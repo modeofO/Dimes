@@ -1,0 +1,217 @@
+# ========================================
+# CAD Engine Project - .gitignore
+# ========================================
+
+# ========================================
+# C++ / CMake / OCCT Server
+# ========================================
+
+# Build directories
+server/build/
+server/out/
+server/Release/
+server/Debug/
+server/RelWithDebInfo/
+server/MinSizeRel/
+
+# CMake generated files
+server/CMakeCache.txt
+server/CMakeFiles/
+server/cmake_install.cmake
+server/Makefile
+server/*.vcxproj*
+server/*.sln
+server/*.filters
+server/*.user
+
+# Visual Studio / MSVC
+server/.vs/
+server/x64/
+server/Win32/
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.dll
+*.exe
+
+# Object files
+*.o
+*.obj
+*.lo
+*.slo
+*.ko
+*.elf
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Libraries
+*.la
+*.a
+*.so
+*.so.*
+*.dylib
+
+# ========================================
+# Node.js / TypeScript / Vite Client
+# ========================================
+
+# Dependencies
+client/node_modules/
+client/npm-debug.log*
+client/yarn-debug.log*
+client/yarn-error.log*
+client/pnpm-debug.log*
+client/lerna-debug.log*
+
+# Build outputs
+client/dist/
+client/dist-ssr/
+client/build/
+client/.next/
+client/out/
+
+# Runtime data
+client/pids
+client/*.pid
+client/*.seed
+client/*.pid.lock
+
+# Coverage directory used by tools like istanbul
+client/coverage/
+client/*.lcov
+
+# nyc test coverage
+client/.nyc_output
+
+# Vite
+client/.vite/
+
+# TypeScript
+client/*.tsbuildinfo
+
+# Optional npm cache directory
+client/.npm
+
+# Optional eslint cache
+client/.eslintcache
+
+# Microbundle cache
+client/.rpt2_cache/
+client/.rts2_cache_cjs/
+client/.rts2_cache_es/
+client/.rts2_cache_umd/
+
+# Optional REPL history
+client/.node_repl_history
+
+# Output of 'npm pack'
+client/*.tgz
+
+# Yarn Integrity file
+client/.yarn-integrity
+
+# dotenv environment variables file
+client/.env
+client/.env.local
+client/.env.development.local
+client/.env.test.local
+client/.env.production.local
+
+# Stores VSCode versions used for testing VSCode extensions
+client/.vscode-test
+
+# yarn v2
+client/.yarn/cache
+client/.yarn/unplugged
+client/.yarn/build-state.yml
+client/.yarn/install-state.gz
+client/.pnp.*
+
+# ========================================
+# General Development
+# ========================================
+
+# IDE files
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.bak
+*.backup
+
+# Documentation build
+docs/build/
+docs/_build/
+
+# Package managers
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# ========================================
+# CAD Specific
+# ========================================
+
+# CAD file exports
+*.step
+*.stp
+*.stl
+*.obj
+*.iges
+*.igs
+
+# Session data
+sessions/
+temp_models/
+export_cache/
+
+# Test outputs
+test_exports/
+test_sessions/
+
+# ========================================
+# Security & Credentials
+# ========================================
+
+# API keys and secrets
+.env.secret
+*.key
+*.pem
+config/secrets.json
+
+# ========================================
+# Deployment
+# ========================================
+
+# Docker
+docker-compose.override.yml
+.dockerignore
+
+# Deployment configs
+deploy/
+.deployment
+
+# Cloud provider configs
+.aws/
+.azure/
+.gcp/ 
