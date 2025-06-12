@@ -1,0 +1,180 @@
+---
+description: Server-Side OCCT Development Guidelines
+globs: 
+alwaysApply: false
+---
+# Server-Side OCCT Development Guidelines
+
+## OpenCASCADE Integration Patterns
+
+### Core OCCT Classes to Use
+- **TopoDS_Shape**: Primary geometry container
+- **BRepPrimAPI_***: Primitive creation (boxes, cylinders, spheres)
+- **BRepAlgoAPI_***: Boolean operations (fuse, cut, common)
+- **BRepFilletAPI_***: Filleting and chamfering
+- **BRepOffsetAPI_***: Offset operations (thicken, shell)
+- **BRepMesh_IncrementalMesh**: Tessellation for Three.js
+
+### Geometry Engine Architecture
+The main geometry engine should be implemented in [server/src/geometry/occt_engine.cpp](mdc:server/src/geometry/occt_engine.cpp):
+
+```cpp
+class OCCTEngine {
+private:
+    std::map<std::string, TopoDS_Shape> shapes_;
+    std::map<std::string, ParameterSet> parameters_;
+    
+public:
+    // Core operations
+    ShapeID createPrimitive(PrimitiveType type, const Parameters& params);
+    bool booleanOperation(ShapeID shape1, ShapeID shape2, BooleanOp op);
+    bool addFillet(ShapeID shape, const EdgeList& edges, double radius);
+    
+    // Parametric updates
+    bool updateParameter(const std::string& param_name, double value);
+    void rebuildModel();
+    
+    // Export functions
+    MeshData tessellate(ShapeID shape, double deflection = 0.1);
+    bool exportSTEP(ShapeID shape, const std::string& filename);
+    bool exportSTL(ShapeID shape, const std::string& filename);
+};
+```
+
+### Session Management
+Implement session handling in [server/src/session/session_manager.cpp](mdc:server/src/session/session_manager.cpp):
+
+```cpp
+class SessionManager {
+private:
+    std::map<std::string, std::unique_ptr<OCCTEngine>> sessions_;
+    
+public:
+    OCCTEngine* getOrCreateSession(const std::string& session_id);
+    void cleanupSession(const std::string& session_id);
+    bool sessionExists(const std::string& session_id);
+};
+```
+
+## Parametric Modeling Best Practices
+
+### 1. Parameter-Driven Design
+All geometry should be controlled by parameters that can be updated:
+```cpp
+struct BoxParameters {
+    double width = 10.0;
+    double height = 10.0;
+    double depth = 10.0;
+    Vector3d position = {0, 0, 0};
+};
+```
+
+### 2. Feature Tree Implementation
+Maintain a history of operations that can be rebuilt:
+```cpp
+class Feature {
+public:
+    virtual TopoDS_Shape execute(const ParameterSet& params) = 0;
+    virtual bool isValid() const = 0;
+    virtual std::vector<std::string> getDependencies() const = 0;
+};
+```
+
+### 3. Dependency Management
+Track feature dependencies for efficient rebuilding:
+```cpp
+class DependencyGraph {
+public:
+    void addDependency(const std::string& child, const std::string& parent);
+    std::vector<std::string> getTopologicalOrder();
+    void markDirty(const std::string& feature_id);
+};
+```
+
+## Error Handling Patterns
+
+### OCCT Exception Handling
+Always wrap OCCT operations in try-catch blocks:
+```cpp
+try {
+    TopoDS_Shape result = BRepAlgoAPI_Fuse(shape1, shape2).Shape();
+    if (result.IsNull()) {
+        return {false, "Boolean operation failed: null result"};
+    }
+    return {true, result};
+} catch (const Standard_Failure& e) {
+    return {false, "OCCT Error: " + std::string(e.GetMessageString())};
+}
+```
+
+### Validation Checks
+Always validate shapes before operations:
+```cpp
+bool validateShape(const TopoDS_Shape& shape) {
+    BRepCheck_Analyzer analyzer(shape);
+    return analyzer.IsValid();
+}
+```
+
+## Performance Optimization
+
+### 1. Tessellation Settings
+Balance quality vs. performance in [server/src/tessellation/mesh_generator.cpp](mdc:server/src/tessellation/mesh_generator.cpp):
+```cpp
+struct TessellationSettings {
+    double linear_deflection = 0.1;    // Lower = higher quality
+    double angular_deflection = 0.1;   // Lower = smoother curves
+    bool relative_deflection = true;   // Relative to shape size
+};
+```
+
+### 2. Incremental Updates
+Only rebuild changed features:
+```cpp
+void OCCTEngine::updateParameter(const std::string& param, double value) {
+    if (parameters_[param] != value) {
+        parameters_[param] = value;
+        rebuildDirtyFeatures();
+    }
+}
+```
+
+### 3. Memory Management
+Use RAII patterns and smart pointers:
+```cpp
+using ShapePtr = std::shared_ptr<TopoDS_Shape>;
+using EnginePtr = std::unique_ptr<OCCTEngine>;
+```
+
+## Testing Guidelines
+
+### Unit Tests
+Test each OCCT operation in isolation:
+```cpp
+TEST(OCCTEngineTest, CreateBox) {
+    OCCTEngine engine;
+    auto result = engine.createBox({10, 20, 5});
+    EXPECT_TRUE(result.success);
+    EXPECT_TRUE(validateShape(result.shape));
+}
+```
+
+### Integration Tests
+Test complete workflows:
+```cpp
+TEST(OCCTEngineTest, ParametricUpdate) {
+    OCCTEngine engine;
+    auto box_id = engine.createBox({10, 10, 10});
+    engine.updateParameter("width", 20.0);
+    // Verify shape was updated
+}
+```
+
+## Build Configuration
+Ensure [server/CMakeLists.txt](mdc:server/CMakeLists.txt) properly links OCCT:
+```cmake
+find_package(OpenCASCADE REQUIRED)
+target_link_libraries(cad_server ${OpenCASCADE_LIBRARIES})
+target_include_directories(cad_server PRIVATE ${OpenCASCADE_INCLUDE_DIR})
+```
+

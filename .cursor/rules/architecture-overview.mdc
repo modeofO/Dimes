@@ -1,0 +1,42 @@
+---
+description: CAD Application Architecture Overview
+globs: 
+alwaysApply: false
+---
+# CAD Application Architecture Overview
+
+## System Architecture
+This is a server-based CAD application that replaces OpenSCAD in the Daydreams AI workflow. The system uses OpenCASCADE Technology (OCCT) for precise parametric modeling and Three.js for browser-based visualization.
+
+## Core Components
+
+### Server Side (Precision Engine)
+- **OCCT Geometry Kernel**: Handles parametric B-Rep modeling
+- **CAD API Server**: REST API for model operations
+- **Tessellation Engine**: Converts OCCT geometry to Three.js meshes
+- **File Export System**: Generates STEP, STL, and other CAD formats
+
+### Client Side (Visualization)
+- **Three.js Renderer**: Real-time 3D visualization
+- **Mesh Manager**: Handles geometry updates from server
+- **UI Controls**: Camera, lighting, and interaction controls
+
+### Integration Layer
+- **Daydreams Interface**: API endpoints compatible with existing AI agent
+- **Session Management**: Maintains parametric model state
+- **Real-time Updates**: WebSocket/HTTP streaming for live geometry updates
+
+## Data Flow
+```
+Daydreams AI → CAD API → OCCT Engine → Tessellator → Three.js Browser
+    ↓             ↓         ↓            ↓           ↓
+Natural Lang → Parameters → B-Rep Model → Triangles → Visual Render
+```
+
+## Key Design Principles
+1. **Separation of Concerns**: Precise modeling (server) vs. Visualization (client)
+2. **Parametric First**: All geometry is parameter-driven and updateable
+3. **Format Agnostic**: Support multiple CAD file formats
+4. **Performance Optimized**: Efficient tessellation and mesh transfer
+5. **API Compatible**: Drop-in replacement for OpenSCAD workflow
+

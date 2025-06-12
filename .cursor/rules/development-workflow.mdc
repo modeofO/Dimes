@@ -1,0 +1,524 @@
+---
+description: Development Workflow & Deployment Guidelines
+globs: 
+alwaysApply: false
+---
+# Development Workflow & Deployment Guidelines
+
+## Development Environment Setup
+
+### Prerequisites
+Ensure the following tools are installed and configured:
+
+```bash
+# Required tools
+- CMake 3.16+
+- OpenCASCADE 7.6+
+- Node.js 18+
+- Docker & Docker Compose
+- Git with LFS support
+
+# Build tools
+- GCC 9+ or Clang 10+ or MSVC 2019+
+- Make or Ninja
+- pkg-config
+```
+
+### Environment Configuration
+Create environment files based on templates:
+
+```bash
+# Development environment
+cp .env.example .env.development
+
+# Docker environment  
+cp docker/.env.docker.example docker/.env.docker
+
+# CI/CD environment
+cp .env.ci.example .env.ci
+```
+
+### Docker Development Environment
+Use [docker-compose.yml](mdc:docker-compose.yml) for consistent development:
+
+```yaml
+version: '3.8'
+services:
+  cad-server:
+    build: 
+      context: ./server
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./server:/app/server
+      - cad-build-cache:/app/build
+    ports:
+      - "8080:8080"
+    environment:
+      - CMAKE_BUILD_TYPE=Debug
+      - OCCT_INSTALL_PATH=/usr/local
+    
+  cad-client:
+    build:
+      context: ./client  
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./client:/app/client
+      - /app/client/node_modules
+    ports:
+      - "3000:3000"
+    depends_on:
+      - cad-server
+
+volumes:
+  cad-build-cache:
+```
+
+## Build System Configuration
+
+### Server Build (CMake)
+Configure [server/CMakeLists.txt](mdc:server/CMakeLists.txt) with proper OCCT integration:
+
+```cmake
+cmake_minimum_required(VERSION 3.16)
+project(cad-engine-server VERSION 1.0.0)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Find OpenCASCADE
+find_package(OpenCASCADE REQUIRED)
+
+# Build configuration
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -DNDEBUG")
+else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O0 -Wall -Wextra")
+endif()
+
+# Source files
+file(GLOB_RECURSE SOURCES "src/*.cpp")
+file(GLOB_RECURSE HEADERS "include/*.h")
+
+# Executable
+add_executable(cad-server ${SOURCES})
+target_include_directories(cad-server PRIVATE 
+    include/
+    ${OpenCASCADE_INCLUDE_DIR}
+)
+target_link_libraries(cad-server 
+    ${OpenCASCADE_LIBRARIES}
+    pthread
+)
+
+# Install rules
+install(TARGETS cad-server DESTINATION bin)
+```
+
+### Client Build (Vite)
+Configure [client/vite.config.ts](mdc:client/vite.config.ts) for optimal performance:
+
+```typescript
+import { defineConfig } from 'vite';
+import { resolve } from 'path';
+
+export default defineConfig({
+    build: {
+        target: 'es2020',
+        lib: {
+            entry: resolve(__dirname, 'src/main.ts'),
+            name: 'CADClient',
+            fileName: 'cad-client'
+        },
+        rollupOptions: {
+            external: ['three'],
+            output: {
+                globals: {
+                    three: 'THREE'
+                }
+            }
+        }
+    },
+    optimizeDeps: {
+        include: ['three', 'three/examples/jsm/controls/OrbitControls']
+    },
+    server: {
+        proxy: {
+            '/api': 'http://localhost:8080',
+            '/ws': {
+                target: 'ws://localhost:8080',
+                ws: true
+            }
+        }
+    }
+});
+```
+
+## Git Workflow
+
+### Branch Strategy
+Follow Git Flow with CAD-specific adaptations:
+
+```
+main              # Production releases
+├── develop       # Integration branch
+├── feature/*     # Feature development
+├── hotfix/*      # Production fixes
+└── release/*     # Release preparation
+```
+
+### Commit Conventions
+Use conventional commits with CAD-specific scopes:
+
+```
+feat(geometry): add fillet operation support
+fix(tessellation): resolve mesh generation memory leak
+docs(api): update WebSocket protocol documentation
+perf(occt): optimize boolean operation performance
+test(client): add Three.js mesh validation tests
+
+Scopes: geometry, tessellation, api, client, server, build, docs
+```
+
+### Pre-commit Hooks
+Configure [.pre-commit-config.yaml](mdc:.pre-commit-config.yaml):
+
+```yaml
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+  
+  - repo: https://github.com/psf/black
+    rev: 22.10.0
+    hooks:
+      - id: black
+        files: ^scripts/.*\.py$
+  
+  - repo: local
+    hooks:
+      - id: cpp-format
+        name: Format C++ code
+        entry: clang-format -i
+        language: system
+        files: \.(cpp|h)$
+      
+      - id: typescript-lint
+        name: TypeScript ESLint
+        entry: cd client && npm run lint
+        language: system
+        files: \.ts$
+```
+
+## Testing Strategy
+
+### Server Testing (C++)
+Implement comprehensive tests in [server/tests/](mdc:server/tests):
+
+```cpp
+// Unit tests for OCCT operations
+TEST(GeometryEngineTest, CreateBox) {
+    auto engine = std::make_unique<OCCTEngine>();
+    auto result = engine->createBox({10, 20, 5});
+    
+    EXPECT_TRUE(result.success);
+    EXPECT_TRUE(validateShape(result.shape));
+    
+    // Verify dimensions
+    Bnd_Box bbox;
+    BRepBndLib::Add(result.shape, bbox);
+    double xmin, ymin, zmin, xmax, ymax, zmax;
+    bbox.Get(xmin, ymin, zmin, xmax, ymax, zmax);
+    
+    EXPECT_NEAR(xmax - xmin, 10.0, 1e-6);
+    EXPECT_NEAR(ymax - ymin, 20.0, 1e-6);
+    EXPECT_NEAR(zmax - zmin, 5.0, 1e-6);
+}
+
+// Integration tests
+TEST(APITest, FullWorkflow) {
+    // Test complete workflow: create -> modify -> export
+    CADClient client("http://localhost:8080");
+    
+    auto session = client.createSession();
+    auto model = client.createBox(session, {10, 10, 10});
+    auto updated = client.updateParameter(session, "width", 20);
+    auto exported = client.exportSTEP(session);
+    
+    EXPECT_TRUE(exported.success);
+}
+```
+
+### Client Testing (TypeScript/Jest)
+Configure testing in [client/jest.config.js](mdc:client/jest.config.js):
+
+```javascript
+module.exports = {
+    preset: 'ts-jest',
+    testEnvironment: 'jsdom',
+    setupFilesAfterEnv: ['<rootDir>/src/test/setup.ts'],
+    moduleNameMapping: {
+        '^@/(.*)$': '<rootDir>/src/$1'
+    },
+    transform: {
+        '^.+\\.ts$': 'ts-jest'
+    },
+    testMatch: [
+        '<rootDir>/src/**/__tests__/**/*.test.ts',
+        '<rootDir>/src/**/*.test.ts'
+    ]
+};
+```
+
+### Performance Testing
+Implement benchmarks for critical operations:
+
+```cpp
+// Benchmark tessellation performance
+static void BM_Tessellation(benchmark::State& state) {
+    OCCTEngine engine;
+    auto box = engine.createBox({100, 100, 100});
+    
+    for (auto _ : state) {
+        auto mesh = engine.tessellate(box.shape, 0.1);
+        benchmark::DoNotOptimize(mesh);
+    }
+    
+    state.SetComplexityN(state.range(0));
+}
+BENCHMARK(BM_Tessellation)->Range(8, 8<<10)->Complexity();
+```
+
+## Continuous Integration
+
+### GitHub Actions Configuration
+Create [.github/workflows/ci.yml](mdc:.github/workflows/ci.yml):
+
+```yaml
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  server-build-test:
+    runs-on: ubuntu-latest
+    container: opencascade/opencascade:7.6.0
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Configure CMake
+        run: cmake -B build -S server -DCMAKE_BUILD_TYPE=Release
+        
+      - name: Build
+        run: cmake --build build --config Release
+        
+      - name: Test
+        run: cd build && ctest --output-on-failure
+        
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: cad-server
+          path: build/cad-server
+
+  client-build-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+          
+      - name: Install dependencies
+        run: cd client && npm ci
+        
+      - name: Lint
+        run: cd client && npm run lint
+        
+      - name: Test
+        run: cd client && npm run test
+        
+      - name: Build
+        run: cd client && npm run build
+```
+
+## Deployment Strategy
+
+### Production Docker Configuration
+Create production [Dockerfile](mdc:server/Dockerfile):
+
+```dockerfile
+# Multi-stage build for server
+FROM opencascade/opencascade:7.6.0 AS builder
+
+WORKDIR /app
+COPY server/ .
+
+RUN cmake -B build -S . -DCMAKE_BUILD_TYPE=Release \
+    && cmake --build build --config Release
+
+FROM ubuntu:22.04 AS runtime
+
+RUN apt-get update && apt-get install -y \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /app/build/cad-server /usr/local/bin/
+COPY --from=builder /usr/local/lib/libTK*.so* /usr/local/lib/
+
+EXPOSE 8080
+CMD ["cad-server"]
+```
+
+### Kubernetes Deployment
+Create [k8s/deployment.yaml](mdc:k8s/deployment.yaml):
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cad-engine
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: cad-engine
+  template:
+    metadata:
+      labels:
+        app: cad-engine
+    spec:
+      containers:
+      - name: cad-server
+        image: cad-engine:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi" 
+            cpu: "2000m"
+        env:
+        - name: OCCT_RESOURCE_PATH
+          value: "/usr/local/share/opencascade"
+```
+
+## Monitoring and Observability
+
+### Health Checks
+Implement comprehensive health endpoints:
+
+```cpp
+// Health check endpoint
+void HealthController::checkHealth(const Request& req, Response& res) {
+    HealthStatus status;
+    
+    // Check OCCT initialization
+    status.occt_available = checkOCCTStatus();
+    
+    // Check memory usage
+    status.memory_usage = getCurrentMemoryUsage();
+    
+    // Check active sessions
+    status.active_sessions = SessionManager::getInstance().getActiveCount();
+    
+    // Overall health
+    status.healthy = status.occt_available && 
+                    status.memory_usage < MAX_MEMORY_THRESHOLD &&
+                    status.active_sessions < MAX_SESSIONS;
+    
+    res.json(status);
+}
+```
+
+### Performance Metrics
+Track key performance indicators:
+
+```cpp
+class MetricsCollector {
+public:
+    void recordGeometryOperation(const std::string& operation, 
+                                double duration_ms, 
+                                size_t complexity);
+    void recordTessellation(double duration_ms, 
+                           size_t vertex_count, 
+                           double quality);
+    void recordExport(const std::string& format, 
+                      double duration_ms, 
+                      size_t file_size);
+};
+```
+
+### Logging Configuration
+Configure structured logging:
+
+```cpp
+// Use spdlog for structured logging
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/json_sinks.h>
+
+void setupLogging() {
+    auto json_sink = std::make_shared<spdlog::sinks::json_sink_mt>("logs/cad-engine.json");
+    auto logger = std::make_shared<spdlog::logger>("cad-engine", json_sink);
+    
+    logger->set_level(spdlog::level::info);
+    logger->set_pattern("{\"timestamp\":\"%Y-%m-%d %H:%M:%S\",\"level\":\"%l\",\"message\":\"%v\"}");
+    
+    spdlog::register_logger(logger);
+}
+```
+
+## Security Best Practices
+
+### Input Sanitization
+Always validate and sanitize input parameters:
+
+```cpp
+class ParameterValidator {
+public:
+    static ValidationResult validateDimension(double value) {
+        if (std::isnan(value) || std::isinf(value)) {
+            return {false, "Invalid numeric value"};
+        }
+        if (value < MIN_DIMENSION || value > MAX_DIMENSION) {
+            return {false, "Dimension out of allowed range"};
+        }
+        return {true, ""};
+    }
+};
+```
+
+### Resource Limits
+Implement resource consumption limits:
+
+```cpp
+class ResourceManager {
+private:
+    static constexpr size_t MAX_MEMORY_PER_SESSION = 1024 * 1024 * 1024; // 1GB
+    static constexpr size_t MAX_EXPORT_FILE_SIZE = 100 * 1024 * 1024;   // 100MB
+    static constexpr int MAX_CONCURRENT_OPERATIONS = 10;
+    
+public:
+    bool checkMemoryLimit(const std::string& session_id);
+    bool checkFileSize(size_t size);
+    bool acquireOperationSlot();
+};
+```
+
+This comprehensive rule set provides the foundation for building a professional-grade CAD application that can seamlessly replace OpenSCAD in your Daydreams workflow while providing superior parametric modeling capabilities!
+

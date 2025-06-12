@@ -1,0 +1,188 @@
+---
+description: CAD Engine Project Rules - Master Guide
+globs: 
+alwaysApply: false
+---
+# CAD Engine Project Rules - Master Guide
+
+## Overview
+This repository contains a professional CAD application built with OpenCASCADE Technology (OCCT) for precise parametric modeling and Three.js for browser-based visualization. It serves as a drop-in replacement for OpenSCAD in Daydreams AI workflows.
+
+## Rule Files Navigation
+
+### 🏗️ [Architecture Overview](mdc:architecture-overview.mdc)
+Core system architecture, data flow, and design principles. Start here to understand the overall system structure.
+
+### 📁 [Project Structure](mdc:project-structure.mdc)
+Directory organization, key files, naming conventions, and module dependencies. Essential for understanding codebase layout.
+
+### ⚙️ [Server-Side OCCT Development](mdc:server-occt-development.mdc)
+OpenCASCADE integration patterns, geometry engine architecture, parametric modeling, and C++ development guidelines.
+
+### 🎨 [Client-Side Three.js Development](mdc:client-threejs-development.mdc)
+Three.js renderer architecture, mesh management, real-time communication, and browser-side optimization strategies.
+
+### 🔌 [API Design Guidelines](mdc:api-design-guidelines.mdc)
+REST API architecture, request/response schemas, Daydreams integration, WebSocket protocols, and error handling.
+
+### 🚀 [Development Workflow](mdc:development-workflow.mdc)
+Environment setup, build systems, Git workflow, testing strategies, CI/CD, deployment, and security best practices.
+
+## Quick Start Checklist
+
+### Initial Setup
+- [ ] Clone repository and set up development environment
+- [ ] Install OpenCASCADE 7.6+, CMake 3.16+, Node.js 18+
+- [ ] Configure Docker development environment using [docker-compose.yml](mdc:docker-compose.yml)
+- [ ] Set up environment variables from templates
+
+### Development Workflow
+- [ ] Create feature branch following Git Flow conventions
+- [ ] Implement server-side OCCT geometry operations in [server/src/geometry/](mdc:server/src/geometry)
+- [ ] Build client-side Three.js renderer in [client/src/renderer/](mdc:client/src/renderer)
+- [ ] Define API endpoints in [server/src/api/](mdc:server/src/api)
+- [ ] Add comprehensive tests for both server and client
+- [ ] Follow commit conventions and run pre-commit hooks
+
+### Integration with Daydreams
+- [ ] Implement Daydreams-compatible endpoint at `/api/v1/daydreams/cad`
+- [ ] Ensure response format matches existing OpenSCAD workflow
+- [ ] Test natural language instruction parsing
+- [ ] Verify mesh data transfer to Three.js frontend
+
+## Key Technologies
+
+### Server Stack
+- **OpenCASCADE Technology (OCCT)**: Parametric B-Rep modeling kernel
+- **C++17**: Primary development language
+- **CMake**: Build system
+- **Docker**: Containerization and deployment
+
+### Client Stack
+- **Three.js**: 3D visualization and rendering
+- **TypeScript**: Type-safe client development
+- **Vite**: Fast build tool and development server
+- **WebSocket**: Real-time geometry updates
+
+### Integration
+- **REST API**: HTTP/JSON communication
+- **WebSocket**: Real-time parametric updates
+- **Docker Compose**: Development environment orchestration
+
+## Core Concepts
+
+### Parametric Modeling
+- All geometry is parameter-driven and updateable
+- Features maintain dependencies and relationships
+- Changes propagate through the feature tree automatically
+
+### Tessellation Pipeline
+- OCCT generates precise B-Rep geometry on server
+- Tessellation converts to triangular meshes for Three.js
+- Quality vs. performance balance through tessellation settings
+
+### Session Management
+- Each user session maintains independent OCCT document
+- Persistent state across multiple operations
+- Automatic cleanup and resource management
+
+## Performance Considerations
+
+### Server Optimization
+- Efficient OCCT memory management with RAII patterns
+- Incremental updates (only rebuild changed features)
+- Tessellation quality optimization based on viewport requirements
+
+### Client Optimization
+- Level-of-detail (LOD) rendering for complex geometries
+- Frustum culling and occlusion optimization
+- Efficient mesh data transfer using typed arrays
+
+### Network Optimization
+- WebSocket streaming for real-time updates
+- Response caching strategies
+- Compressed mesh data transfer
+
+## File Organization Patterns
+
+### Server Files
+```
+server/src/
+├── geometry/     # OCCT operations and geometry engine
+├── api/         # REST API endpoints and controllers
+├── tessellation/ # Mesh generation from OCCT shapes
+├── export/      # File format export (STEP, STL, etc.)
+└── session/     # Session and state management
+```
+
+### Client Files
+```
+client/src/
+├── renderer/    # Three.js rendering engine
+├── mesh/        # Geometry and mesh management
+├── controls/    # User interaction and camera controls
+└── api/         # Server communication layer
+```
+
+### Shared Types
+```
+shared/
+├── types/       # TypeScript interface definitions
+└── protocols/   # API schemas and validation
+```
+
+## Common Development Tasks
+
+### Adding New Geometry Operations
+1. Implement OCCT operation in [server/src/geometry/occt_engine.cpp](mdc:server/src/geometry/occt_engine.cpp)
+2. Add API endpoint in [server/src/api/cad_controller.cpp](mdc:server/src/api/cad_controller.cpp)
+3. Update client communication in [client/src/api/cad-client.ts](mdc:client/src/api/cad-client.ts)
+4. Add comprehensive tests for the new operation
+
+### Optimizing Rendering Performance
+1. Profile Three.js performance using [client/src/renderer/performance-monitor.ts](mdc:client/src/renderer/performance-monitor.ts)
+2. Implement LOD strategies in [client/src/mesh/lod-manager.ts](mdc:client/src/mesh/lod-manager.ts)
+3. Optimize tessellation settings in [server/src/tessellation/mesh_generator.cpp](mdc:server/src/tessellation/mesh_generator.cpp)
+
+### Debugging OCCT Issues
+1. Enable debug logging in CMake build configuration
+2. Use OCCT shape validation functions before operations
+3. Check for null shapes and invalid geometry states
+4. Analyze OCCT exceptions for detailed error information
+
+## Integration Points
+
+### Daydreams AI Workflow
+```
+User Chat → Daydreams AI → CAD API → OCCT Engine → Tessellator → Three.js
+```
+
+### File Export Pipeline
+```
+OCCT B-Rep → Multiple Formats (STEP, STL, OBJ, IGES) → Download/Storage
+```
+
+### Real-time Updates
+```
+Parameter Change → WebSocket → Geometry Rebuild → Mesh Update → Three.js Render
+```
+
+## Troubleshooting Guide
+
+### Common OCCT Issues
+- **Null shapes**: Always validate shapes after operations
+- **Memory leaks**: Use proper RAII patterns and smart pointers
+- **Boolean failures**: Check geometry validity before operations
+
+### Three.js Performance Issues
+- **Low FPS**: Check polygon count and implement LOD
+- **Memory growth**: Dispose of unused geometries and textures
+- **Rendering artifacts**: Verify mesh normals and indices
+
+### API Communication Issues
+- **WebSocket disconnections**: Implement reconnection logic
+- **Large mesh transfers**: Use compression and streaming
+- **Session timeouts**: Implement proper session lifecycle management
+
+This master guide provides navigation to all aspects of the CAD engine development. Refer to individual rule files for detailed implementation guidance.
+

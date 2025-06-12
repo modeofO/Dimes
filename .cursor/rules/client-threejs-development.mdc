@@ -1,0 +1,352 @@
+---
+description: Client-Side Three.js Development Guidelines
+globs: 
+alwaysApply: false
+---
+# Client-Side Three.js Development Guidelines
+
+## Three.js Renderer Architecture
+
+### Main Renderer Class
+Implement the core renderer in [client/src/renderer/cad-renderer.ts](mdc:client/src/renderer/cad-renderer.ts):
+
+```typescript
+class CADRenderer {
+    private scene: THREE.Scene;
+    private camera: THREE.PerspectiveCamera;
+    private renderer: THREE.WebGLRenderer;
+    private controls: OrbitControls;
+    private meshManager: MeshManager;
+    
+    constructor(container: HTMLElement) {
+        this.initializeScene();
+        this.setupCamera();
+        this.setupRenderer(container);
+        this.setupControls();
+        this.setupLighting();
+    }
+    
+    // Core rendering methods
+    public updateGeometry(meshData: MeshData): void;
+    public setRenderQuality(quality: RenderQuality): void;
+    public exportScreenshot(): Promise<Blob>;
+    public dispose(): void;
+}
+```
+
+### Mesh Management
+Handle geometry updates efficiently in [client/src/mesh/mesh-manager.ts](mdc:client/src/mesh/mesh-manager.ts):
+
+```typescript
+class MeshManager {
+    private geometryCache = new Map<string, THREE.BufferGeometry>();
+    private materialCache = new Map<string, THREE.Material>();
+    private activeMeshes = new Map<string, THREE.Mesh>();
+    
+    // Efficient geometry updates
+    public updateMesh(id: string, meshData: MeshData): void;
+    public removeMesh(id: string): void;
+    public clearAll(): void;
+    
+    // Performance optimizations
+    private optimizeGeometry(geometry: THREE.BufferGeometry): void;
+    private generateLOD(geometry: THREE.BufferGeometry): THREE.LOD;
+}
+```
+
+## Geometry Processing Patterns
+
+### Converting Server Mesh Data
+Transform OCCT tessellation data to Three.js format:
+
+```typescript
+function createGeometryFromMeshData(meshData: MeshData): THREE.BufferGeometry {
+    const geometry = new THREE.BufferGeometry();
+    
+    // Convert flat arrays to typed arrays
+    const vertices = new Float32Array(meshData.vertices);
+    const indices = meshData.faces ? new Uint32Array(meshData.faces) : undefined;
+    const normals = meshData.normals ? new Float32Array(meshData.normals) : undefined;
+    
+    // Set attributes
+    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+    if (indices) geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+    if (normals) geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+    else geometry.computeVertexNormals();
+    
+    // Optimize for rendering
+    geometry.computeBoundingBox();
+    geometry.computeBoundingSphere();
+    
+    return geometry;
+}
+```
+
+### Material System
+Implement CAD-appropriate materials:
+
+```typescript
+class CADMaterialLibrary {
+    private materials = new Map<MaterialType, THREE.Material>();
+    
+    public getMetalMaterial(): THREE.MeshPhysicalMaterial {
+        return new THREE.MeshPhysicalMaterial({
+            color: 0x888888,
+            metalness: 0.9,
+            roughness: 0.1,
+            envMapIntensity: 1.0
+        });
+    }
+    
+    public getPlasticMaterial(): THREE.MeshPhysicalMaterial {
+        return new THREE.MeshPhysicalMaterial({
+            color: 0x4444ff,
+            metalness: 0.0,
+            roughness: 0.3,
+            envMapIntensity: 0.5
+        });
+    }
+    
+    public getWireframeMaterial(): THREE.MeshBasicMaterial {
+        return new THREE.MeshBasicMaterial({
+            color: 0x000000,
+            wireframe: true
+        });
+    }
+}
+```
+
+## Real-time Communication
+
+### API Client Implementation
+Handle server communication in [client/src/api/cad-client.ts](mdc:client/src/api/cad-client.ts):
+
+```typescript
+class CADClient {
+    private baseUrl: string;
+    private sessionId: string;
+    
+    // Model operations
+    public async createModel(parameters: ModelParameters): Promise<CADResponse>;
+    public async updateParameter(name: string, value: number): Promise<CADResponse>;
+    public async performBoolean(op: BooleanOperation): Promise<CADResponse>;
+    
+    // Real-time updates
+    public onGeometryUpdate(callback: (meshData: MeshData) => void): void;
+    private setupWebSocket(): void;
+    
+    // File operations
+    public async exportModel(format: ExportFormat): Promise<Blob>;
+    public getModelUrl(format: string): string;
+}
+```
+
+### WebSocket Integration
+For real-time parametric updates:
+
+```typescript
+class RealTimeUpdates {
+    private ws: WebSocket;
+    private callbacks = new Map<string, Function>();
+    
+    public connect(sessionId: string): Promise<void> {
+        this.ws = new WebSocket(`ws://localhost:8080/ws/${sessionId}`);
+        this.ws.onmessage = this.handleMessage.bind(this);
+    }
+    
+    private handleMessage(event: MessageEvent): void {
+        const data = JSON.parse(event.data);
+        if (data.type === 'geometry_update') {
+            this.callbacks.get('geometry')?.call(null, data.meshData);
+        }
+    }
+}
+```
+
+## Performance Optimization
+
+### Level of Detail (LOD)
+Implement LOD for complex geometries:
+
+```typescript
+class LODManager {
+    public createLOD(highDetailGeometry: THREE.BufferGeometry): THREE.LOD {
+        const lod = new THREE.LOD();
+        
+        // High detail (close up)
+        const highDetail = new THREE.Mesh(highDetailGeometry, this.getHighDetailMaterial());
+        lod.addLevel(highDetail, 0);
+        
+        // Medium detail
+        const mediumGeometry = this.simplifyGeometry(highDetailGeometry, 0.5);
+        const mediumDetail = new THREE.Mesh(mediumGeometry, this.getMediumDetailMaterial());
+        lod.addLevel(mediumDetail, 100);
+        
+        // Low detail (far away)
+        const lowGeometry = this.simplifyGeometry(highDetailGeometry, 0.2);
+        const lowDetail = new THREE.Mesh(lowGeometry, this.getLowDetailMaterial());
+        lod.addLevel(lowDetail, 500);
+        
+        return lod;
+    }
+}
+```
+
+### Frustum Culling and Occlusion
+Optimize rendering performance:
+
+```typescript
+class RenderOptimizer {
+    private frustum = new THREE.Frustum();
+    private cameraMatrix = new THREE.Matrix4();
+    
+    public updateFrustum(camera: THREE.Camera): void {
+        this.cameraMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+        this.frustum.setFromProjectionMatrix(this.cameraMatrix);
+    }
+    
+    public cullObjects(objects: THREE.Object3D[]): THREE.Object3D[] {
+        return objects.filter(obj => {
+            obj.updateMatrixWorld();
+            return this.frustum.intersectsObject(obj);
+        });
+    }
+}
+```
+
+## User Interface Integration
+
+### Camera Controls
+Implement CAD-style navigation in [client/src/controls/cad-controls.ts](mdc:client/src/controls/cad-controls.ts):
+
+```typescript
+class CADControls extends OrbitControls {
+    constructor(camera: THREE.Camera, domElement: HTMLElement) {
+        super(camera, domElement);
+        
+        // CAD-specific settings
+        this.enablePan = true;
+        this.enableZoom = true;
+        this.enableRotate = true;
+        this.mouseButtons = {
+            LEFT: THREE.MOUSE.ROTATE,
+            MIDDLE: THREE.MOUSE.DOLLY,
+            RIGHT: THREE.MOUSE.PAN
+        };
+        
+        // Set reasonable limits
+        this.minDistance = 1;
+        this.maxDistance = 1000;
+        this.maxPolarAngle = Math.PI;
+    }
+    
+    // CAD-specific view methods
+    public viewFront(): void;
+    public viewTop(): void;
+    public viewRight(): void;
+    public viewIsometric(): void;
+    public fitToView(boundingBox: THREE.Box3): void;
+}
+```
+
+### Selection and Highlighting
+Handle object selection:
+
+```typescript
+class SelectionManager {
+    private raycaster = new THREE.Raycaster();
+    private selectedObjects = new Set<THREE.Object3D>();
+    
+    public handleClick(event: MouseEvent, camera: THREE.Camera, scene: THREE.Scene): void {
+        const mouse = this.getMousePosition(event);
+        this.raycaster.setFromCamera(mouse, camera);
+        
+        const intersects = this.raycaster.intersectObjects(scene.children, true);
+        if (intersects.length > 0) {
+            this.selectObject(intersects[0].object);
+        }
+    }
+    
+    private selectObject(object: THREE.Object3D): void {
+        this.clearSelection();
+        this.selectedObjects.add(object);
+        this.highlightObject(object);
+    }
+}
+```
+
+## Error Handling and Debugging
+
+### Geometry Validation
+Validate received mesh data:
+
+```typescript
+function validateMeshData(meshData: MeshData): ValidationResult {
+    const errors: string[] = [];
+    
+    if (!meshData.vertices || meshData.vertices.length === 0) {
+        errors.push("No vertices provided");
+    }
+    
+    if (meshData.vertices.length % 3 !== 0) {
+        errors.push("Vertex count not divisible by 3");
+    }
+    
+    if (meshData.faces && meshData.faces.some(i => i >= meshData.vertices.length / 3)) {
+        errors.push("Face indices out of bounds");
+    }
+    
+    return { isValid: errors.length === 0, errors };
+}
+```
+
+### Performance Monitoring
+Track rendering performance:
+
+```typescript
+class PerformanceMonitor {
+    private frameCount = 0;
+    private lastTime = 0;
+    private fps = 0;
+    
+    public update(): void {
+        this.frameCount++;
+        const currentTime = performance.now();
+        
+        if (currentTime - this.lastTime >= 1000) {
+            this.fps = Math.round((this.frameCount * 1000) / (currentTime - this.lastTime));
+            this.frameCount = 0;
+            this.lastTime = currentTime;
+            
+            // Log performance warnings
+            if (this.fps < 30) {
+                console.warn(`Low FPS detected: ${this.fps}`);
+            }
+        }
+    }
+}
+```
+
+## Build Configuration
+
+### Vite Configuration
+Configure [client/vite.config.ts](mdc:client/vite.config.ts) for optimal Three.js bundling:
+
+```typescript
+export default defineConfig({
+    optimizeDeps: {
+        include: ['three', 'three/examples/jsm/controls/OrbitControls']
+    },
+    build: {
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    three: ['three'],
+                    controls: ['three/examples/jsm/controls/OrbitControls']
+                }
+            }
+        }
+    }
+});
+```
+

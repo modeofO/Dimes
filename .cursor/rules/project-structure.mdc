@@ -1,0 +1,65 @@
+---
+description: Project Structure Guidelines
+globs: 
+alwaysApply: false
+---
+# Project Structure Guidelines
+
+## Directory Structure
+```
+cad-engine/
+├── server/                 # OCCT-based CAD server
+│   ├── src/
+│   │   ├── geometry/       # OCCT geometry operations
+│   │   ├── api/           # REST API endpoints
+│   │   ├── tessellation/  # Mesh generation
+│   │   ├── export/        # File format exports
+│   │   └── session/       # Session management
+│   ├── include/           # C++ headers
+│   ├── tests/             # Server tests
+│   └── CMakeLists.txt     # Build configuration
+├── client/                # Three.js visualization
+│   ├── src/
+│   │   ├── renderer/      # Three.js rendering engine
+│   │   ├── mesh/          # Geometry management
+│   │   ├── controls/      # User interactions
+│   │   └── api/           # Server communication
+│   ├── public/            # Static assets
+│   └── package.json       # Client dependencies
+├── shared/                # Common interfaces
+│   ├── types/             # TypeScript definitions
+│   └── protocols/         # API schemas
+├── docker/                # Container configurations
+├── docs/                  # Documentation
+└── examples/              # Usage examples
+```
+
+## Key Files
+
+### Server Core
+- [server/src/main.cpp](mdc:server/src/main.cpp) - Main server entry point
+- [server/src/api/cad_controller.cpp](mdc:server/src/api/cad_controller.cpp) - CAD operations API
+- [server/src/geometry/occt_engine.cpp](mdc:server/src/geometry/occt_engine.cpp) - OCCT wrapper
+- [server/src/tessellation/mesh_generator.cpp](mdc:server/src/tessellation/mesh_generator.cpp) - Tessellation engine
+
+### Client Core
+- [client/src/main.ts](mdc:client/src/main.ts) - Client application entry
+- [client/src/renderer/cad_renderer.ts](mdc:client/src/renderer/cad_renderer.ts) - Three.js renderer
+- [client/src/api/cad_client.ts](mdc:client/src/api/cad_client.ts) - Server communication
+
+### Configuration
+- [docker-compose.yml](mdc:docker-compose.yml) - Development environment
+- [server/CMakeLists.txt](mdc:server/CMakeLists.txt) - C++ build configuration
+- [client/package.json](mdc:client/package.json) - Node.js dependencies
+
+## File Naming Conventions
+- **C++ Files**: `snake_case.cpp/.h` (e.g., `occt_engine.cpp`)
+- **TypeScript Files**: `kebab-case.ts` (e.g., `cad-renderer.ts`)
+- **API Endpoints**: `/api/v1/resource-action` (e.g., `/api/v1/model-create`)
+- **Class Names**: `PascalCase` (e.g., `GeometryEngine`, `MeshGenerator`)
+
+## Module Dependencies
+- Server depends on: OpenCASCADE, nlohmann/json, httplib
+- Client depends on: Three.js, TypeScript, Vite
+- Shared types should be defined in [shared/types/](mdc:shared/types) directory
+
