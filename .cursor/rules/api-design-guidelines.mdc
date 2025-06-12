@@ -5,386 +5,429 @@ alwaysApply: false
 ---
 # API Design Guidelines
 
-## REST API Architecture
+## 🎯 API Design Principles
 
-### Base API Structure
-All endpoints should follow RESTful conventions with consistent patterns:
+The CAD Engine REST API follows RESTful principles and modern API design standards for professional CAD operations.
 
-```
-Base URL: http://localhost:8080/api/v1
-Authentication: Session-based (for now)
+## 📡 Base Configuration
+
+### Endpoints Base
+- **Development**: `http://localhost:8080/api/v1`
+- **Production**: `https://your-domain.com/api/v1`
+
+### Headers
+```http
 Content-Type: application/json
+Accept: application/json
+X-Session-ID: {session_id}  # Optional for session-specific operations
 ```
 
-### Core Endpoints
-
-#### Model Operations
-```
-POST   /api/v1/sessions/{session_id}/models          # Create new model
-PUT    /api/v1/sessions/{session_id}/models/{model_id} # Update existing model
-GET    /api/v1/sessions/{session_id}/models          # List models in session
-DELETE /api/v1/sessions/{session_id}/models/{model_id} # Delete model
-```
-
-#### Parametric Operations
-```
-PUT    /api/v1/sessions/{session_id}/parameters      # Update parameters
-GET    /api/v1/sessions/{session_id}/parameters      # Get current parameters
-POST   /api/v1/sessions/{session_id}/operations      # Perform operations (boolean, fillet, etc.)
+### CORS Policy
+```cpp
+// In cad_controller.cpp
+res.set_header("Access-Control-Allow-Origin", "*");  // Development
+res.set_header("Access-Control-Allow-Origin", "https://your-domain.com");  // Production
+res.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+res.set_header("Access-Control-Allow-Headers", "Content-Type, X-Session-ID");
 ```
 
-#### Export Operations
-```
-GET    /api/v1/sessions/{session_id}/export/{format} # Export model (STEP, STL, etc.)
-POST   /api/v1/sessions/{session_id}/tessellate      # Get mesh data for Three.js
-```
+## 🛠️ Core Endpoints
 
-## Request/Response Schemas
-
-### Standard Request Format
-Define request schemas in [shared/types/api-types.ts](mdc:shared/types/api-types.ts):
-
-```typescript
-interface CADRequest {
-    session_id: string;
-    operation: OperationType;
-    parameters?: Record<string, any>;
-    options?: OperationOptions;
-}
-
-interface ModelCreateRequest extends CADRequest {
-    operation: 'create_model';
-    parameters: {
-        type: 'primitive' | 'sketch' | 'imported';
-        primitive_type?: 'box' | 'cylinder' | 'sphere' | 'cone';
-        dimensions?: Record<string, number>;
-        position?: [number, number, number];
-        rotation?: [number, number, number];
-    };
-}
-
-interface ParameterUpdateRequest extends CADRequest {
-    operation: 'update_parameters';
-    parameters: Record<string, number>;
-}
-
-interface BooleanOperationRequest extends CADRequest {
-    operation: 'boolean_operation';
-    parameters: {
-        operation_type: 'union' | 'cut' | 'intersect';
-        target_id: string;
-        tool_id: string;
-    };
-}
+### 1. Health Check
+```http
+GET /api/v1/health
 ```
 
-### Standard Response Format
-```typescript
-interface CADResponse {
-    success: boolean;
-    session_id: string;
-    timestamp: string;
-    data?: any;
-    error?: {
-        code: string;
-        message: string;
-        details?: Record<string, any>;
-    };
-    performance?: {
-        processing_time_ms: number;
-        geometry_complexity: number;
-    };
-}
-
-interface ModelResponse extends CADResponse {
-    data: {
-        model_id: string;
-        mesh_data?: MeshData;
-        bounding_box: BoundingBox;
-        file_urls?: Record<string, string>; // format -> download URL
-    };
-}
-
-interface MeshData {
-    vertices: number[];      // Flat array: [x1,y1,z1, x2,y2,z2, ...]
-    faces: number[];         // Triangle indices: [i1,i2,i3, i4,i5,i6, ...]
-    normals?: number[];      // Vertex normals (optional)
-    colors?: number[];       // Vertex colors (optional)
-    metadata: {
-        vertex_count: number;
-        face_count: number;
-        tessellation_quality: number;
-    };
-}
-```
-
-## Daydreams Integration Pattern
-
-### Compatible Endpoint for Existing System
-Create a Daydreams-compatible endpoint to replace OpenSCAD:
-
-```typescript
-// POST /api/v1/daydreams/cad
-interface DaydreamsCADRequest {
-    sessionId: string;
-    instruction: string;  // Natural language instruction
-    parameters?: Record<string, any>;
-}
-
-interface DaydreamsCADResponse {
-    success: boolean;
-    script?: string;      // For backward compatibility (can be empty)
-    status: 'idle' | 'processing' | 'error';
-    message: string;
-    errorMessage?: string;
-    // New CAD-specific fields
-    model_data?: {
-        mesh: MeshData;
-        files: Record<string, string>;
-        parameters: Record<string, number>;
-    };
-}
-```
-
-### Migration Path
-The endpoint at [server/src/api/daydreams_controller.cpp](mdc:server/src/api/daydreams_controller.cpp) should:
-
-1. Parse natural language instructions
-2. Convert to CAD operations
-3. Execute using OCCT engine
-4. Return compatible response format
-5. Maintain session state
-
-## Error Handling Standards
-
-### Error Code Categories
-```typescript
-enum ErrorCategory {
-    VALIDATION = 'VALIDATION',    // Input validation errors
-    GEOMETRY = 'GEOMETRY',        // OCCT geometry errors
-    SYSTEM = 'SYSTEM',            // System/resource errors
-    SESSION = 'SESSION',          // Session management errors
-}
-
-interface ErrorResponse {
-    success: false;
-    error: {
-        category: ErrorCategory;
-        code: string;
-        message: string;
-        details?: {
-            field?: string;           // For validation errors
-            occt_error?: string;      // For OCCT-specific errors
-            suggestions?: string[];   // Helpful suggestions
-        };
-    };
-}
-```
-
-### Common Error Codes
-```typescript
-const ERROR_CODES = {
-    // Validation errors
-    'VALIDATION_001': 'Missing required parameter',
-    'VALIDATION_002': 'Invalid parameter type',
-    'VALIDATION_003': 'Parameter out of range',
-    
-    // Geometry errors
-    'GEOMETRY_001': 'Invalid geometry operation',
-    'GEOMETRY_002': 'Boolean operation failed',
-    'GEOMETRY_003': 'Tessellation failed',
-    
-    // System errors
-    'SYSTEM_001': 'OCCT initialization failed',
-    'SYSTEM_002': 'Memory allocation failed',
-    'SYSTEM_003': 'File export failed',
-    
-    // Session errors
-    'SESSION_001': 'Session not found',
-    'SESSION_002': 'Session expired',
-    'SESSION_003': 'Session limit exceeded',
-} as const;
-```
-
-## WebSocket Real-time Updates
-
-### WebSocket Protocol
-For real-time parametric updates:
-
-```typescript
-// WebSocket connection: ws://localhost:8080/ws/{session_id}
-
-interface WebSocketMessage {
-    type: MessageType;
-    session_id: string;
-    timestamp: string;
-    data: any;
-}
-
-type MessageType = 
-    | 'parameter_update'
-    | 'geometry_update'
-    | 'operation_complete'
-    | 'error'
-    | 'session_status';
-
-// Client -> Server
-interface ParameterUpdateMessage extends WebSocketMessage {
-    type: 'parameter_update';
-    data: {
-        parameter_name: string;
-        new_value: number;
-        update_id: string; // For tracking
-    };
-}
-
-// Server -> Client
-interface GeometryUpdateMessage extends WebSocketMessage {
-    type: 'geometry_update';
-    data: {
-        update_id: string;
-        mesh_delta?: MeshData; // Only changed geometry
-        full_mesh?: MeshData;  // Full geometry if needed
-        performance_info: {
-            update_time_ms: number;
-            complexity_score: number;
-        };
-    };
-}
-```
-
-## Performance and Caching
-
-### Response Caching Strategy
-```typescript
-interface CacheHeaders {
-    'Cache-Control': string;
-    'ETag': string;
-    'Last-Modified': string;
-}
-
-// Geometry data caching
-const CACHE_STRATEGIES = {
-    mesh_data: {
-        ttl: 300, // 5 minutes
-        invalidate_on: ['parameter_change', 'geometry_operation']
-    },
-    export_files: {
-        ttl: 3600, // 1 hour
-        invalidate_on: ['model_change']
-    },
-    session_state: {
-        ttl: 1800, // 30 minutes
-        invalidate_on: ['session_timeout']
-    }
-};
-```
-
-### Rate Limiting
-```typescript
-interface RateLimit {
-    window_ms: number;
-    max_requests: number;
-    per_session?: boolean;
-}
-
-const RATE_LIMITS = {
-    parameter_updates: { window_ms: 1000, max_requests: 10, per_session: true },
-    geometry_operations: { window_ms: 5000, max_requests: 5, per_session: true },
-    export_requests: { window_ms: 60000, max_requests: 10, per_session: true },
-};
-```
-
-## Security Considerations
-
-### Input Validation
-All API endpoints should validate input according to schemas defined in [shared/types/validation.ts](mdc:shared/types/validation.ts):
-
-```typescript
-import { z } from 'zod';
-
-const ParameterSchema = z.object({
-    name: z.string().min(1).max(50).regex(/^[a-zA-Z][a-zA-Z0-9_]*$/),
-    value: z.number().finite().min(-1000).max(1000),
-});
-
-const GeometryOperationSchema = z.object({
-    operation: z.enum(['create', 'modify', 'boolean', 'fillet', 'chamfer']),
-    parameters: z.record(z.union([z.string(), z.number(), z.boolean()])),
-});
-```
-
-### Session Security
-```typescript
-interface SessionSecurity {
-    max_session_lifetime: number;    // 24 hours
-    max_models_per_session: number;  // 10 models
-    max_file_size: number;           // 100MB exports
-    allowed_origins: string[];       // CORS origins
-}
-```
-
-## Documentation Standards
-
-### OpenAPI Specification
-Maintain API documentation in [docs/api-spec.yml](mdc:docs/api-spec.yml) using OpenAPI 3.0:
-
-```yaml
-openapi: 3.0.0
-info:
-  title: CAD Engine API
-  version: 1.0.0
-  description: OpenCASCADE-based parametric modeling API
-
-paths:
-  /api/v1/sessions/{session_id}/models:
-    post:
-      summary: Create new CAD model
-      parameters:
-        - name: session_id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ModelCreateRequest'
-```
-
-### Response Examples
-Include comprehensive examples in API documentation:
-
+**Response:**
 ```json
 {
-  "success": true,
-  "session_id": "user_123_session",
-  "timestamp": "2024-01-15T10:30:00Z",
-  "data": {
-    "model_id": "box_001",
-    "mesh_data": {
-      "vertices": [0,0,0, 10,0,0, 10,10,0, ...],
-      "faces": [0,1,2, 2,3,0, ...],
-      "metadata": {
-        "vertex_count": 8,
-        "face_count": 12,
-        "tessellation_quality": 0.1
-      }
-    },
-    "bounding_box": {
-      "min": [0, 0, 0],
-      "max": [10, 10, 10]
-    },
-    "file_urls": {
-      "step": "/api/v1/files/box_001.step",
-      "stl": "/api/v1/files/box_001.stl"
-    }
-  },
-  "performance": {
-    "processing_time_ms": 45,
-    "geometry_complexity": 8
+  "status": "healthy",
+  "server": "CAD Engine v1.0.0",
+  "occt_version": "7.7.0",
+  "timestamp": "2024-01-01T12:00:00Z",
+  "uptime_seconds": 3600
+}
+```
+
+### 2. Session Management
+
+#### Create Session
+```http
+POST /api/v1/sessions
+```
+
+**Request:**
+```json
+{
+  "user_id": "optional-user-identifier",
+  "preferences": {
+    "units": "mm",
+    "precision": 0.1
   }
 }
 ```
+
+**Response:**
+```json
+{
+  "session_id": "session_abc123",
+  "created_at": "2024-01-01T12:00:00Z",
+  "expires_at": "2024-01-01T16:00:00Z"
+}
+```
+
+### 3. Model Operations
+
+#### Create Model
+```http
+POST /api/v1/models
+```
+
+**Request (Primitive):**
+```json
+{
+  "session_id": "session_abc123",
+  "operation": "create_model",
+  "parameters": {
+    "type": "primitive",
+    "primitive_type": "box",
+    "dimensions": {
+      "width": 10.0,
+      "height": 5.0,
+      "depth": 2.0
+    },
+    "position": {
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0
+    }
+  }
+}
+```
+
+**Request (Boolean Operation):**
+```json
+{
+  "session_id": "session_abc123",
+  "operation": "boolean_operation",
+  "parameters": {
+    "type": "union",
+    "operand_a": "model_123",
+    "operand_b": "model_456"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "model_id": "model_789",
+  "operation": "create_model",
+  "status": "success",
+  "geometry": {
+    "bounding_box": {
+      "min": {"x": -5.0, "y": -2.5, "z": -1.0},
+      "max": {"x": 5.0, "y": 2.5, "z": 1.0}
+    },
+    "volume": 100.0,
+    "surface_area": 140.0
+  },
+  "created_at": "2024-01-01T12:00:00Z"
+}
+```
+
+#### Get Model
+```http
+GET /api/v1/models/{model_id}
+```
+
+**Response:**
+```json
+{
+  "model_id": "model_789",
+  "session_id": "session_abc123",
+  "parameters": {
+    "type": "primitive",
+    "primitive_type": "box",
+    "dimensions": {"width": 10.0, "height": 5.0, "depth": 2.0}
+  },
+  "geometry": {
+    "bounding_box": {
+      "min": {"x": -5.0, "y": -2.5, "z": -1.0},
+      "max": {"x": 5.0, "y": 2.5, "z": 1.0}
+    },
+    "volume": 100.0,
+    "surface_area": 140.0
+  },
+  "mesh_data": {
+    "vertices": [/* array of vertex positions */],
+    "faces": [/* array of triangle indices */],
+    "normals": [/* array of vertex normals */]
+  },
+  "created_at": "2024-01-01T12:00:00Z",
+  "updated_at": "2024-01-01T12:00:00Z"
+}
+```
+
+#### Update Model Parameters
+```http
+PUT /api/v1/models/{model_id}
+```
+
+**Request:**
+```json
+{
+  "session_id": "session_abc123",
+  "parameters": {
+    "dimensions": {
+      "width": 15.0,
+      "height": 5.0,
+      "depth": 2.0
+    }
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "model_id": "model_789",
+  "status": "updated",
+  "geometry": {
+    "bounding_box": {
+      "min": {"x": -7.5, "y": -2.5, "z": -1.0},
+      "max": {"x": 7.5, "y": 2.5, "z": 1.0}
+    },
+    "volume": 150.0,
+    "surface_area": 190.0
+  },
+  "updated_at": "2024-01-01T12:05:00Z"
+}
+```
+
+#### Delete Model
+```http
+DELETE /api/v1/models/{model_id}
+```
+
+**Response:**
+```json
+{
+  "model_id": "model_789",
+  "status": "deleted",
+  "deleted_at": "2024-01-01T12:10:00Z"
+}
+```
+
+### 4. Export Operations
+
+#### Export Model
+```http
+POST /api/v1/models/{model_id}/export
+```
+
+**Request:**
+```json
+{
+  "session_id": "session_abc123",
+  "format": "step",
+  "options": {
+    "units": "mm",
+    "precision": 0.01
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "export_id": "export_def456",
+  "model_id": "model_789",
+  "format": "step",
+  "status": "completed",
+  "download_url": "/api/v1/exports/export_def456/download",
+  "file_size": 1024,
+  "created_at": "2024-01-01T12:15:00Z"
+}
+```
+
+#### Download Export
+```http
+GET /api/v1/exports/{export_id}/download
+```
+
+**Response:** Binary file data with appropriate Content-Type header.
+
+## 🎯 Implementation Guidelines
+
+### Error Handling
+
+#### HTTP Status Codes
+- **200 OK**: Successful operation
+- **201 Created**: Resource created successfully
+- **400 Bad Request**: Invalid request parameters
+- **404 Not Found**: Resource not found
+- **409 Conflict**: Resource conflict (e.g., duplicate names)
+- **500 Internal Server Error**: Server-side error
+
+#### Error Response Format
+```json
+{
+  "error": {
+    "code": "INVALID_PARAMETERS",
+    "message": "Box dimensions must be positive values",
+    "details": {
+      "field": "dimensions.width",
+      "value": -5.0,
+      "constraint": "must be > 0"
+    },
+    "timestamp": "2024-01-01T12:00:00Z"
+  }
+}
+```
+
+### Validation Rules
+
+#### Parameter Validation
+```cpp
+// In cad_controller.cpp
+bool validateBoxDimensions(const Json::Value& dimensions) {
+    if (!dimensions.isMember("width") || !dimensions.isMember("height") || !dimensions.isMember("depth")) {
+        return false;
+    }
+    
+    double width = dimensions["width"].asDouble();
+    double height = dimensions["height"].asDouble();
+    double depth = dimensions["depth"].asDouble();
+    
+    return width > 0 && height > 0 && depth > 0;
+}
+```
+
+#### Session Validation
+```cpp
+bool validateSession(const std::string& sessionId) {
+    return sessionManager.hasSession(sessionId) && !sessionManager.isExpired(sessionId);
+}
+```
+
+### Response Formatting
+
+#### Consistent JSON Structure
+```cpp
+// Success response helper
+Json::Value createSuccessResponse(const std::string& operation, const Json::Value& data) {
+    Json::Value response;
+    response["status"] = "success";
+    response["operation"] = operation;
+    response["data"] = data;
+    response["timestamp"] = getCurrentTimestamp();
+    return response;
+}
+
+// Error response helper  
+Json::Value createErrorResponse(const std::string& code, const std::string& message) {
+    Json::Value response;
+    response["error"]["code"] = code;
+    response["error"]["message"] = message;
+    response["error"]["timestamp"] = getCurrentTimestamp();
+    return response;
+}
+```
+
+## 🔧 Server Implementation
+
+### Route Registration
+```cpp
+// In cad_controller.cpp
+void CADController::setupRoutes() {
+    // Health check
+    server.Get("/api/v1/health", [this](mdc:const httplib::Request&, httplib::Response& res) {
+        handleHealthCheck(res);
+    });
+    
+    // Session management
+    server.Post("/api/v1/sessions", [this](mdc:const httplib::Request& req, httplib::Response& res) {
+        handleCreateSession(req, res);
+    });
+    
+    // Model operations
+    server.Post("/api/v1/models", [this](mdc:const httplib::Request& req, httplib::Response& res) {
+        handleCreateModel(req, res);
+    });
+    
+    server.Get(R"(/api/v1/models/(\w+))", [this](mdc:const httplib::Request& req, httplib::Response& res) {
+        handleGetModel(req, res);
+    });
+    
+    server.Put(R"(/api/v1/models/(\w+))", [this](mdc:const httplib::Request& req, httplib::Response& res) {
+        handleUpdateModel(req, res);
+    });
+    
+    server.Delete(R"(/api/v1/models/(\w+))", [this](mdc:const httplib::Request& req, httplib::Response& res) {
+        handleDeleteModel(req, res);
+    });
+}
+```
+
+### Request Parsing
+```cpp
+bool CADController::parseJsonRequest(const httplib::Request& req, Json::Value& json) {
+    try {
+        Json::CharReaderBuilder builder;
+        std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
+        std::string errors;
+        
+        if (!reader->parse(req.body.c_str(), req.body.c_str() + req.body.length(), &json, &errors)) {
+            return false;
+        }
+        return true;
+    } catch (const std::exception&) {
+        return false;
+    }
+}
+```
+
+## 🔍 Testing API Endpoints
+
+### Automated Testing
+```bash
+# Health check
+curl -X GET http://localhost:8080/api/v1/health
+
+# Create session
+curl -X POST http://localhost:8080/api/v1/sessions \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "test-user"}'
+
+# Create box model
+curl -X POST http://localhost:8080/api/v1/models \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "session_abc123",
+    "operation": "create_model",
+    "parameters": {
+      "type": "primitive",
+      "primitive_type": "box",
+      "dimensions": {"width": 10, "height": 5, "depth": 2}
+    }
+  }'
+```
+
+### Integration with Client
+The [CADClient](mdc:client/src/api/cad-client.ts) implements these API calls:
+
+```typescript
+// Create model example
+const response = await cadClient.createModel({
+  operation: 'create_model',
+  parameters: {
+    type: 'primitive',
+    primitive_type: 'box',
+    dimensions: { width: 10, height: 5, depth: 2 }
+  }
+});
+```
+
+This API design ensures consistency, type safety, and professional CAD operation standards while maintaining compatibility with the Three.js frontend.
 

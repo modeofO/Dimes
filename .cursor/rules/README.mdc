@@ -5,6 +5,80 @@ alwaysApply: false
 ---
 # CAD Engine Project Rules - Master Guide
 
+Welcome to the CAD Engine project! This is a professional 3D CAD application built with OpenCASCADE (OCCT) backend and Three.js frontend.
+
+## 🏗️ Project Architecture
+
+This is a **client-server architecture** with:
+- **Backend**: C++ OpenCASCADE server on port 8080
+- **Frontend**: TypeScript Three.js client on port 5173
+- **Communication**: REST API + optional WebSocket for real-time updates
+
+## 📁 Key Project Structure
+
+```
+Dimes/
+├── client/                 # Three.js TypeScript frontend
+│   ├── src/
+│   │   ├── api/           # Server communication ([cad-client.ts](mdc:client/src/api/cad-client.ts))
+│   │   ├── renderer/      # 3D rendering ([cad-renderer.ts](mdc:client/src/renderer/cad-renderer.ts))
+│   │   ├── controls/      # Camera controls ([cad-controls.ts](mdc:client/src/controls/cad-controls.ts))
+│   │   ├── mesh/          # Geometry processing ([mesh-manager.ts](mdc:client/src/mesh/mesh-manager.ts))
+│   │   ├── types/         # TypeScript definitions
+│   │   └── main.ts        # Application entry point ([main.ts](mdc:client/src/main.ts))
+├── server/                # OCCT C++ backend
+│   ├── include/           # Header files
+│   │   ├── api/           # REST API ([cad_controller.h](mdc:server/include/api/cad_controller.h))
+│   │   ├── geometry/      # OCCT operations ([occt_engine.h](mdc:server/include/geometry/occt_engine.h))
+│   │   └── session/       # Session management ([session_manager.h](mdc:server/include/session/session_manager.h))
+│   ├── src/               # Implementation files
+│   └── CMakeLists.txt     # Build configuration ([CMakeLists.txt](mdc:server/CMakeLists.txt))
+```
+
+## 🎯 Core Components
+
+### Server Side (C++)
+- **CADController**: HTTP server with REST endpoints ([cad_controller.cpp](mdc:server/src/api/cad_controller.cpp))
+- **OCCTEngine**: OpenCASCADE geometric operations ([occt_engine.cpp](mdc:server/src/geometry/occt_engine.cpp))
+- **SessionManager**: Multi-user session handling ([session_manager.cpp](mdc:server/src/session/session_manager.cpp))
+
+### Client Side (TypeScript)
+- **CADApplication**: Main application orchestrator ([main.ts](mdc:client/src/main.ts))
+- **CADRenderer**: Three.js 3D rendering engine ([cad-renderer.ts](mdc:client/src/renderer/cad-renderer.ts))
+- **CADClient**: Server communication layer ([cad-client.ts](mdc:client/src/api/cad-client.ts))
+- **MeshManager**: Geometry mesh processing ([mesh-manager.ts](mdc:client/src/mesh/mesh-manager.ts))
+
+## 🔧 Development Workflow
+
+1. **Server Development**: Work in C++ with OCCT, build with CMake
+2. **Client Development**: Work in TypeScript with Three.js, build with Vite
+3. **API Integration**: REST endpoints for geometry operations
+4. **Real-time Updates**: Optional WebSocket for live geometry updates
+
+## 📚 Additional Rules
+
+For detailed guidelines, see these specialized rules:
+- [Architecture Overview](mdc:architecture-overview.mdc) - System design principles
+- [Development Workflow](mdc:development-workflow.mdc) - Build and deployment
+- [API Design Guidelines](mdc:api-design-guidelines.mdc) - REST API standards
+- [Client Three.js Development](mdc:client-threejs-development.mdc) - Frontend guidelines
+- [Server OCCT Development](mdc:server-occt-development.mdc) - Backend guidelines
+- [Project Structure](mdc:project-structure.mdc) - File organization
+
+## 🚀 Quick Start
+
+1. **Server**: `cd server/build && cmake --build . --config Release`
+2. **Client**: `cd client && npm run dev`
+3. **Access**: Open `http://localhost:5173`
+
+## 🎯 Key Principles
+
+- **Separation of Concerns**: Clean client/server architecture
+- **Type Safety**: Full TypeScript on client, modern C++ on server
+- **Professional CAD**: Production-ready geometry processing
+- **Real-time**: Responsive 3D interactions and updates
+- **Cross-platform**: Windows, Linux, macOS support
+
 ## Overview
 This repository contains a professional CAD application built with OpenCASCADE Technology (OCCT) for precise parametric modeling and Three.js for browser-based visualization. It serves as a drop-in replacement for OpenSCAD in Daydreams AI workflows.
 

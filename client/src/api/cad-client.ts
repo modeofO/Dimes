@@ -115,7 +115,12 @@ export class CADClient {
     // Real-time updates
     public onGeometryUpdate(callback: (meshData: MeshData) => void): void {
         this.geometryUpdateCallback = callback;
-        this.setupWebSocket();
+        // Make WebSocket connection optional - don't block if it fails
+        try {
+            this.setupWebSocket();
+        } catch (error) {
+            console.log('WebSocket not available, using REST API only:', error);
+        }
     }
     
     private setupWebSocket(): void {
@@ -124,36 +129,39 @@ export class CADClient {
         }
         
         const wsUrl = this.baseUrl.replace(/^http/, 'ws') + `/ws/${this.sessionId}`;
-        this.ws = new WebSocket(wsUrl);
         
-        this.ws.onopen = () => {
-            console.log('WebSocket connected');
-        };
-        
-        this.ws.onmessage = (event) => {
-            try {
-                const message = JSON.parse(event.data);
-                this.handleWebSocketMessage(message);
-            } catch (error) {
-                console.error('Failed to parse WebSocket message:', error);
-            }
-        };
-        
-        this.ws.onclose = () => {
-            console.log('WebSocket disconnected');
-            this.ws = null;
+        try {
+            this.ws = new WebSocket(wsUrl);
             
-            // Attempt to reconnect after a delay
-            setTimeout(() => {
-                if (this.geometryUpdateCallback) {
-                    this.setupWebSocket();
+            this.ws.onopen = () => {
+                console.log('WebSocket connected');
+            };
+            
+            this.ws.onmessage = (event) => {
+                try {
+                    const message = JSON.parse(event.data);
+                    this.handleWebSocketMessage(message);
+                } catch (error) {
+                    console.error('Failed to parse WebSocket message:', error);
                 }
-            }, 3000);
-        };
-        
-        this.ws.onerror = (error) => {
-            console.error('WebSocket error:', error);
-        };
+            };
+            
+            this.ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                this.ws = null;
+                
+                // Don't attempt to reconnect - just log it
+                console.log('WebSocket disconnected, continuing with REST API only');
+            };
+            
+            this.ws.onerror = (error) => {
+                console.log('WebSocket not available, using REST API only');
+                this.ws = null;
+            };
+        } catch (error) {
+            console.log('WebSocket connection failed, continuing with REST API only');
+            this.ws = null;
+        }
     }
     
     private handleWebSocketMessage(message: any): void {

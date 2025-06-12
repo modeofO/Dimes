@@ -5,38 +5,177 @@ alwaysApply: false
 ---
 # CAD Application Architecture Overview
 
-## System Architecture
-This is a server-based CAD application that replaces OpenSCAD in the Daydreams AI workflow. The system uses OpenCASCADE Technology (OCCT) for precise parametric modeling and Three.js for browser-based visualization.
+## 🏗️ System Architecture
 
-## Core Components
+The CAD Engine follows a **client-server architecture** designed for professional 3D CAD operations:
 
-### Server Side (Precision Engine)
-- **OCCT Geometry Kernel**: Handles parametric B-Rep modeling
-- **CAD API Server**: REST API for model operations
-- **Tessellation Engine**: Converts OCCT geometry to Three.js meshes
-- **File Export System**: Generates STEP, STL, and other CAD formats
-
-### Client Side (Visualization)
-- **Three.js Renderer**: Real-time 3D visualization
-- **Mesh Manager**: Handles geometry updates from server
-- **UI Controls**: Camera, lighting, and interaction controls
-
-### Integration Layer
-- **Daydreams Interface**: API endpoints compatible with existing AI agent
-- **Session Management**: Maintains parametric model state
-- **Real-time Updates**: WebSocket/HTTP streaming for live geometry updates
-
-## Data Flow
 ```
-Daydreams AI → CAD API → OCCT Engine → Tessellator → Three.js Browser
-    ↓             ↓         ↓            ↓           ↓
-Natural Lang → Parameters → B-Rep Model → Triangles → Visual Render
+┌─────────────────┐    HTTP/REST     ┌─────────────────┐
+│   Three.js      │◄─────────────────►│   OCCT C++      │
+│   Client        │    WebSocket     │   Server        │
+│   (Port 5173)   │    (optional)    │   (Port 8080)   │
+└─────────────────┘                  └─────────────────┘
 ```
 
-## Key Design Principles
-1. **Separation of Concerns**: Precise modeling (server) vs. Visualization (client)
-2. **Parametric First**: All geometry is parameter-driven and updateable
-3. **Format Agnostic**: Support multiple CAD file formats
-4. **Performance Optimized**: Efficient tessellation and mesh transfer
-5. **API Compatible**: Drop-in replacement for OpenSCAD workflow
+## 🎯 Design Principles
+
+### 1. **Separation of Concerns**
+- **Client**: UI, 3D rendering, user interaction
+- **Server**: Geometry computation, CAD operations, data persistence
+- **Communication**: Clean REST API boundaries
+
+### 2. **Professional CAD Standards**
+- **Precision**: OCCT provides industry-standard geometric accuracy
+- **Performance**: Efficient tessellation and mesh processing
+- **Reliability**: Session management and error handling
+
+### 3. **Modern Development**
+- **Type Safety**: Full TypeScript on client, modern C++ on server
+- **Real-time**: WebSocket for live geometry updates
+- **Cross-platform**: Windows, Linux, macOS support
+
+## 🔧 Component Architecture
+
+### Server Components ([server/](mdc:server))
+
+#### Core Engine
+- **OCCTEngine** ([occt_engine.h](mdc:server/include/geometry/occt_engine.h)): OpenCASCADE operations
+  - Primitive creation (box, cylinder, sphere, cone)
+  - Boolean operations (union, cut, intersection)
+  - Geometric transformations
+  - Export to STEP/STL/OBJ/IGES
+
+#### API Layer
+- **CADController** ([cad_controller.h](mdc:server/include/api/cad_controller.h)): HTTP server
+  - REST endpoints for CAD operations
+  - CORS support for browser access
+  - JSON request/response handling
+  - Error handling and validation
+
+#### Session Management
+- **SessionManager** ([session_manager.h](mdc:server/include/session/session_manager.h)): Multi-user support
+  - Session lifecycle management
+  - User isolation and data separation
+  - Resource cleanup and memory management
+
+#### Tessellation
+- **TessellationEngine** ([tessellation_engine.h](mdc:server/include/tessellation/tessellation_engine.h)): Mesh generation
+  - High-quality triangle mesh generation
+  - Configurable mesh density
+  - Optimized for Three.js rendering
+
+### Client Components ([client/src/](mdc:client/src))
+
+#### Application Core
+- **Main Application** ([main.ts](mdc:client/src/main.ts)): Application orchestrator
+  - Component initialization and lifecycle
+  - Error handling and user feedback
+  - Keyboard shortcuts and user interaction
+
+#### 3D Rendering
+- **CADRenderer** ([cad-renderer.ts](mdc:client/src/renderer/cad-renderer.ts)): Three.js engine
+  - Scene setup with professional lighting
+  - Grid, axes, and visual aids
+  - Material and shader management
+  - Responsive viewport handling
+
+#### User Interaction
+- **CADControls** ([cad-controls.ts](mdc:client/src/controls/cad-controls.ts)): Camera and viewport
+  - OrbitControls for 3D navigation
+  - Keyboard shortcuts (Ctrl+1/2/3/0)
+  - View presets (front, top, right, isometric)
+  - Smooth camera transitions
+
+#### Server Communication
+- **CADClient** ([cad-client.ts](mdc:client/src/api/cad-client.ts)): API communication
+  - REST API client with fetch() wrapper
+  - WebSocket connection for real-time updates
+  - Connection state management
+  - Retry logic and error handling
+
+#### Geometry Processing
+- **MeshManager** ([mesh-manager.ts](mdc:client/src/mesh/mesh-manager.ts)): Mesh operations
+  - Three.js geometry creation from server data
+  - Mesh optimization and LOD (Level of Detail)
+  - Material assignment and rendering optimization
+
+## 🔄 Data Flow
+
+### 1. **CAD Operation Request**
+```
+User Input → CADClient → REST API → OCCTEngine → Database
+```
+
+### 2. **Geometry Update Response**
+```
+OCCTEngine → TessellationEngine → WebSocket → MeshManager → CADRenderer
+```
+
+### 3. **Real-time Visualization**
+```
+Server Mesh Data → Client BufferGeometry → Three.js Scene → WebGL Render
+```
+
+## 📡 Communication Protocols
+
+### REST API Endpoints
+- `GET /api/v1/health` - Server health check
+- `POST /api/v1/models` - Create new CAD model
+- `GET /api/v1/models/{id}` - Retrieve model data
+- `PUT /api/v1/models/{id}` - Update model parameters
+- `DELETE /api/v1/models/{id}` - Delete model
+- `POST /api/v1/models/{id}/export` - Export to file format
+
+### WebSocket Events (Optional)
+- `geometry_update` - Real-time mesh data updates
+- `parameter_change` - Live parameter modifications
+- `session_status` - Session state changes
+
+## 🎯 Key Architectural Patterns
+
+### 1. **Repository Pattern**
+- **Server**: SessionManager acts as repository for CAD sessions
+- **Client**: CADClient abstracts server communication
+
+### 2. **Observer Pattern**
+- **WebSocket**: Real-time updates from server to client
+- **Event System**: UI components react to geometry changes
+
+### 3. **Factory Pattern**
+- **OCCTEngine**: Creates geometry primitives and operations
+- **MeshManager**: Creates Three.js geometry from server data
+
+### 4. **Singleton Pattern**
+- **OCCTEngine**: Single instance for geometric operations
+- **SessionManager**: Single instance for session coordination
+
+## 🔒 Security Considerations
+
+### CORS Configuration
+- Explicit origin allowlist for production
+- Credential handling for authenticated sessions
+
+### Input Validation
+- Parameter validation on all API endpoints
+- Geometry bounds checking and limits
+- Resource usage monitoring
+
+### Session Security
+- Session token generation and validation
+- User isolation and data separation
+- Automatic session cleanup and timeouts
+
+## 🚀 Performance Optimization
+
+### Server Performance
+- **Memory Management**: RAII patterns and smart pointers
+- **Computation**: Parallel tessellation where possible
+- **Caching**: Session-level geometry caching
+
+### Client Performance
+- **Rendering**: LOD and frustum culling
+- **Memory**: Geometry pooling and cleanup
+- **Network**: Debounced API calls and compression
+
+This architecture provides a solid foundation for professional CAD operations while maintaining modern development practices and user experience standards.
 

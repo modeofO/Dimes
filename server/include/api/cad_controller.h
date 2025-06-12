@@ -3,11 +3,20 @@
 #include <string>
 #include <memory>
 
+// Forward declarations
 class SessionManager;
+namespace httplib {
+    class Server;
+    class Request;
+}
+namespace Json {
+    class Value;
+}
 
 class CADController {
 private:
     int port_;
+    std::unique_ptr<httplib::Server> server_;
     
 public:
     explicit CADController(int port);
@@ -17,6 +26,14 @@ public:
     void stop();
     
 private:
+    // HTTP server setup
+    void setupRoutes();
+    
+    // Utility functions
+    std::string getSessionId(const httplib::Request& req);
+    std::string getContentType(const std::string& format);
+    std::string jsonToString(const Json::Value& json);
+    
     // HTTP request handlers
     void handleCreateModel(const std::string& session_id, const std::string& request_body, std::string& response);
     void handleUpdateParameter(const std::string& session_id, const std::string& request_body, std::string& response);
@@ -27,7 +44,7 @@ private:
     // Daydreams compatibility endpoint
     void handleDaydreamsCAD(const std::string& request_body, std::string& response);
     
-    // Utility functions
+    // Response utilities
     std::string createErrorResponse(const std::string& message);
     std::string createSuccessResponse(const std::string& data);
 }; 

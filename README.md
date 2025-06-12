@@ -88,10 +88,16 @@ sequenceDiagram
 
 ### Prerequisites
 
-**Windows Requirements:**
-- **Visual Studio Build Tools 2022** (C++ compiler)
+**All Platforms:**
 - **CMake 3.20+** 
 - **Node.js 18+**
+- **OpenCASCADE 7.7+**
+- **C++ Compiler** (Visual Studio 2022, GCC 10+, or Clang 12+)
+
+**Platform-Specific Dependencies:**
+
+#### Windows Requirements
+- **Visual Studio Build Tools 2022** (C++ compiler)
 - **OpenCASCADE 7.7+** (Windows VC++ 2022 64-bit package + 3rd party)
 
 *Third Party Includes:*
@@ -99,6 +105,16 @@ sequenceDiagram
 - **jemalloc** (Memory allocator)
 
 *Third party in the installer includes much more but those packages are essential to the build*
+
+#### Linux Requirements (Ubuntu/Debian)
+- **Build essentials**: `build-essential`, `cmake`, `git`
+- **OpenCASCADE**: Available via package manager or source build
+- **Additional libraries**: `libtbb-dev`, `libjemalloc-dev`
+
+#### macOS Requirements
+- **Xcode Command Line Tools** or **Xcode**
+- **Homebrew** package manager
+- **OpenCASCADE**: Available via Homebrew
 
 ### 1. Install System Dependencies
 
@@ -116,6 +132,46 @@ winget install OpenJS.NodeJS
 # - Visual Studio Build Tools 2022: https://visualstudio.microsoft.com/downloads/
 ```
 
+#### Linux Setup (Ubuntu/Debian)
+
+```bash
+# Update package manager
+sudo apt update
+
+# Install build tools
+sudo apt install build-essential cmake git curl
+
+# Install Node.js (via NodeSource)
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# Install OpenCASCADE and dependencies
+sudo apt install libocct-foundation-dev libocct-modeling-data-dev \
+                 libocct-modeling-algorithms-dev libocct-visualization-dev \
+                 libocct-application-framework-dev libocct-data-exchange-dev \
+                 libtbb-dev libjemalloc-dev
+
+# Alternative: Install from source
+# wget https://git.dev.opencascade.org/gitweb/?p=occt.git;a=snapshot;h=refs/tags/V7_7_0;sf=tgz
+# tar -xzf occt-V7_7_0.tar.gz && cd occt-V7_7_0
+# mkdir build && cd build
+# cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local
+# make -j$(nproc) && sudo make install
+```
+
+#### macOS Setup
+
+```bash
+# Install Homebrew (if not installed)
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install dependencies
+brew install cmake node opencascade tbb jemalloc
+
+# Install Xcode Command Line Tools (if not installed)
+xcode-select --install
+```
+
 ### 2. Clone and Setup
 
 ```bash
@@ -130,6 +186,7 @@ cd ..
 
 ### 3. Build OCCT Server
 
+#### Windows Build
 ```bash
 cd server
 
@@ -146,12 +203,38 @@ cmake --build . --config Release
 cd ..
 ```
 
+#### Linux/macOS Build
+```bash
+cd server
+
+# Create build directory
+mkdir build
+cd build
+
+# Configure with CMake
+cmake .. -DCMAKE_BUILD_TYPE=Release
+
+# Build with multiple cores
+make -j$(nproc)  # Linux
+# make -j$(sysctl -n hw.ncpu)  # macOS
+
+cd ..
+```
+
 ### 4. Run the Application
 
 #### Terminal 1: Start OCCT Server
+
+**Windows:**
 ```bash
 cd server/build/Release
 ./cad-engine-server.exe
+```
+
+**Linux/macOS:**
+```bash
+cd server/build
+./cad-server
 ```
 
 You should see:

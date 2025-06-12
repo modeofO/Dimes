@@ -51,6 +51,29 @@ if(NOT OpenCASCADE_FOUND)
     endif()
 endif()
 
+# Find JSON library (jsoncpp)
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(JSONCPP jsoncpp)
+endif()
+
+if(NOT JSONCPP_FOUND)
+    # Try to find jsoncpp using find_package
+    find_package(jsoncpp QUIET)
+    if(jsoncpp_FOUND)
+        set(JSONCPP_LIBRARIES jsoncpp_lib)
+        set(JSONCPP_FOUND TRUE)
+        message(STATUS "Found jsoncpp using find_package")
+    endif()
+endif()
+
+if(NOT JSONCPP_FOUND)
+    message(STATUS "jsoncpp not found via package manager, using header-only fallback")
+    # Create a simple JSON implementation fallback or use bundled jsoncpp
+    # For now, we'll create minimal JSON handling
+    add_definitions(-DUSE_SIMPLE_JSON)
+endif()
+
 # Build configuration
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     if(MSVC)
@@ -76,6 +99,12 @@ if(OpenCASCADE_INCLUDE_DIR)
 elseif(DEFINED ENV{CASROOT})
     include_directories("$ENV{CASROOT}/inc")
     message(STATUS "Using CASROOT include dir: $ENV{CASROOT}/inc")
+endif()
+
+# Add jsoncpp include directories if found
+if(JSONCPP_FOUND AND JSONCPP_INCLUDE_DIRS)
+    include_directories(${JSONCPP_INCLUDE_DIRS})
+    message(STATUS "Using jsoncpp include dirs: ${JSONCPP_INCLUDE_DIRS}")
 endif()
 
 # Source files
@@ -138,6 +167,12 @@ endif()
 target_link_libraries(cad-server 
     ${AVAILABLE_OCCT_LIBS}
 )
+
+# Link jsoncpp if found
+if(JSONCPP_FOUND)
+    target_link_libraries(cad-server ${JSONCPP_LIBRARIES})
+    message(STATUS "Linking jsoncpp libraries: ${JSONCPP_LIBRARIES}")
+endif()
 
 # Add pthread on non-Windows systems
 if(NOT WIN32)
