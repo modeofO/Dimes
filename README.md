@@ -92,11 +92,13 @@ sequenceDiagram
 - **Visual Studio Build Tools 2022** (C++ compiler)
 - **CMake 3.20+** 
 - **Node.js 18+**
-- **OpenCASCADE 7.7+** (Windows VC++ 2022 64-bit package)
+- **OpenCASCADE 7.7+** (Windows VC++ 2022 64-bit package + 3rd party)
 
-**Optional Dependencies:**
+*Third Party Includes:*
 - **Intel TBB** (Threading Building Blocks)
 - **jemalloc** (Memory allocator)
+
+*Third party in the installer includes much more but those packages are essential to the build*
 
 ### 1. Install System Dependencies
 
