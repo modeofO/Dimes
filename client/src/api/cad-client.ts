@@ -1,4 +1,4 @@
-import { CADResponse, ModelCreateRequest, ModelResponse, DaydreamsInstructionRequest } from '../types/api';
+import { CADResponse, ModelCreateRequest, ModelResponse } from '../types/api';
 import { MeshData, ExportFormat, PrimitiveType } from '../types/geometry';
 
 export class CADClient {
@@ -89,26 +89,6 @@ export class CADClient {
         return `${this.baseUrl}/api/v1/cad/sessions/${this.sessionId}/export/${format}`;
     }
     
-    // Daydreams compatibility
-    public async sendInstruction(instruction: string): Promise<CADResponse> {
-        const request: DaydreamsInstructionRequest = {
-            instruction,
-            sessionId: this.sessionId,
-        };
-        
-        const response = await this.makeRequest<CADResponse>('/api/v1/cad/daydreams', 'POST', request);
-        
-        // The agent's response is a log of its execution. We need to find the geometry update.
-        if (response.data && Array.isArray(response.data)) {
-            const geometryUpdate = response.data.find(log => log.ref === 'output' && log.type === 'geometry_update');
-            if (geometryUpdate && geometryUpdate.data.mesh_data && this.geometryUpdateCallback) {
-                this.geometryUpdateCallback(geometryUpdate.data.mesh_data);
-            }
-        }
-        
-        return response;
-    }
-    
     // Real-time updates
     public onGeometryUpdate(callback: (meshData: MeshData) => void): void {
         this.geometryUpdateCallback = callback;
@@ -132,6 +112,10 @@ export class CADClient {
             
             this.ws.onopen = () => {
                 console.log('WebSocket connected');
+                // Subscribe to geometry updates
+                this.ws!.send(JSON.stringify({
+                    type: 'subscribe_geometry_updates'
+                }));
             };
             
             this.ws.onmessage = (event) => {

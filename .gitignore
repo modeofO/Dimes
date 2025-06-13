@@ -219,3 +219,5 @@ deploy/
 .aws/
 .azure/
 .gcp/ 
+
+smart-agent/node_modules

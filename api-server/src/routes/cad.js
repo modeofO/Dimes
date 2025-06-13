@@ -4,7 +4,7 @@ import { CppBackendClient } from '../services/cppBackendClient.js';
 import { logger } from '../utils/logger.js';
 import { ApiError } from '../utils/errors.js';
 
-export default function(agent) {
+export default function() {
   const router = express.Router();
   const cppBackend = new CppBackendClient();
 
@@ -51,14 +51,6 @@ export default function(agent) {
   const validateExport = [
     param('sessionId').isString().notEmpty().withMessage('Session ID is required'),
     param('format').isIn(['step', 'stp', 'stl', 'obj', 'iges']).withMessage('Invalid export format'),
-    handleValidationErrors,
-  ];
-
-  // Daydreams validation
-  const validateDaydreams = [
-    body('instruction').isString().notEmpty().withMessage('Instruction is required'),
-    body('sessionId').isString().notEmpty().withMessage('Session ID is required'),
-    body('parameters').optional().isObject().withMessage('Parameters must be an object'),
     handleValidationErrors,
   ];
 
@@ -195,35 +187,6 @@ export default function(agent) {
 
     } catch (error) {
       next(new ApiError(500, 'Failed to export model', error.message));
-    }
-  });
-
-  /**
-   * POST /api/v1/cad/daydreams
-   * AI-powered CAD operations via Daydreams
-   */
-  router.post('/daydreams', validateDaydreams, async (req, res, next) => {
-    try {
-      const { instruction, sessionId, parameters = {} } = req.body;
-  
-      logger.info(`Processing Daydreams request for session ${sessionId}`, { instruction });
-  
-      const result = await agent.run({
-        context: 'cad',
-        args: { sessionId },
-        input: instruction,
-      });
-  
-      res.json({
-        success: true,
-        session_id: sessionId,
-        timestamp: Date.now(),
-        data: result,
-      });
-  
-    } catch (error) {
-      logger.error('Daydreams agent run failed', { error: error, message: error.message, stack: error.stack });
-      next(new ApiError(500, 'Failed to process Daydreams request', error.message));
     }
   });
 

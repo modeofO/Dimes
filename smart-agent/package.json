@@ -1,0 +1,16 @@
+{
+  "name": "smart-agent",
+  "version": "1.0.0",
+  "description": "An autonomous Daydreams agent that uses the CAD MCP server.",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@daydreamsai/core": "latest",
+    "@daydreamsai/mcp": "latest",
+    "@openrouter/ai-sdk-provider": "latest",
+    "zod": "latest"
+  }
+} 
