@@ -90,6 +90,18 @@ export class MeshManager {
             mesh.material = material;
         }
     }
+
+    public clearAllMeshes(): void {
+        // Remove all meshes from scene
+        this.activeMeshes.forEach(mesh => this.scene.remove(mesh));
+        this.activeMeshes.clear();
+        
+        // Dispose all geometries
+        this.geometryCache.forEach(geometry => geometry.dispose());
+        this.geometryCache.clear();
+        
+        console.log('Cleared all meshes from scene');
+    }
     
     public dispose(): void {
         // Dispose all geometries

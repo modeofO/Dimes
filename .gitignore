@@ -66,6 +66,8 @@ client/yarn-error.log*
 client/pnpm-debug.log*
 client/lerna-debug.log*
 
+api-server/node_modules/
+
 # Build outputs
 client/dist/
 client/dist-ssr/
@@ -119,6 +121,8 @@ client/.env.local
 client/.env.development.local
 client/.env.test.local
 client/.env.production.local
+
+api-server/.env
 
 # Stores VSCode versions used for testing VSCode extensions
 client/.vscode-test

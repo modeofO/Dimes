@@ -99,6 +99,10 @@ export class CADRenderer {
     public updateGeometry(modelId: string, meshData: MeshData): void {
         this.meshManager.updateMesh(modelId, meshData);
     }
+
+    public clearAllGeometry(): void {
+        this.meshManager.clearAllMeshes();
+    }
     
     public removeGeometry(modelId: string): void {
         this.meshManager.removeMesh(modelId);

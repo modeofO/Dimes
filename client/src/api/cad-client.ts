@@ -12,6 +12,7 @@ export class CADClient {
         this.sessionId = sessionId;
         
         console.log(`CAD Client initialized for session: ${sessionId}`);
+        console.log(`Connecting to Node.js API server at: ${this.baseUrl}`);
     }
     
     // Model operations
@@ -22,13 +23,11 @@ export class CADClient {
         position?: [number, number, number];
         rotation?: [number, number, number];
     }): Promise<ModelResponse> {
-        const request: ModelCreateRequest = {
-            session_id: this.sessionId,
-            operation: 'create_model',
+        const request = {
             parameters
         };
         
-        const response = await this.makeRequest<ModelResponse>('/api/v1/models', 'POST', request);
+        const response = await this.makeRequest<ModelResponse>('/api/v1/cad/models', 'POST', request);
         
         // If mesh data is included, trigger geometry update
         if (response.data?.mesh_data && this.geometryUpdateCallback) {
@@ -40,12 +39,10 @@ export class CADClient {
     
     public async updateParameter(name: string, value: number): Promise<CADResponse> {
         const request = {
-            session_id: this.sessionId,
-            operation: 'update_parameters',
-            parameters: { [name]: value }
+            [name]: value
         };
         
-        return this.makeRequest<CADResponse>('/api/v1/parameters', 'PUT', request);
+        return this.makeRequest<CADResponse>('/api/v1/cad/parameters', 'PUT', request);
     }
     
     public async performBoolean(operation: {
@@ -53,33 +50,27 @@ export class CADClient {
         target_id: string;
         tool_id: string;
     }): Promise<CADResponse> {
-        const request = {
-            session_id: this.sessionId,
-            operation: 'boolean_operation',
-            parameters: operation
-        };
-        
-        return this.makeRequest<CADResponse>('/api/v1/operations', 'POST', request);
+        return this.makeRequest<CADResponse>('/api/v1/cad/operations', 'POST', operation);
     }
     
     public async tessellate(modelId: string, quality: number = 0.1): Promise<MeshData> {
         const request = {
-            session_id: this.sessionId,
             model_id: modelId,
             tessellation_quality: quality
         };
         
-        const response = await this.makeRequest<{ mesh_data: MeshData }>('/api/v1/tessellate', 'POST', request);
+        const response = await this.makeRequest<{ mesh_data: MeshData }>('/api/v1/cad/tessellate', 'POST', request);
         return response.mesh_data;
     }
     
     public async exportModel(format: ExportFormat): Promise<Blob> {
-        const url = `${this.baseUrl}/api/v1/sessions/${this.sessionId}/export/${format}`;
+        const url = `${this.baseUrl}/api/v1/cad/sessions/${this.sessionId}/export/${format}`;
         
         const response = await fetch(url, {
             method: 'GET',
             headers: {
-                'Accept': this.getAcceptHeader(format)
+                'Accept': this.getAcceptHeader(format),
+                'X-Session-ID': this.sessionId
             }
         });
         
@@ -91,7 +82,7 @@ export class CADClient {
     }
     
     public getModelUrl(format: string): string {
-        return `${this.baseUrl}/api/v1/sessions/${this.sessionId}/export/${format}`;
+        return `${this.baseUrl}/api/v1/cad/sessions/${this.sessionId}/export/${format}`;
     }
     
     // Daydreams compatibility
@@ -102,7 +93,7 @@ export class CADClient {
             parameters
         };
         
-        const response = await this.makeRequest<DaydreamsCADResponse>('/api/v1/daydreams/cad', 'POST', request);
+        const response = await this.makeRequest<DaydreamsCADResponse>('/api/v1/cad/daydreams', 'POST', request);
         
         // If model data is included, trigger geometry update
         if (response.model_data?.mesh && this.geometryUpdateCallback) {
@@ -128,7 +119,7 @@ export class CADClient {
             return; // Already connected
         }
         
-        const wsUrl = this.baseUrl.replace(/^http/, 'ws') + `/ws/${this.sessionId}`;
+        const wsUrl = this.baseUrl.replace(/^http/, 'ws') + `/ws?sessionId=${this.sessionId}`;
         
         try {
             this.ws = new WebSocket(wsUrl);
@@ -166,6 +157,9 @@ export class CADClient {
     
     private handleWebSocketMessage(message: any): void {
         switch (message.type) {
+            case 'connection_established':
+                console.log('WebSocket connection established for session:', message.sessionId);
+                break;
             case 'geometry_update':
                 if (message.data && this.geometryUpdateCallback) {
                     this.geometryUpdateCallback(message.data);
@@ -174,8 +168,14 @@ export class CADClient {
             case 'parameter_update':
                 console.log('Parameter updated:', message.data);
                 break;
+            case 'backend_status':
+                console.log('Backend status:', message.status);
+                break;
             case 'error':
-                console.error('Server error:', message.data);
+                console.error('Server error:', message.data || message.error);
+                break;
+            case 'pong':
+                // Heartbeat response - no action needed
                 break;
             default:
                 console.log('Unknown message type:', message.type);

@@ -63,12 +63,15 @@ class CADApplication {
         // Create renderer
         this.renderer = new CADRenderer(viewport);
         
+        // Clear any existing geometry (including fallback cubes)
+        this.renderer.clearAllGeometry();
+        
         console.log('✅ Three.js renderer initialized');
     }
 
     private async initializeClient(): Promise<void> {
-        // Connect to OCCT server running on port 8080
-        this.client = new CADClient('http://localhost:8080', this.sessionId);
+        // Connect to Node.js API server running on port 3000
+        this.client = new CADClient('http://localhost:3000', this.sessionId);
         
         // Set up geometry update callback
         this.client.onGeometryUpdate((meshData: MeshData) => {
@@ -358,76 +361,26 @@ class CADApplication {
 
     private async testServerConnection(): Promise<void> {
         try {
-            // Try to create a simple test primitive to verify server connection
+            // Test server connection without creating visible geometry
             console.log('Testing server connection...');
             
-            // This will test the full pipeline: API → OCCT → Tessellation
-            const response = await this.client.createModel({
-                type: 'primitive',
-                primitive_type: 'box',
-                dimensions: { width: 0.1, height: 0.1, depth: 0.1 },
-                position: [100, 100, 100] // Position off-screen for now
-            });
+            // Just check the health endpoint instead of creating geometry
+            const healthResponse = await fetch('http://localhost:3000/api/v1/health');
             
-            console.log('✅ Server connection successful:', response);
+            if (healthResponse.ok) {
+                console.log('✅ Server connection successful');
+            } else {
+                throw new Error(`Server health check failed: ${healthResponse.status}`);
+            }
             
         } catch (error) {
             console.warn('⚠️  Server connection test failed:', error);
             this.updateStatus('Server offline - running in demo mode', 'warning');
-            // Create fallback geometry for demo
-            this.createFallbackGeometry();
+            // Don't create fallback geometry - keep viewport clean
         }
     }
 
-    private createFallbackGeometry(): void {
-        // Create a simple Three.js cube as fallback when server is unavailable
-        const fallbackMesh: MeshData = {
-            vertices: [
-                // Front face
-                -5, -5,  5,   5, -5,  5,   5,  5,  5,  -5,  5,  5,
-                // Back face
-                -5, -5, -5,  -5,  5, -5,   5,  5, -5,   5, -5, -5,
-                // Top face
-                -5,  5, -5,  -5,  5,  5,   5,  5,  5,   5,  5, -5,
-                // Bottom face
-                -5, -5, -5,   5, -5, -5,   5, -5,  5,  -5, -5,  5,
-                // Right face
-                 5, -5, -5,   5,  5, -5,   5,  5,  5,   5, -5,  5,
-                // Left face
-                -5, -5, -5,  -5, -5,  5,  -5,  5,  5,  -5,  5, -5
-            ],
-            faces: [
-                0,  1,  2,    0,  2,  3,    // front
-                4,  5,  6,    4,  6,  7,    // back
-                8,  9,  10,   8,  10, 11,   // top
-                12, 13, 14,   12, 14, 15,   // bottom
-                16, 17, 18,   16, 18, 19,   // right
-                20, 21, 22,   20, 22, 23    // left
-            ],
-            normals: [
-                // Front face
-                0, 0, 1,  0, 0, 1,  0, 0, 1,  0, 0, 1,
-                // Back face
-                0, 0, -1,  0, 0, -1,  0, 0, -1,  0, 0, -1,
-                // Top face
-                0, 1, 0,  0, 1, 0,  0, 1, 0,  0, 1, 0,
-                // Bottom face
-                0, -1, 0,  0, -1, 0,  0, -1, 0,  0, -1, 0,
-                // Right face
-                1, 0, 0,  1, 0, 0,  1, 0, 0,  1, 0, 0,
-                // Left face
-                -1, 0, 0,  -1, 0, 0,  -1, 0, 0,  -1, 0, 0
-            ],
-            metadata: {
-                vertex_count: 24,
-                face_count: 12,
-                tessellation_quality: 1.0
-            }
-        };
-        
-        this.renderer.updateGeometry('fallback-cube', fallbackMesh);
-        console.log('✅ Fallback cube created');
-    }
+
 
     private updateStatus(message: string, type: 'info' | 'success' | 'warning' | 'error'): void {
         if (!this.statusElement) return;

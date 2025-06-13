@@ -2,24 +2,29 @@ openapi: 3.0.3
 info:
   title: Dimes CAD API
   description: |-
-    This is the API for the Dimes CAD application, providing functionalities for creating,
-    modifying, and exporting 3D models. It also includes endpoints for AI-driven
-    operations through the Daydreams AI framework.
+    This is the Node.js API layer for the Dimes CAD application, providing functionalities for creating,
+    modifying, and exporting 3D models. This API acts as a secure gateway between the frontend
+    and the C++ OpenCascade backend, handling authentication, validation, and protocol translation.
+    It also includes endpoints for AI-driven operations through the Daydreams AI framework.
   version: 1.0.0
 servers:
-  - url: http://localhost:8080/api/v1
-    description: Development server
+  - url: http://localhost:3000/api/v1
+    description: Node.js API Server (Development)
+  - url: https://api.dimes-cad.com/api/v1
+    description: Production API Server
 tags:
   - name: Health
-    description: API Health Check
-  - name: Models
+    description: API Health Check and Backend Status
+  - name: CAD Models
     description: Operations related to 3D models
-  - name: Operations
+  - name: CAD Operations
     description: Geometric and boolean operations
-  - name: Export
+  - name: CAD Export
     description: Exporting models to different formats
-  - name: AI
-    description: AI-powered CAD operations
+  - name: CAD AI
+    description: AI-powered CAD operations via Daydreams
+  - name: Backend
+    description: C++ Backend status and monitoring
 components:
   schemas:
     Vector3d:
@@ -163,7 +168,7 @@ paths:
       tags:
         - Health
       summary: Check API Health
-      description: Returns the health status of the CAD engine server.
+      description: Returns the health status of the Node.js API server and C++ backend.
       operationId: getHealth
       responses:
         '200':
@@ -178,19 +183,51 @@ paths:
                     example: healthy
                   service:
                     type: string
-                    example: CAD Engine Server
+                    example: Dimes CAD API Server
                   version:
                     type: string
                     example: 1.0.0
                   timestamp:
                     type: integer
                     format: int64
-  /models:
+                  uptime:
+                    type: number
+                    description: Server uptime in seconds
+                  memory:
+                    type: object
+                    description: Memory usage statistics
+                  environment:
+                    type: string
+                    example: development
+                  backend:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        enum: [healthy, unhealthy, unknown]
+                      health:
+                        type: object
+                        description: C++ backend health data
+                      url:
+                        type: string
+                        description: C++ backend URL
+                  performance:
+                    type: object
+                    properties:
+                      response_time_ms:
+                        type: number
+        '503':
+          description: Service unavailable (backend unhealthy).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /cad/models:
     post:
       tags:
-        - Models
+        - CAD Models
       summary: Create a new 3D model
-      description: Creates a new primitive 3D model (e.g., box, cylinder, sphere).
+      description: Creates a new primitive 3D model (e.g., box, cylinder, sphere) via the C++ backend.
       operationId: createModel
       requestBody:
         description: Parameters for creating the new model.
@@ -208,9 +245,26 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Model'
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  session_id:
+                    type: string
+                  timestamp:
+                    type: integer
+                    format: int64
+                  data:
+                    $ref: '#/components/schemas/Model'
         '400':
-          description: Invalid request body.
+          description: Invalid request body or validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: C++ backend unavailable.
           content:
             application/json:
               schema:
@@ -221,12 +275,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  /operations:
+  /cad/operations:
     post:
       tags:
-        - Operations
+        - CAD Operations
       summary: Perform a boolean operation
-      description: Performs a boolean operation (union, cut, intersect) between two models.
+      description: Performs a boolean operation (union, cut, intersect) between two models via the C++ backend.
       operationId: performBooleanOperation
       requestBody:
         description: Parameters for the boolean operation.
@@ -271,12 +325,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  /tessellate:
+  /cad/tessellate:
     post:
       tags:
-        - Models
+        - CAD Models
       summary: Tessellate a model
-      description: Generates a mesh representation of a model for visualization.
+      description: Generates a mesh representation of a model for visualization via the C++ backend.
       operationId: tessellateModel
       requestBody:
         description: Parameters for tessellation.
@@ -319,12 +373,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  /sessions/{sessionId}/export/{format}:
+  /cad/sessions/{sessionId}/export/{format}:
     get:
       tags:
-        - Export
+        - CAD Export
       summary: Export a model
-      description: Exports a model to a specified format (e.g., STEP, STL).
+      description: Exports a model to a specified format (e.g., STEP, STL) via the C++ backend.
       operationId: exportModel
       parameters:
         - name: sessionId
@@ -364,12 +418,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-  /daydreams/cad:
+  /cad/daydreams:
     post:
       tags:
-        - AI
+        - CAD AI
       summary: AI-powered CAD operation
-      description: Executes a CAD operation based on a natural language instruction.
+      description: Executes a CAD operation based on a natural language instruction via the Daydreams AI framework and C++ backend.
       operationId: daydreamsCad
       requestBody:
         description: The instruction for the AI.
@@ -410,4 +464,167 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error' 
+                $ref: '#/components/schemas/Error'
+  /cad/parameters:
+    put:
+      tags:
+        - CAD Models
+      summary: Update model parameters
+      description: Updates parameters of existing models via the C++ backend.
+      operationId: updateParameters
+      requestBody:
+        description: Parameters to update.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: number
+              example:
+                width: 15.0
+                height: 20.0
+      responses:
+        '200':
+          description: Parameters updated successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  session_id:
+                    type: string
+                  timestamp:
+                    type: integer
+                    format: int64
+                  data:
+                    type: object
+        '400':
+          description: Invalid parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: C++ backend unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /cad/backend/status:
+    get:
+      tags:
+        - Backend
+      summary: Check C++ backend status
+      description: Returns the status and health of the C++ OpenCascade backend.
+      operationId: getBackendStatus
+      responses:
+        '200':
+          description: Backend is available and healthy.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  backend_status:
+                    type: string
+                    enum: [available, unavailable]
+                  backend_health:
+                    type: object
+                    description: Health data from C++ backend
+                  timestamp:
+                    type: integer
+                    format: int64
+        '503':
+          description: Backend is unavailable.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  backend_status:
+                    type: string
+                    example: unavailable
+                  error:
+                    type: string
+                  timestamp:
+                    type: integer
+                    format: int64
+  /health/ready:
+    get:
+      tags:
+        - Health
+      summary: Readiness probe
+      description: Checks if the service is ready to accept traffic (including backend availability).
+      operationId: getReadiness
+      responses:
+        '200':
+          description: Service is ready.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ready
+                  timestamp:
+                    type: integer
+                    format: int64
+                  backend_ready:
+                    type: boolean
+        '503':
+          description: Service is not ready.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: not_ready
+                  timestamp:
+                    type: integer
+                    format: int64
+                  backend_ready:
+                    type: boolean
+                  message:
+                    type: string
+  /health/live:
+    get:
+      tags:
+        - Health
+      summary: Liveness probe
+      description: Checks if the service is alive (basic health check).
+      operationId: getLiveness
+      responses:
+        '200':
+          description: Service is alive.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: alive
+                  timestamp:
+                    type: integer
+                    format: int64
+                  uptime:
+                    type: number

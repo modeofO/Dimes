@@ -1,6 +1,6 @@
 # CAD Engine - Professional 3D CAD Application
 
-A sophisticated CAD application built to replace OpenSCAD in the Daydreams AI workflow. Features a powerful **OpenCASCADE (OCCT)** server backend with a modern **Three.js** client frontend.
+A sophisticated CAD application built to replace OpenSCAD in the Daydreams AI workflow. Features a three-tier architecture with a **Node.js API layer**, **OpenCASCADE (OCCT)** C++ backend, and modern **Three.js** client frontend.
 
 ![CAD Engine Screenshot](https://via.placeholder.com/800x400/f0f0f0/333333?text=CAD+Engine+3D+Viewport)
 
@@ -8,10 +8,12 @@ A sophisticated CAD application built to replace OpenSCAD in the Daydreams AI wo
 
 This CAD engine provides:
 
-- **🔧 Professional CAD Backend**: OpenCASCADE (OCCT) C++ server for robust geometric modeling
+- **🔧 Professional CAD Backend**: OpenCASCADE (OCCT) C++ engine for robust geometric modeling
+- **🌐 Secure API Layer**: Node.js middleware for authentication, validation, and protocol translation
 - **🎨 Modern 3D Frontend**: Three.js TypeScript client with professional viewport controls  
 - **⚡ Real-time Updates**: WebSocket communication for live geometry updates
 - **🔗 REST API**: Complete CRUD operations for CAD models and parameters
+- **🛡️ Security & Monitoring**: Rate limiting, input validation, health checks, and logging
 - **🤖 AI Integration**: Daydreams AI compatible endpoints for natural language CAD operations
 - **📤 Multi-format Export**: STEP, STL, OBJ, IGES format support
 
@@ -21,16 +23,22 @@ This CAD engine provides:
 
 ```mermaid
 graph TB
-    subgraph "Client (Port 5173)"
+    subgraph "Frontend (Port 5173)"
         UI[Three.js UI]
         Renderer[CAD Renderer]
         Controls[Camera Controls]
-        API[API Client]
+        Client[CAD Client]
     end
     
-    subgraph "Server (Port 8080)"
-        REST[REST API Endpoints]
-        WS[WebSocket Handler]
+    subgraph "Node.js API (Port 3000)"
+        Routes[API Routes]
+        WS[WebSocket Manager]
+        Validation[Request Validation]
+        Auth[Authentication]
+        Backend[C++ Backend Client]
+    end
+    
+    subgraph "C++ Backend (Port 8080)"
         OCCT[OCCT Engine]
         Session[Session Manager]
         Tess[Tessellation]
@@ -44,44 +52,74 @@ graph TB
     
     UI --> Controls
     UI --> Renderer
-    API --> REST
-    API --> WS
-    REST --> Session
-    WS --> Session
-    Session --> OCCT
+    Client --> Routes
+    Client --> WS
+    Routes --> Validation
+    Routes --> Auth
+    Validation --> Backend
+    Auth --> Backend
+    Backend --> OCCT
+    WS --> Backend
+    OCCT --> Session
     OCCT --> Tess
     OCCT --> Export
     Export --> Files
-    Daydreams --> REST
+    Daydreams --> Routes
     
-    Tess -.->|Mesh Data| WS
-    WS -.->|Real-time Updates| API
-    API -.->|Geometry Updates| Renderer
+    Tess -.->|Mesh Data| Backend
+    Backend -.->|Real-time Updates| WS
+    WS -.->|WebSocket| Client
+    Client -.->|Geometry Updates| Renderer
 ```
+
+### Three-Tier Architecture
+
+The application uses a modern three-tier architecture for better security, scalability, and maintainability:
+
+1. **Frontend (Port 5173)**: Three.js TypeScript client
+   - User interface and 3D visualization
+   - Camera controls and viewport management
+   - Real-time geometry updates via WebSocket
+
+2. **Node.js API Layer (Port 3000)**: Secure gateway
+   - Authentication and session management
+   - Request validation and rate limiting
+   - Protocol translation between web and C++
+   - WebSocket management for real-time updates
+   - Security headers and CORS handling
+
+3. **C++ Backend (Port 8080)**: OpenCASCADE engine
+   - Core geometric modeling operations
+   - Tessellation and mesh generation
+   - File export (STEP, STL, OBJ, IGES)
+   - Session-based geometry storage
 
 ### Data Flow
 
 ```mermaid
 sequenceDiagram
     participant U as User
-    participant C as Client (Three.js)
-    participant A as REST API
-    participant O as OCCT Engine
+    participant F as Frontend (Three.js)
+    participant N as Node.js API
+    participant C as C++ Backend
     participant W as WebSocket
     
-    U->>C: Create Box (10x10x10)
-    C->>A: POST /api/v1/models
-    A->>O: CreatePrimitive(box, dimensions)
-    O->>O: Generate Solid Geometry
-    O->>A: Return Model ID + BBox
-    A->>C: ModelResponse
+    U->>F: Create Box (10x10x10)
+    F->>N: POST /api/v1/cad/models
+    N->>N: Validate Request & Session
+    N->>C: POST /api/v1/models
+    C->>C: CreatePrimitive(box, dimensions)
+    C->>C: Generate Solid Geometry
+    C->>N: Return Model ID + BBox
+    N->>F: ModelResponse
     
-    A->>O: Tessellate(modelId, quality=0.1)
-    O->>O: Generate Triangle Mesh
-    O->>W: Send MeshData
-    W->>C: geometry_update event
-    C->>C: Update Three.js Scene
-    C->>U: Display 3D Model
+    N->>C: POST /api/v1/tessellate
+    C->>C: Generate Triangle Mesh
+    C->>N: Return MeshData
+    N->>W: Send geometry_update
+    W->>F: WebSocket message
+    F->>F: Update Three.js Scene
+    F->>U: Display 3D Model
 ```
 
 ## 🚀 Quick Start
@@ -223,7 +261,7 @@ cd ..
 
 ### 4. Run the Application
 
-#### Terminal 1: Start OCCT Server
+#### Terminal 1: Start C++ Backend Server
 
 **Windows:**
 ```bash
@@ -245,7 +283,28 @@ You should see:
 [INFO] Server is ready to accept connections
 ```
 
-#### Terminal 2: Start Client Development Server
+#### Terminal 2: Start Node.js API Server
+```bash
+cd api-server
+
+# Install dependencies (first time only)
+npm install
+
+# Copy environment template (first time only)
+cp env.example .env
+
+# Start the API server
+npm run dev
+```
+
+You should see:
+```
+🚀 Dimes CAD API Server running on port 3000
+📊 Environment: development
+🔗 C++ Backend: localhost:8080
+```
+
+#### Terminal 3: Start Frontend Development Server
 ```bash
 cd client
 npm run dev
@@ -275,7 +334,7 @@ Navigate to `http://localhost:5173` in your browser.
 Dimes/
 ├── client/                 # Three.js TypeScript frontend
 │   ├── src/
-│   │   ├── api/           # OCCT server communication
+│   │   ├── api/           # API client communication
 │   │   ├── renderer/      # Three.js 3D rendering
 │   │   ├── controls/      # Camera and viewport controls
 │   │   ├── mesh/          # Geometry processing
@@ -283,7 +342,15 @@ Dimes/
 │   │   └── main.ts        # Application entry point
 │   ├── public/            # Static assets
 │   └── package.json       # Node.js dependencies
-├── server/                # OCCT C++ backend
+├── api-server/            # Node.js API layer
+│   ├── src/
+│   │   ├── routes/        # API route handlers
+│   │   ├── services/      # Business logic services
+│   │   ├── middleware/    # Express middleware
+│   │   └── utils/         # Utility functions
+│   ├── scripts/           # Development scripts
+│   └── package.json       # Node.js dependencies
+├── server/                # C++ OpenCascade backend
 │   ├── include/           # Header files
 │   │   ├── api/           # REST API handlers
 │   │   ├── geometry/      # OCCT geometry operations
@@ -292,7 +359,7 @@ Dimes/
 │   ├── src/               # Implementation files
 │   └── CMakeLists.txt     # Build configuration
 ├── shared/                # Shared type definitions
-└── Docs/                  # Documentation
+└── Docs/                  # Documentation and OpenAPI schema
 ```
 
 ### Development Commands
