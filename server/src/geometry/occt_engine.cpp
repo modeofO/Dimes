@@ -35,17 +35,25 @@ OCCTEngine::~OCCTEngine() {
 }
 
 std::string OCCTEngine::createBox(const BoxParameters& params) {
+    std::cout << "📦 OCCT createBox called: " << params.width << "x" << params.height << "x" << params.depth << std::endl;
+    std::cout.flush();
+    
     try {
         gp_Pnt corner(params.position.x, params.position.y, params.position.z);
         BRepPrimAPI_MakeBox boxMaker(corner, params.width, params.height, params.depth);
         
         TopoDS_Shape box = boxMaker.Shape();
         if (!validateShape(box)) {
+            std::cout << "❌ Box shape validation failed!" << std::endl;
+            std::cout.flush();
             return "";
         }
         
         std::string shape_id = generateShapeId();
         shapes_[shape_id] = box;
+        
+        std::cout << "✅ Box created successfully with ID: " << shape_id << std::endl;
+        std::cout.flush();
         
         return shape_id;
     } catch (const Standard_Failure& e) {
@@ -55,17 +63,25 @@ std::string OCCTEngine::createBox(const BoxParameters& params) {
 }
 
 std::string OCCTEngine::createCylinder(double radius, double height, const Vector3d& position) {
+    std::cout << "🛢️ OCCT createCylinder called: radius=" << radius << ", height=" << height << std::endl;
+    std::cout.flush();
+    
     try {
         gp_Ax2 axis(gp_Pnt(position.x, position.y, position.z), gp_Dir(0, 0, 1));
         BRepPrimAPI_MakeCylinder cylinderMaker(axis, radius, height);
         
         TopoDS_Shape cylinder = cylinderMaker.Shape();
         if (!validateShape(cylinder)) {
+            std::cout << "❌ Cylinder shape validation failed!" << std::endl;
+            std::cout.flush();
             return "";
         }
         
         std::string shape_id = generateShapeId();
         shapes_[shape_id] = cylinder;
+        
+        std::cout << "✅ Cylinder created successfully with ID: " << shape_id << std::endl;
+        std::cout.flush();
         
         return shape_id;
     } catch (const Standard_Failure& e) {
@@ -118,7 +134,12 @@ bool OCCTEngine::unionShapes(const std::string& shape1_id, const std::string& sh
 MeshData OCCTEngine::tessellate(const std::string& shape_id, double deflection) {
     MeshData meshData;
     
+    std::cout << "🔍 OCCT tessellate called for shape: " << shape_id << std::endl;
+    std::cout.flush();
+    
     if (!shapeExists(shape_id)) {
+        std::cout << "❌ Shape " << shape_id << " does not exist!" << std::endl;
+        std::cout.flush();
         return meshData;
     }
     

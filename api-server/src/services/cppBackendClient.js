@@ -84,16 +84,31 @@ export class CppBackendClient {
    */
   async createModel(sessionId, parameters) {
     try {
+      // Flatten the structure to avoid C++ JSON parsing issues
+      const requestBody = {
+        session_id: sessionId,
+        operation: 'create_model',
+        type: parameters.type,
+        primitive_type: parameters.primitive_type,
+        dimensions: parameters.dimensions,
+        position: parameters.position,
+        rotation: parameters.rotation,
+        // Keep original nested structure as backup
+        parameters,
+      };
+      
+      const jsonString = JSON.stringify(requestBody);
+      
+      // Debug: Log what we're sending to C++
+      console.log('🔧 Node.js sending to C++:', jsonString);
+      console.log('🔧 Parameters object:', JSON.stringify(parameters, null, 2));
+      
       const response = await this.makeRequest('/api/v1/models', {
         method: 'POST',
         headers: {
           'X-Session-ID': sessionId,
         },
-        body: JSON.stringify({
-          session_id: sessionId,
-          operation: 'create_model',
-          parameters,
-        }),
+        body: jsonString,
       });
       return response;
     } catch (error) {

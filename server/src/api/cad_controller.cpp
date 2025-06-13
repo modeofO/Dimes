@@ -62,6 +62,11 @@ void CADController::setupRoutes() {
     // Create model endpoint
     server_->Post("/api/v1/models", [this](const httplib::Request& req, httplib::Response& res) {
         try {
+            std::cout << "🔍 HTTP Request received - Content-Length: " << req.get_header_value("Content-Length") << std::endl;
+            std::cout << "🔍 HTTP Request body size: " << req.body.size() << std::endl;
+            std::cout << "🔍 HTTP Request first 100 chars: " << req.body.substr(0, 100) << std::endl;
+            std::cout.flush();
+            
             std::string session_id = getSessionId(req);
             std::string response_body;
             handleCreateModel(session_id, req.body, response_body);
@@ -194,10 +199,16 @@ std::string CADController::jsonToString(const Json::Value& json) {
 
 void CADController::handleCreateModel(const std::string& session_id, const std::string& request_body, std::string& response) {
     try {
+        // Debug: Print raw request body first
+        std::cout << "🔧 RAW request body: " << request_body << std::endl;
+        std::cout.flush();
+        
         // Parse JSON request
         Json::Value request;
         Json::Reader reader;
         if (!reader.parse(request_body, request)) {
+            std::cout << "❌ JSON parsing failed. Raw body: " << request_body << std::endl;
+            std::cout.flush();
             response = createErrorResponse("Invalid JSON in request body");
             return;
         }
@@ -208,46 +219,73 @@ void CADController::handleCreateModel(const std::string& session_id, const std::
             return;
         }
         
-        // Extract parameters from JSON
-        Json::Value params = request.get("parameters", Json::Value());
-        std::string type = params.get("type", "primitive").asString();
+        // Read directly from flat structure (avoiding nested JSON parsing issues)
+        std::string type = request.get("type", "primitive").asString();
+        
+        // Read from flat structure
+        std::string primitive_type = request.get("primitive_type", "box").asString();
+        
+        // Debug: Print the entire JSON structure
+        std::cout << "🔧 Full request JSON: " << jsonToString(request) << std::endl;
+        std::cout << "🔧 Parsed type: '" << type << "'" << std::endl;
+        std::cout << "🔧 Parsed primitive_type: '" << primitive_type << "'" << std::endl;
+        std::cout.flush();
         
         std::string shape_id;
         
         if (type == "primitive") {
-            std::string primitive_type = params.get("primitive_type", "box").asString();
-            
-            // Get position if provided
+            // Get position if provided (from flat structure)
             Vector3d position(0, 0, 0);
-            if (params.isMember("position") && params["position"].size() >= 3) {
-                position.x = params["position"][0].asDouble();
-                position.y = params["position"][1].asDouble();
-                position.z = params["position"][2].asDouble();
+            if (request.isMember("position") && request["position"].size() >= 3) {
+                position.x = request["position"][0].asDouble();
+                position.y = request["position"][1].asDouble();
+                position.z = request["position"][2].asDouble();
             }
+            
+            std::cout << "🔧 Creating primitive: " << primitive_type << std::endl;
+            std::cout.flush();
             
             if (primitive_type == "box") {
                 BoxParameters box_params;
-                Json::Value dimensions = params.get("dimensions", Json::Value());
+                Json::Value dimensions = request.get("dimensions", Json::Value());
                 box_params.width = dimensions.get("width", 10.0).asDouble();
                 box_params.height = dimensions.get("height", 10.0).asDouble();
                 box_params.depth = dimensions.get("depth", 10.0).asDouble();
                 box_params.position = position;
                 
+                std::cout << "📦 Creating BOX: " << box_params.width << "x" << box_params.height << "x" << box_params.depth 
+                          << " at (" << position.x << "," << position.y << "," << position.z << ")" << std::endl;
+                std::cout.flush();
+                
                 shape_id = engine->createBox(box_params);
                 
             } else if (primitive_type == "cylinder") {
-                Json::Value dimensions = params.get("dimensions", Json::Value());
+                Json::Value dimensions = request.get("dimensions", Json::Value());
                 double radius = dimensions.get("radius", 5.0).asDouble();
                 double height = dimensions.get("height", 10.0).asDouble();
+                
+                std::cout << "🛢️ Creating CYLINDER: radius=" << radius << ", height=" << height 
+                          << " at (" << position.x << "," << position.y << "," << position.z << ")" << std::endl;
+                std::cout.flush();
                 
                 shape_id = engine->createCylinder(radius, height, position);
                 
             } else if (primitive_type == "sphere") {
-                Json::Value dimensions = params.get("dimensions", Json::Value());
+                Json::Value dimensions = request.get("dimensions", Json::Value());
                 double radius = dimensions.get("radius", 5.0).asDouble();
                 
+                std::cout << "🔮 Creating SPHERE: radius=" << radius 
+                          << " at (" << position.x << "," << position.y << "," << position.z << ")" << std::endl;
+                std::cout.flush();
+                
                 shape_id = engine->createSphere(radius, position);
+            } else {
+                std::cout << "❌ Unknown primitive type: " << primitive_type << std::endl;
+                std::cout.flush();
             }
+            
+            std::cout << "✅ Created shape with ID: " << shape_id << std::endl;
+            std::cout.flush();
         }
         
         if (shape_id.empty()) {
@@ -256,7 +294,14 @@ void CADController::handleCreateModel(const std::string& session_id, const std::
         }
         
         // Generate mesh data
+        std::cout << "🔍 Tessellating shape: " << shape_id << std::endl;
+        std::cout.flush();
+        
         MeshData mesh = engine->tessellate(shape_id);
+        
+        std::cout << "📊 Tessellation result: " << mesh.metadata.vertex_count << " vertices, " 
+                  << mesh.metadata.face_count << " faces" << std::endl;
+        std::cout.flush();
         
         // Create JSON response
         Json::Value json_response;

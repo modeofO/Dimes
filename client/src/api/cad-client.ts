@@ -29,8 +29,12 @@ export class CADClient {
         
         const response = await this.makeRequest<ModelResponse>('/api/v1/cad/models', 'POST', request);
         
+        // Debug: Log what we received
+        console.log('📨 Received createModel response:', JSON.stringify(response, null, 2));
+        
         // If mesh data is included, trigger geometry update
         if (response.data?.mesh_data && this.geometryUpdateCallback) {
+            console.log('🎯 Updating geometry with mesh data:', response.data.mesh_data.metadata);
             this.geometryUpdateCallback(response.data.mesh_data);
         }
         

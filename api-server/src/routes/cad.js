@@ -73,7 +73,13 @@ export default function(agent) {
 
       logger.info(`Creating model for session ${sessionId}`, { parameters });
 
+      // Debug: Log detailed parameters
+      console.log('🔧 API Server received parameters:', JSON.stringify(parameters, null, 2));
+
       const result = await cppBackend.createModel(sessionId, parameters);
+
+      // Debug: Log C++ backend response
+      console.log('📨 C++ Backend returned:', JSON.stringify(result, null, 2));
 
       res.json({
         success: true,

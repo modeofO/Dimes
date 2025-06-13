@@ -223,13 +223,17 @@ class CADApplication {
 
             this.updateStatus(`Creating ${primitiveType}...`, 'info');
 
-            // Create the primitive via server
-            const response = await this.client.createModel({
+            // Debug: Log what we're sending
+            const requestData = {
                 type: 'primitive',
                 primitive_type: primitiveType as any,
                 dimensions: dimensions,
                 position: position
-            });
+            };
+            console.log('🔧 Sending createModel request:', JSON.stringify(requestData, null, 2));
+
+            // Create the primitive via server
+            const response = await this.client.createModel(requestData);
 
             if (response.success && response.data) {
                 // Add to shapes list
