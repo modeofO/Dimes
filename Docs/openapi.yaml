@@ -1,0 +1,413 @@
+openapi: 3.0.3
+info:
+  title: Dimes CAD API
+  description: |-
+    This is the API for the Dimes CAD application, providing functionalities for creating,
+    modifying, and exporting 3D models. It also includes endpoints for AI-driven
+    operations through the Daydreams AI framework.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Development server
+tags:
+  - name: Health
+    description: API Health Check
+  - name: Models
+    description: Operations related to 3D models
+  - name: Operations
+    description: Geometric and boolean operations
+  - name: Export
+    description: Exporting models to different formats
+  - name: AI
+    description: AI-powered CAD operations
+components:
+  schemas:
+    Vector3d:
+      type: object
+      properties:
+        x:
+          type: number
+          format: double
+          description: X-coordinate
+        y:
+          type: number
+          format: double
+          description: Y-coordinate
+        z:
+          type: number
+          format: double
+          description: Z-coordinate
+      required:
+        - x
+        - y
+        - z
+    BoxParameters:
+      type: object
+      properties:
+        width:
+          type: number
+          format: double
+          description: Width of the box.
+        height:
+          type: number
+          format: double
+          description: Height of the box.
+        depth:
+          type: number
+          format: double
+          description: Depth of the box.
+        position:
+          $ref: '#/components/schemas/Vector3d'
+    CylinderParameters:
+      type: object
+      properties:
+        radius:
+          type: number
+          format: double
+          description: Radius of the cylinder.
+        height:
+          type: number
+          format: double
+          description: Height of the cylinder.
+        position:
+          $ref: '#/components/schemas/Vector3d'
+    SphereParameters:
+      type: object
+      properties:
+        radius:
+          type: number
+          format: double
+          description: Radius of the sphere.
+        position:
+          $ref: '#/components/schemas/Vector3d'
+    Primitive:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [box, cylinder, sphere]
+          description: The type of primitive to create.
+        parameters:
+          oneOf:
+            - $ref: '#/components/schemas/BoxParameters'
+            - $ref: '#/components/schemas/CylinderParameters'
+            - $ref: '#/components/schemas/SphereParameters'
+      discriminator:
+        propertyName: type
+        mapping:
+          box: '#/components/schemas/BoxParameters'
+          cylinder: '#/components/schemas/CylinderParameters'
+          sphere: '#/components/schemas/SphereParameters'
+    MeshData:
+      type: object
+      properties:
+        vertices:
+          type: array
+          items:
+            type: number
+            format: float
+        faces:
+          type: array
+          items:
+            type: integer
+        metadata:
+          type: object
+          properties:
+            vertex_count:
+              type: integer
+            face_count:
+              type: integer
+            tessellation_quality:
+              type: number
+              format: double
+    BoundingBox:
+      type: object
+      properties:
+        min:
+          $ref: '#/components/schemas/Vector3d'
+        max:
+          $ref: '#/components/schemas/Vector3d'
+    Model:
+      type: object
+      properties:
+        model_id:
+          type: string
+          description: The unique identifier for the model.
+        mesh_data:
+          $ref: '#/components/schemas/MeshData'
+        bounding_box:
+          $ref: '#/components/schemas/BoundingBox'
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          description: A message describing the error.
+        timestamp:
+          type: integer
+          format: int64
+          description: The timestamp of when the error occurred.
+  securitySchemes:
+    SessionID:
+      type: apiKey
+      in: header
+      name: X-Session-ID
+security:
+  - SessionID: []
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Check API Health
+      description: Returns the health status of the CAD engine server.
+      operationId: getHealth
+      responses:
+        '200':
+          description: Successful response with health status.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  service:
+                    type: string
+                    example: CAD Engine Server
+                  version:
+                    type: string
+                    example: 1.0.0
+                  timestamp:
+                    type: integer
+                    format: int64
+  /models:
+    post:
+      tags:
+        - Models
+      summary: Create a new 3D model
+      description: Creates a new primitive 3D model (e.g., box, cylinder, sphere).
+      operationId: createModel
+      requestBody:
+        description: Parameters for creating the new model.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                parameters:
+                  $ref: '#/components/schemas/Primitive'
+      responses:
+        '200':
+          description: The model was created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Model'
+        '400':
+          description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /operations:
+    post:
+      tags:
+        - Operations
+      summary: Perform a boolean operation
+      description: Performs a boolean operation (union, cut, intersect) between two models.
+      operationId: performBooleanOperation
+      requestBody:
+        description: Parameters for the boolean operation.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                operation_type:
+                  type: string
+                  enum: [union, cut, intersect]
+                  description: The type of boolean operation to perform.
+                target_id:
+                  type: string
+                  description: The ID of the target model.
+                tool_id:
+                  type: string
+                  description: The ID of the tool model.
+      responses:
+        '200':
+          description: The boolean operation was successful.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result_id:
+                    type: string
+                    description: The ID of the resulting model.
+                  mesh_data:
+                    $ref: '#/components/schemas/MeshData'
+        '400':
+          description: Invalid request parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /tessellate:
+    post:
+      tags:
+        - Models
+      summary: Tessellate a model
+      description: Generates a mesh representation of a model for visualization.
+      operationId: tessellateModel
+      requestBody:
+        description: Parameters for tessellation.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                model_id:
+                  type: string
+                  description: The ID of the model to tessellate.
+                tessellation_quality:
+                  type: number
+                  format: double
+                  description: The quality of the tessellation (e.g., 0.1 for high quality).
+                  default: 0.1
+      responses:
+        '200':
+          description: Tessellation was successful.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeshData'
+        '400':
+          description: Invalid request parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Model not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /sessions/{sessionId}/export/{format}:
+    get:
+      tags:
+        - Export
+      summary: Export a model
+      description: Exports a model to a specified format (e.g., STEP, STL).
+      operationId: exportModel
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          description: The ID of the session.
+          schema:
+            type: string
+        - name: format
+          in: path
+          required: true
+          description: The format to export the model to.
+          schema:
+            type: string
+            enum: [step, stp, stl]
+      responses:
+        '200':
+          description: The model was exported successfully.
+          content:
+            application/step:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-pki.stl:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Session or model not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /daydreams/cad:
+    post:
+      tags:
+        - AI
+      summary: AI-powered CAD operation
+      description: Executes a CAD operation based on a natural language instruction.
+      operationId: daydreamsCad
+      requestBody:
+        description: The instruction for the AI.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                instruction:
+                  type: string
+                  description: The natural language instruction for the CAD operation.
+                sessionId:
+                  type: string
+                  description: The ID of the session.
+      responses:
+        '200':
+          description: The AI operation was completed successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  model_data:
+                    type: object
+        '400':
+          description: Invalid instruction.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error' 

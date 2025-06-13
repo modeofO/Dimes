@@ -22,6 +22,7 @@
             flex: 1;
             position: relative;
             background-color: #2a2a2a;
+            display: flex;
         }
         #status {
             padding: 10px;
@@ -29,15 +30,232 @@
             border-bottom: 1px solid #555;
             font-size: 14px;
         }
+        #control-panel {
+            width: 300px;
+            background-color: #2a2a2a;
+            border-left: 1px solid #555;
+            padding: 15px;
+            overflow-y: auto;
+            box-sizing: border-box;
+        }
+        #viewport-3d {
+            flex: 1;
+            position: relative;
+        }
+        .control-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #333;
+            border-radius: 5px;
+        }
+        .control-section h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: #fff;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .control-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            gap: 8px;
+        }
+        .control-row label {
+            min-width: 60px;
+            font-size: 12px;
+            color: #ccc;
+        }
+        .control-row input, .control-row select {
+            flex: 1;
+            padding: 4px 8px;
+            background-color: #444;
+            border: 1px solid #666;
+            border-radius: 3px;
+            color: #fff;
+            font-size: 12px;
+        }
+        .btn {
+            width: 100%;
+            padding: 8px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        .btn:hover {
+            background-color: #0056b3;
+        }
+        .btn:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+        .btn.danger {
+            background-color: #dc3545;
+        }
+        .btn.danger:hover {
+            background-color: #c82333;
+        }
+        .shape-list {
+            max-height: 150px;
+            overflow-y: auto;
+            background-color: #444;
+            border: 1px solid #666;
+            border-radius: 3px;
+            padding: 5px;
+            margin-top: 10px;
+        }
+        .shape-item {
+            padding: 5px;
+            margin: 2px 0;
+            background-color: #555;
+            border-radius: 2px;
+            font-size: 11px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .shape-item.selected {
+            background-color: #007bff;
+        }
+        .shape-item button {
+            padding: 2px 6px;
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 2px;
+            cursor: pointer;
+            font-size: 10px;
+        }
+        .loading-placeholder {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
     </style>
 </head>
 <body>
     <div id="app">
         <div id="status">Initializing CAD Engine...</div>
         <div id="cad-viewport">
-            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
-                <h2>CAD Engine</h2>
-                <p>Three.js viewport loading...</p>
+            <div id="viewport-3d">
+                <div class="loading-placeholder">
+                    <h2>CAD Engine</h2>
+                    <p>Three.js viewport loading...</p>
+                </div>
+            </div>
+            <div id="control-panel">
+                <div class="control-section">
+                    <h3>Create Primitive</h3>
+                    <div class="control-row">
+                        <label>Type:</label>
+                        <select id="primitive-type">
+                            <option value="box">Box</option>
+                            <option value="cylinder">Cylinder</option>
+                            <option value="sphere">Sphere</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Box Parameters -->
+                    <div id="box-params" class="param-group">
+                        <div class="control-row">
+                            <label>Width:</label>
+                            <input type="number" id="box-width" value="10" step="0.1">
+                        </div>
+                        <div class="control-row">
+                            <label>Height:</label>
+                            <input type="number" id="box-height" value="10" step="0.1">
+                        </div>
+                        <div class="control-row">
+                            <label>Depth:</label>
+                            <input type="number" id="box-depth" value="10" step="0.1">
+                        </div>
+                    </div>
+                    
+                    <!-- Cylinder Parameters -->
+                    <div id="cylinder-params" class="param-group" style="display: none;">
+                        <div class="control-row">
+                            <label>Radius:</label>
+                            <input type="number" id="cylinder-radius" value="5" step="0.1">
+                        </div>
+                        <div class="control-row">
+                            <label>Height:</label>
+                            <input type="number" id="cylinder-height" value="10" step="0.1">
+                        </div>
+                    </div>
+                    
+                    <!-- Sphere Parameters -->
+                    <div id="sphere-params" class="param-group" style="display: none;">
+                        <div class="control-row">
+                            <label>Radius:</label>
+                            <input type="number" id="sphere-radius" value="5" step="0.1">
+                        </div>
+                    </div>
+                    
+                    <!-- Position -->
+                    <div class="control-row">
+                        <label>X:</label>
+                        <input type="number" id="pos-x" value="0" step="0.1">
+                        <label>Y:</label>
+                        <input type="number" id="pos-y" value="0" step="0.1">
+                        <label>Z:</label>
+                        <input type="number" id="pos-z" value="0" step="0.1">
+                    </div>
+                    
+                    <button class="btn" id="create-primitive">Create Primitive</button>
+                </div>
+                
+                <div class="control-section">
+                    <h3>Shapes</h3>
+                    <div id="shape-list" class="shape-list">
+                        <div style="text-align: center; color: #888; font-size: 11px; padding: 10px;">
+                            No shapes created yet
+                        </div>
+                    </div>
+                    <button class="btn danger" id="clear-all" style="margin-top: 5px;">Clear All</button>
+                </div>
+                
+                <div class="control-section">
+                    <h3>Boolean Operations</h3>
+                    <div class="control-row">
+                        <label>Operation:</label>
+                        <select id="boolean-op">
+                            <option value="union">Union</option>
+                            <option value="cut">Cut</option>
+                            <option value="intersect">Intersect</option>
+                        </select>
+                    </div>
+                    <div class="control-row">
+                        <label>Target:</label>
+                        <select id="target-shape">
+                            <option value="">Select shape</option>
+                        </select>
+                    </div>
+                    <div class="control-row">
+                        <label>Tool:</label>
+                        <select id="tool-shape">
+                            <option value="">Select shape</option>
+                        </select>
+                    </div>
+                    <button class="btn" id="perform-boolean" disabled>Perform Operation</button>
+                </div>
+                
+                <div class="control-section">
+                    <h3>View Controls</h3>
+                    <div style="font-size: 11px; color: #ccc; line-height: 1.4;">
+                        <div>Ctrl+1: Front view</div>
+                        <div>Ctrl+2: Top view</div>
+                        <div>Ctrl+3: Right view</div>
+                        <div>Ctrl+0: Isometric view</div>
+                        <div style="margin-top: 8px;">Mouse: Orbit, Pan, Zoom</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

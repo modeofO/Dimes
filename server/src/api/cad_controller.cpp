@@ -16,6 +16,8 @@
 #include <sstream>
 #include <thread>
 #include <ctime>
+#include <fstream>
+#include <cstdio>
 #include "json/json.h"
 
 // Simple HTTP server implementation (placeholder)
@@ -215,16 +217,37 @@ void CADController::handleCreateModel(const std::string& session_id, const std::
         if (type == "primitive") {
             std::string primitive_type = params.get("primitive_type", "box").asString();
             
+            // Get position if provided
+            Vector3d position(0, 0, 0);
+            if (params.isMember("position") && params["position"].size() >= 3) {
+                position.x = params["position"][0].asDouble();
+                position.y = params["position"][1].asDouble();
+                position.z = params["position"][2].asDouble();
+            }
+            
             if (primitive_type == "box") {
                 BoxParameters box_params;
                 Json::Value dimensions = params.get("dimensions", Json::Value());
                 box_params.width = dimensions.get("width", 10.0).asDouble();
                 box_params.height = dimensions.get("height", 10.0).asDouble();
                 box_params.depth = dimensions.get("depth", 10.0).asDouble();
+                box_params.position = position;
                 
                 shape_id = engine->createBox(box_params);
+                
+            } else if (primitive_type == "cylinder") {
+                Json::Value dimensions = params.get("dimensions", Json::Value());
+                double radius = dimensions.get("radius", 5.0).asDouble();
+                double height = dimensions.get("height", 10.0).asDouble();
+                
+                shape_id = engine->createCylinder(radius, height, position);
+                
+            } else if (primitive_type == "sphere") {
+                Json::Value dimensions = params.get("dimensions", Json::Value());
+                double radius = dimensions.get("radius", 5.0).asDouble();
+                
+                shape_id = engine->createSphere(radius, position);
             }
-            // Add other primitive types here (cylinder, sphere, cone)
         }
         
         if (shape_id.empty()) {
@@ -352,16 +375,277 @@ void CADController::handleUpdateParameter(const std::string& session_id, const s
 }
 
 void CADController::handleBooleanOperation(const std::string& session_id, const std::string& request_body, std::string& response) {
-    (void)session_id; (void)request_body; // Suppress unused parameter warnings
-    response = createErrorResponse("Not implemented");
+    try {
+        // Force immediate console output
+        std::cout << "=== BOOLEAN OPERATION CALLED ===" << std::endl;
+        std::cout.flush();
+        
+        // Debug: Print the raw request body
+        std::cout << "Boolean operation - Raw request body: " << request_body << std::endl;
+        std::cout.flush();
+        
+        // Parse JSON request
+        Json::Value request;
+        Json::Reader reader;
+        if (!reader.parse(request_body, request)) {
+            std::cout << "Boolean operation - JSON parsing failed: Invalid JSON format" << std::endl;
+            std::cout.flush();
+            response = createErrorResponse("Invalid JSON in request body");
+            return;
+        }
+        
+        // Debug: Print parsed JSON
+        std::cout << "Boolean operation - Parsed JSON: " << jsonToString(request) << std::endl;
+        std::cout.flush();
+        
+        auto engine = SessionManager::getInstance().getOrCreateSession(session_id);
+        if (!engine) {
+            response = createErrorResponse("Failed to get session");
+            return;
+        }
+        
+        // Extract parameters from JSON
+        Json::Value params = request.get("parameters", Json::Value());
+        std::cout << "Boolean operation - Parameters: " << jsonToString(params) << std::endl;
+        std::cout.flush();
+        
+        // This JSON library has issues with nested objects - let's extract parameters manually from raw request
+        std::cout << "Attempting to extract parameters manually from raw request..." << std::endl;
+        std::cout.flush();
+        
+        size_t params_start = request_body.find("\"parameters\":{");
+        if (params_start != std::string::npos) {
+            // Find the opening brace
+            size_t brace_start = request_body.find("{", params_start + 13);
+            if (brace_start != std::string::npos) {
+                // Find the matching closing brace
+                int brace_count = 1;
+                size_t brace_end = brace_start + 1;
+                while (brace_end < request_body.length() && brace_count > 0) {
+                    if (request_body[brace_end] == '{') brace_count++;
+                    else if (request_body[brace_end] == '}') brace_count--;
+                    brace_end++;
+                }
+                
+                if (brace_count == 0) {
+                    // Extract the parameters JSON substring
+                    std::string params_json = request_body.substr(brace_start, brace_end - brace_start - 1);
+                    std::cout << "Extracted parameters JSON: " << params_json << std::endl;
+                    std::cout.flush();
+                    
+                    // Parse this as JSON
+                    Json::Reader params_reader;
+                    Json::Value params_obj;
+                    if (params_reader.parse(params_json, params_obj)) {
+                        params = params_obj;
+                        std::cout << "Successfully parsed manual parameters: " << jsonToString(params) << std::endl;
+                        std::cout.flush();
+                    }
+                }
+            }
+        }
+        
+        std::string operation_type = params.get("operation_type", "").asString();
+        std::string target_id = params.get("target_id", "").asString();
+        std::string tool_id = params.get("tool_id", "").asString();
+        
+        std::cout << "Boolean operation - Extracted params: operation_type='" << operation_type 
+                  << "', target_id='" << target_id << "', tool_id='" << tool_id << "'" << std::endl;
+        std::cout.flush();
+        
+        if (operation_type.empty() || target_id.empty() || tool_id.empty()) {
+            std::cout << "=== MISSING PARAMETERS ERROR ===" << std::endl;
+            std::cout.flush();
+            response = createErrorResponse("Missing required parameters: operation_type, target_id, tool_id");
+            return;
+        }
+        
+        // Generate result ID
+        std::string result_id = "result_" + std::to_string(std::time(nullptr));
+        
+        // Perform boolean operation
+        bool success = false;
+        if (operation_type == "union") {
+            success = engine->unionShapes(target_id, tool_id, result_id);
+        } else if (operation_type == "cut") {
+            success = engine->cutShapes(target_id, tool_id, result_id);
+        } else if (operation_type == "intersect") {
+            success = engine->intersectShapes(target_id, tool_id, result_id);
+        } else {
+            response = createErrorResponse("Unknown operation type: " + operation_type);
+            return;
+        }
+        
+        if (!success) {
+            response = createErrorResponse("Boolean operation failed");
+            return;
+        }
+        
+        // Generate mesh data for the result
+        MeshData mesh = engine->tessellate(result_id);
+        
+        // Create JSON response
+        Json::Value json_response;
+        json_response["success"] = true;
+        json_response["session_id"] = session_id;
+        json_response["timestamp"] = static_cast<int64_t>(std::time(nullptr));
+        
+        Json::Value data;
+        data["result_id"] = result_id;
+        data["operation_type"] = operation_type;
+        data["target_id"] = target_id;
+        data["tool_id"] = tool_id;
+        
+        // Include mesh data
+        Json::Value mesh_data;
+        mesh_data["vertices"] = Json::Value(Json::Value::arrayValue);
+        for (size_t i = 0; i < mesh.vertices.size(); ++i) {
+            mesh_data["vertices"].append(mesh.vertices[i]);
+        }
+        
+        mesh_data["faces"] = Json::Value(Json::Value::arrayValue);
+        for (size_t i = 0; i < mesh.faces.size(); ++i) {
+            mesh_data["faces"].append(mesh.faces[i]);
+        }
+        
+        Json::Value metadata;
+        metadata["vertex_count"] = static_cast<int>(mesh.metadata.vertex_count);
+        metadata["face_count"] = static_cast<int>(mesh.metadata.face_count);
+        metadata["tessellation_quality"] = mesh.metadata.tessellation_quality;
+        mesh_data["metadata"] = metadata;
+        
+        data["mesh_data"] = mesh_data;
+        
+        json_response["data"] = data;
+        
+        response = jsonToString(json_response);
+        
+    } catch (const std::exception& e) {
+        response = createErrorResponse(std::string("Boolean operation exception: ") + e.what());
+    }
 }
 
 void CADController::handleTessellate(const std::string& session_id, const std::string& request_body, std::string& response) {
-    (void)session_id; (void)request_body; // Suppress unused parameter warnings
-    response = createErrorResponse("Not implemented");
+    try {
+        // Parse JSON request
+        Json::Value request;
+        Json::Reader reader;
+        if (!reader.parse(request_body, request)) {
+            response = createErrorResponse("Invalid JSON in request body");
+            return;
+        }
+        
+        auto engine = SessionManager::getInstance().getOrCreateSession(session_id);
+        if (!engine) {
+            response = createErrorResponse("Failed to get session");
+            return;
+        }
+        
+        // Extract parameters from JSON
+        std::string model_id = request.get("model_id", "").asString();
+        double tessellation_quality = request.get("tessellation_quality", 0.1).asDouble();
+        
+        if (model_id.empty()) {
+            response = createErrorResponse("Missing required parameter: model_id");
+            return;
+        }
+        
+        // Check if shape exists
+        if (!engine->shapeExists(model_id)) {
+            response = createErrorResponse("Shape not found: " + model_id);
+            return;
+        }
+        
+        // Generate mesh data
+        MeshData mesh = engine->tessellate(model_id, tessellation_quality);
+        
+        // Create JSON response
+        Json::Value json_response;
+        json_response["success"] = true;
+        json_response["session_id"] = session_id;
+        json_response["timestamp"] = static_cast<int64_t>(std::time(nullptr));
+        
+        // Include mesh data
+        Json::Value mesh_data;
+        mesh_data["vertices"] = Json::Value(Json::Value::arrayValue);
+        for (size_t i = 0; i < mesh.vertices.size(); ++i) {
+            mesh_data["vertices"].append(mesh.vertices[i]);
+        }
+        
+        mesh_data["faces"] = Json::Value(Json::Value::arrayValue);
+        for (size_t i = 0; i < mesh.faces.size(); ++i) {
+            mesh_data["faces"].append(mesh.faces[i]);
+        }
+        
+        Json::Value metadata;
+        metadata["vertex_count"] = static_cast<int>(mesh.metadata.vertex_count);
+        metadata["face_count"] = static_cast<int>(mesh.metadata.face_count);
+        metadata["tessellation_quality"] = mesh.metadata.tessellation_quality;
+        mesh_data["metadata"] = metadata;
+        
+        json_response["mesh_data"] = mesh_data;
+        
+        response = jsonToString(json_response);
+        
+    } catch (const std::exception& e) {
+        response = createErrorResponse(std::string("Tessellation exception: ") + e.what());
+    }
 }
 
 void CADController::handleExport(const std::string& session_id, const std::string& format, std::string& response) {
-    (void)session_id; (void)format; // Suppress unused parameter warnings
-    response = createErrorResponse("Not implemented");
+    try {
+        auto engine = SessionManager::getInstance().getOrCreateSession(session_id);
+        if (!engine) {
+            response = createErrorResponse("Failed to get session");
+            return;
+        }
+        
+        // For now, we'll export the first shape in the session
+        // TODO: Add model_id parameter to export specific shapes
+        auto available_shapes = engine->getAvailableShapeIds();
+        if (available_shapes.empty()) {
+            response = createErrorResponse("No shapes available for export");
+            return;
+        }
+        
+        // Get the first shape ID (temporary solution)
+        std::string shape_id = available_shapes[0];
+        
+        // Generate temporary filename
+        std::string temp_filename = "/tmp/export_" + session_id + "_" + std::to_string(std::time(nullptr)) + "." + format;
+        
+        bool export_success = false;
+        if (format == "step" || format == "stp") {
+            export_success = engine->exportSTEP(shape_id, temp_filename);
+        } else if (format == "stl") {
+            export_success = engine->exportSTL(shape_id, temp_filename);
+        } else {
+            response = createErrorResponse("Unsupported export format: " + format);
+            return;
+        }
+        
+        if (!export_success) {
+            response = createErrorResponse("Export operation failed");
+            return;
+        }
+        
+        // Read the file content
+        std::ifstream file(temp_filename, std::ios::binary);
+        if (!file.is_open()) {
+            response = createErrorResponse("Failed to read exported file");
+            return;
+        }
+        
+        std::string file_content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        file.close();
+        
+        // Clean up temporary file
+        std::remove(temp_filename.c_str());
+        
+        // Return file content directly (not JSON)
+        response = file_content;
+        
+    } catch (const std::exception& e) {
+        response = createErrorResponse(std::string("Export exception: ") + e.what());
+    }
 } 

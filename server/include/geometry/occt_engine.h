@@ -71,6 +71,7 @@ public:
     bool shapeExists(const std::string& shape_id) const;
     void removeShape(const std::string& shape_id);
     void clearAll();
+    std::vector<std::string> getAvailableShapeIds() const;
     
 private:
     bool validateShape(const TopoDS_Shape& shape) const;

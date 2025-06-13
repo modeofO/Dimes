@@ -9,7 +9,7 @@
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepCheck_Analyzer.hxx>
-#include <STEPCAFControl_Writer.hxx>
+// #include <STEPControl_Writer.hxx>  // Temporarily disabled
 #include <StlAPI_Writer.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
@@ -17,6 +17,10 @@
 #include <Poly_Triangulation.hxx>
 #include <TColgp_Array1OfPnt.hxx>
 #include <Poly_Array1OfTriangle.hxx>
+// Additional OCCT includes for STEP export - temporarily disabled
+// #include <Interface_Static.hxx>
+// #include <IFSelect_ReturnStatus.hxx>
+// #include <STEPControl_StepModelType.hxx>
 
 #include <iostream>
 #include <sstream>
@@ -198,6 +202,14 @@ void OCCTEngine::clearAll() {
     parameters_.clear();
 }
 
+std::vector<std::string> OCCTEngine::getAvailableShapeIds() const {
+    std::vector<std::string> ids;
+    for (const auto& pair : shapes_) {
+        ids.push_back(pair.first);
+    }
+    return ids;
+}
+
 bool OCCTEngine::updateParameter(const std::string& param_name, double value) {
     parameters_[param_name] = value;
     // TODO: Implement parameter-driven rebuilding
@@ -209,21 +221,95 @@ void OCCTEngine::rebuildModel() {
 }
 
 bool OCCTEngine::cutShapes(const std::string& shape1_id, const std::string& shape2_id, const std::string& result_id) {
-    (void)shape1_id; (void)shape2_id; (void)result_id; // Suppress unused parameter warnings
-    // TODO: Implement cut operation
-    return false;
+    if (!shapeExists(shape1_id) || !shapeExists(shape2_id)) {
+        return false;
+    }
+    
+    try {
+        BRepAlgoAPI_Cut cutMaker(shapes_[shape1_id], shapes_[shape2_id]);
+        TopoDS_Shape result = cutMaker.Shape();
+        
+        if (!validateShape(result)) {
+            return false;
+        }
+        
+        shapes_[result_id] = result;
+        return true;
+    } catch (const Standard_Failure& e) {
+        std::cerr << "OCCT Error in cut operation: " << e.GetMessageString() << std::endl;
+        return false;
+    }
 }
 
 bool OCCTEngine::intersectShapes(const std::string& shape1_id, const std::string& shape2_id, const std::string& result_id) {
-    (void)shape1_id; (void)shape2_id; (void)result_id; // Suppress unused parameter warnings
-    // TODO: Implement intersection operation
-    return false;
+    if (!shapeExists(shape1_id) || !shapeExists(shape2_id)) {
+        return false;
+    }
+    
+    try {
+        BRepAlgoAPI_Common commonMaker(shapes_[shape1_id], shapes_[shape2_id]);
+        TopoDS_Shape result = commonMaker.Shape();
+        
+        if (!validateShape(result)) {
+            return false;
+        }
+        
+        shapes_[result_id] = result;
+        return true;
+    } catch (const Standard_Failure& e) {
+        std::cerr << "OCCT Error in intersect operation: " << e.GetMessageString() << std::endl;
+        return false;
+    }
 }
 
 bool OCCTEngine::exportSTEP(const std::string& shape_id, const std::string& filename) {
-    (void)shape_id; (void)filename; // Suppress unused parameter warnings
-    // TODO: Implement STEP export
+    if (!shapeExists(shape_id)) {
+        std::cerr << "Shape not found: " << shape_id << std::endl;
+        return false;
+    }
+
+    // Temporarily disabled - linker can't find STEP libraries
+    std::cerr << "STEP export temporarily disabled - missing STEP libraries" << std::endl;
+    std::cerr << "Would export shape " << shape_id << " to " << filename << std::endl;
     return false;
+
+    /*
+    try {
+        // Create STEP writer (use STEPControl_Writer for simple shape export)
+        STEPControl_Writer writer;
+        
+        // Set precision and units
+        Interface_Static::SetCVal("write.step.unit", "MM");
+        Interface_Static::SetRVal("write.precision.val", 0.01);
+        
+        // Transfer the shape to the writer
+        const TopoDS_Shape& shape = shapes_[shape_id];
+        IFSelect_ReturnStatus status = writer.Transfer(shape, STEPControl_AsIs);
+        
+        if (status != IFSelect_RetDone) {
+            std::cerr << "Failed to transfer shape to STEP writer" << std::endl;
+            return false;
+        }
+        
+        // Write the file
+        status = writer.Write(filename.c_str());
+        
+        if (status != IFSelect_RetDone) {
+            std::cerr << "Failed to write STEP file: " << filename << std::endl;
+            return false;
+        }
+        
+        std::cout << "Successfully exported STEP file: " << filename << std::endl;
+        return true;
+        
+    } catch (const Standard_Failure& e) {
+        std::cerr << "OCCT Error in STEP export: " << e.GetMessageString() << std::endl;
+        return false;
+    } catch (const std::exception& e) {
+        std::cerr << "Standard error in STEP export: " << e.what() << std::endl;
+        return false;
+    }
+    */
 }
 
 bool OCCTEngine::exportSTL(const std::string& shape_id, const std::string& filename) {
