@@ -424,11 +424,16 @@ localStorage.setItem('debug', 'cad:*')
 
 ## 🤝 Contributing
 
-1. **Fork** the repository
-2. **Create** a feature branch: `git checkout -b feature/amazing-feature`
-3. **Commit** changes: `git commit -m 'Add amazing feature'`
-4. **Push** to branch: `git push origin feature/amazing-feature`
-5. **Open** a Pull Request
+We love contributions! Whether you're fixing bugs, adding features, or improving
+documentation, we'd appreciate your help.
+
+### How to Contribute
+
+1. **Check existing issues** or create a new one to discuss your ideas
+2. **Fork the repository** and create your branch from `main`
+3. **Make your changes** and ensure tests pass
+4. **Submit a pull request** with a clear description
+
 
 ## 📄 License
 
