@@ -7,6 +7,9 @@ import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import dotenv from 'dotenv';
+import { createDreams, createMemoryStore, LogLevel } from '@daydreamsai/core';
+import { openrouter } from '@openrouter/ai-sdk-provider';
+import { cadExtension } from './agent/extensions/cad.js';
 
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { validateSession } from './middleware/sessionValidator.js';
@@ -26,6 +29,27 @@ const port = process.env.PORT || 3000;
 // Initialize services
 const cppBackend = new CppBackendClient();
 const wsManager = new WebSocketManager(server, cppBackend);
+
+// Create Daydreams Agent
+const agent = createDreams({
+    model: openrouter(process.env.OPENROUTER_API_KEY || 'google/gemini-2.0-flash-001'),
+    logLevel: process.env.LOG_LEVEL === 'debug' ? LogLevel.DEBUG : LogLevel.INFO,
+    memory: {
+        store: createMemoryStore(),
+    },
+    extensions: [cadExtension],
+});
+
+// Pass services to the agent's container
+agent.container.instance('logger', logger);
+agent.container.instance('wsManager', wsManager);
+
+// Start the agent
+agent.start().then(() => {
+    logger.info('Daydreams AI Agent started successfully.');
+}).catch(error => {
+    logger.error('Failed to start Daydreams AI Agent:', error);
+});
 
 // Security middleware
 app.use(helmet({
@@ -72,7 +96,7 @@ app.use('/api/v1/cad', validateSession);
 
 // Routes
 app.use('/api/v1/health', healthRoutes);
-app.use('/api/v1/cad', cadRoutes);
+app.use('/api/v1/cad', cadRoutes(agent));
 
 // Error handling
 app.use(notFoundHandler);

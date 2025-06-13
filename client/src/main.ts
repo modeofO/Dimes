@@ -167,6 +167,14 @@ class CADApplication {
             toolSelect.addEventListener('change', updateBooleanButton);
         }
 
+        // Daydreams AI instruction handler
+        const sendAiBtn = document.getElementById('send-ai-instruction') as HTMLButtonElement;
+        if (sendAiBtn) {
+            sendAiBtn.addEventListener('click', () => {
+                this.sendAiInstruction();
+            });
+        }
+
         console.log('✅ UI handlers set up');
     }
 
@@ -380,8 +388,6 @@ class CADApplication {
         }
     }
 
-
-
     private updateStatus(message: string, type: 'info' | 'success' | 'warning' | 'error'): void {
         if (!this.statusElement) return;
         
@@ -419,6 +425,33 @@ class CADApplication {
         }
         if (this.client) {
             this.client.dispose();
+        }
+    }
+
+    private async sendAiInstruction(): Promise<void> {
+        const instructionInput = document.getElementById('ai-instruction') as HTMLInputElement;
+        const instruction = instructionInput.value;
+
+        if (!instruction.trim()) {
+            this.updateStatus('❌ Please enter an instruction', 'error');
+            return;
+        }
+
+        try {
+            this.updateStatus(`Sending instruction: "${instruction}"...`, 'info');
+            const response = await this.client.sendInstruction(instruction);
+
+            if (response.success) {
+                // The geometry update is handled by the WebSocket or the sendInstruction method itself.
+                // We can log the agent's raw output for debugging.
+                this.updateStatus('✅ Instruction sent successfully.', 'success');
+                console.log('Agent response:', response.data);
+            } else {
+                this.updateStatus(`❌ Instruction failed: ${response.error?.message || 'Unknown error'}`, 'error');
+            }
+        } catch (error) {
+            console.error('Failed to send AI instruction:', error);
+            this.updateStatus(`❌ AI instruction error: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
         }
     }
 }

@@ -1,4 +1,4 @@
-import { CADResponse, ModelCreateRequest, ModelResponse, DaydreamsCADRequest, DaydreamsCADResponse } from '../types/api';
+import { CADResponse, ModelCreateRequest, ModelResponse, DaydreamsInstructionRequest } from '../types/api';
 import { MeshData, ExportFormat, PrimitiveType } from '../types/geometry';
 
 export class CADClient {
@@ -86,18 +86,20 @@ export class CADClient {
     }
     
     // Daydreams compatibility
-    public async sendDaydreamsCADRequest(instruction: string, parameters?: Record<string, any>): Promise<DaydreamsCADResponse> {
-        const request: DaydreamsCADRequest = {
-            sessionId: this.sessionId,
+    public async sendInstruction(instruction: string): Promise<CADResponse> {
+        const request: DaydreamsInstructionRequest = {
             instruction,
-            parameters
+            sessionId: this.sessionId,
         };
         
-        const response = await this.makeRequest<DaydreamsCADResponse>('/api/v1/cad/daydreams', 'POST', request);
+        const response = await this.makeRequest<CADResponse>('/api/v1/cad/daydreams', 'POST', request);
         
-        // If model data is included, trigger geometry update
-        if (response.model_data?.mesh && this.geometryUpdateCallback) {
-            this.geometryUpdateCallback(response.model_data.mesh);
+        // The agent's response is a log of its execution. We need to find the geometry update.
+        if (response.data && Array.isArray(response.data)) {
+            const geometryUpdate = response.data.find(log => log.ref === 'output' && log.type === 'geometry_update');
+            if (geometryUpdate && geometryUpdate.data.mesh_data && this.geometryUpdateCallback) {
+                this.geometryUpdateCallback(geometryUpdate.data.mesh_data);
+            }
         }
         
         return response;

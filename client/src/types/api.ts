@@ -37,22 +37,7 @@ export interface ModelResponse extends CADResponse {
     };
 }
 
-export interface DaydreamsCADRequest {
+export interface DaydreamsInstructionRequest {
+    instruction: string;
     sessionId: string;
-    instruction: string;  // Natural language instruction
-    parameters?: Record<string, any>;
-}
-
-export interface DaydreamsCADResponse {
-    success: boolean;
-    script?: string;      // For backward compatibility (can be empty)
-    status: 'idle' | 'processing' | 'error';
-    message: string;
-    errorMessage?: string;
-    // New CAD-specific fields
-    model_data?: {
-        mesh: MeshData;
-        files: Record<string, string>;
-        parameters: Record<string, number>;
-    };
 } 
