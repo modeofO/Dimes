@@ -8,7 +8,7 @@ import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import dotenv from 'dotenv';
 import { createDreams, createMemoryStore, LogLevel } from '@daydreamsai/core';
-import { openrouter } from '@openrouter/ai-sdk-provider';
+import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { cadExtension } from './agent/extensions/cad.js';
 
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
@@ -26,13 +26,26 @@ const app = express();
 const server = createServer(app);
 const port = process.env.PORT || 3000;
 
+// CORS configuration - This must come before routes
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-ID'],
+}));
+
 // Initialize services
 const cppBackend = new CppBackendClient();
 const wsManager = new WebSocketManager(server, cppBackend);
 
+// Set up AI provider
+const openrouter = createOpenRouter({
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+
 // Create Daydreams Agent
 const agent = createDreams({
-    model: openrouter(process.env.OPENROUTER_API_KEY || 'google/gemini-2.0-flash-001'),
+    model: openrouter('google/gemini-2.0-flash-001'),
     logLevel: process.env.LOG_LEVEL === 'debug' ? LogLevel.DEBUG : LogLevel.INFO,
     memory: {
         store: createMemoryStore(),
@@ -44,63 +57,32 @@ const agent = createDreams({
 agent.container.instance('logger', logger);
 agent.container.instance('wsManager', wsManager);
 
-// Start the agent
+// Start the agent and then the server
 agent.start().then(() => {
     logger.info('Daydreams AI Agent started successfully.');
+
+    // Session validation middleware for CAD routes
+    app.use('/api/v1/cad', validateSession);
+
+    // Routes
+    app.use('/api/v1/health', healthRoutes);
+    app.use('/api/v1/cad', cadRoutes(agent));
+
+    // Error handling
+    app.use(notFoundHandler);
+    app.use(errorHandler);
+    
+    // Start server
+    server.listen(port, () => {
+      logger.info(`🚀 Dimes CAD API Server running on port ${port}`);
+      logger.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+      logger.info(`🔗 C++ Backend: ${process.env.CPP_BACKEND_HOST}:${process.env.CPP_BACKEND_PORT}`);
+    });
+
 }).catch(error => {
     logger.error('Failed to start Daydreams AI Agent:', error);
+    process.exit(1);
 });
-
-// Security middleware
-app.use(helmet({
-  crossOriginEmbedderPolicy: false,
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
-    },
-  },
-}));
-
-// CORS configuration
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-ID'],
-}));
-
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.API_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.API_RATE_LIMIT_MAX_REQUESTS) || 100,
-  message: {
-    error: 'Too many requests from this IP, please try again later.',
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-app.use(limiter);
-
-// General middleware
-app.use(compression());
-app.use(morgan('combined'));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Session validation middleware for CAD routes
-app.use('/api/v1/cad', validateSession);
-
-// Routes
-app.use('/api/v1/health', healthRoutes);
-app.use('/api/v1/cad', cadRoutes(agent));
-
-// Error handling
-app.use(notFoundHandler);
-app.use(errorHandler);
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
@@ -119,11 +101,22 @@ process.on('SIGINT', () => {
   });
 });
 
-// Start server
-server.listen(port, () => {
-  logger.info(`🚀 Dimes CAD API Server running on port ${port}`);
-  logger.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  logger.info(`🔗 C++ Backend: ${process.env.CPP_BACKEND_HOST}:${process.env.CPP_BACKEND_PORT}`);
+// Security middleware
+app.use(helmet());
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: parseInt(process.env.API_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
+  max: parseInt(process.env.API_RATE_LIMIT_MAX) || 100,
+  standardHeaders: true,
+  legacyHeaders: false,
 });
+app.use(limiter);
+
+// General middleware
+app.use(compression());
+app.use(morgan('combined'));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 export default app; 

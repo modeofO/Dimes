@@ -209,7 +209,7 @@ export default function(agent) {
       logger.info(`Processing Daydreams request for session ${sessionId}`, { instruction });
   
       const result = await agent.run({
-        context: agent.contexts.cad,
+        context: 'cad',
         args: { sessionId },
         input: instruction,
       });
@@ -222,6 +222,7 @@ export default function(agent) {
       });
   
     } catch (error) {
+      logger.error('Daydreams agent run failed', { error: error, message: error.message, stack: error.stack });
       next(new ApiError(500, 'Failed to process Daydreams request', error.message));
     }
   });
