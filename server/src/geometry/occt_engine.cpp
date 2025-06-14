@@ -1,4 +1,7 @@
 #include "geometry/occt_engine.h"
+#include "geometry/sketch_plane.h"
+#include "geometry/sketch.h"
+#include "geometry/extrude_feature.h"
 
 // OCCT includes
 #include <BRepPrimAPI_MakeBox.hxx>
@@ -221,6 +224,11 @@ void OCCTEngine::removeShape(const std::string& shape_id) {
 void OCCTEngine::clearAll() {
     shapes_.clear();
     parameters_.clear();
+    
+    // Clear sketch-based objects
+    extrude_features_.clear();
+    sketches_.clear();
+    sketch_planes_.clear();
 }
 
 std::vector<std::string> OCCTEngine::getAvailableShapeIds() const {
@@ -337,4 +345,182 @@ bool OCCTEngine::exportSTL(const std::string& shape_id, const std::string& filen
     (void)shape_id; (void)filename; // Suppress unused parameter warnings
     // TODO: Implement STL export
     return false;
+}
+
+// ==================== SKETCH-BASED MODELING METHODS ====================
+
+std::string OCCTEngine::createSketchPlane(const std::string& plane_type, const Vector3d& origin) {
+    std::cout << "🎯 Creating sketch plane: " << plane_type << " at (" << origin.x << "," << origin.y << "," << origin.z << ")" << std::endl;
+    std::cout.flush();
+    
+    try {
+        std::shared_ptr<SketchPlane> plane;
+        
+        if (plane_type == "XY") {
+            plane = SketchPlane::createXYPlane(origin);
+        } else if (plane_type == "XZ") {
+            plane = SketchPlane::createXZPlane(origin);
+        } else if (plane_type == "YZ") {
+            plane = SketchPlane::createYZPlane(origin);
+        } else {
+            std::cerr << "❌ Unknown plane type: " << plane_type << std::endl;
+            return "";
+        }
+        
+        std::string plane_id = plane->getPlaneId();
+        sketch_planes_[plane_id] = plane;
+        
+        std::cout << "✅ Created sketch plane: " << plane_id << std::endl;
+        std::cout.flush();
+        
+        return plane_id;
+        
+    } catch (const Standard_Failure& e) {
+        std::cerr << "OCCT Error creating sketch plane: " << e.GetMessageString() << std::endl;
+        return "";
+    }
+}
+
+std::string OCCTEngine::createSketch(const std::string& plane_id) {
+    std::cout << "📐 Creating sketch on plane: " << plane_id << std::endl;
+    std::cout.flush();
+    
+    if (!planeExists(plane_id)) {
+        std::cerr << "❌ Sketch plane not found: " << plane_id << std::endl;
+        return "";
+    }
+    
+    try {
+        auto plane = sketch_planes_[plane_id];
+        auto sketch = std::make_shared<Sketch>(plane);
+        
+        std::string sketch_id = sketch->getId();
+        sketches_[sketch_id] = sketch;
+        
+        std::cout << "✅ Created sketch: " << sketch_id << std::endl;
+        std::cout.flush();
+        
+        return sketch_id;
+        
+    } catch (const Standard_Failure& e) {
+        std::cerr << "OCCT Error creating sketch: " << e.GetMessageString() << std::endl;
+        return "";
+    }
+}
+
+bool OCCTEngine::addLineToSketch(const std::string& sketch_id, double x1, double y1, double x2, double y2) {
+    std::cout << "📏 Adding line to sketch " << sketch_id << ": (" << x1 << "," << y1 << ") to (" << x2 << "," << y2 << ")" << std::endl;
+    std::cout.flush();
+    
+    if (!sketchExists(sketch_id)) {
+        std::cerr << "❌ Sketch not found: " << sketch_id << std::endl;
+        return false;
+    }
+    
+    try {
+        auto sketch = sketches_[sketch_id];
+        gp_Pnt2d start(x1, y1);
+        gp_Pnt2d end(x2, y2);
+        
+        std::string line_id = sketch->addLine(start, end);
+        std::cout << "✅ Added line " << line_id << " to sketch " << sketch_id << std::endl;
+        std::cout.flush();
+        
+        return true;
+        
+    } catch (const Standard_Failure& e) {
+        std::cerr << "OCCT Error adding line to sketch: " << e.GetMessageString() << std::endl;
+        return false;
+    }
+}
+
+bool OCCTEngine::addCircleToSketch(const std::string& sketch_id, double center_x, double center_y, double radius) {
+    std::cout << "⭕ Adding circle to sketch " << sketch_id << ": center(" << center_x << "," << center_y << ") radius=" << radius << std::endl;
+    std::cout.flush();
+    
+    if (!sketchExists(sketch_id)) {
+        std::cerr << "❌ Sketch not found: " << sketch_id << std::endl;
+        return false;
+    }
+    
+    try {
+        auto sketch = sketches_[sketch_id];
+        gp_Pnt2d center(center_x, center_y);
+        
+        std::string circle_id = sketch->addCircle(center, radius);
+        std::cout << "✅ Added circle " << circle_id << " to sketch " << sketch_id << std::endl;
+        std::cout.flush();
+        
+        return true;
+        
+    } catch (const Standard_Failure& e) {
+        std::cerr << "OCCT Error adding circle to sketch: " << e.GetMessageString() << std::endl;
+        return false;
+    }
+}
+
+std::string OCCTEngine::extrudeSketch(const std::string& sketch_id, double distance, const std::string& direction) {
+    std::cout << "🚀 Extruding sketch " << sketch_id << " by distance " << distance << std::endl;
+    std::cout.flush();
+    
+    if (!sketchExists(sketch_id)) {
+        std::cerr << "❌ Sketch not found: " << sketch_id << std::endl;
+        return "";
+    }
+    
+    try {
+        auto sketch = sketches_[sketch_id];
+        
+        // Create extrude parameters
+        ExtrudeParameters params(distance);
+        
+        // Create extrude feature
+        auto extrude_feature = std::make_shared<ExtrudeFeature>(sketch, params);
+        
+        // Execute the extrude
+        if (!extrude_feature->execute()) {
+            std::cerr << "❌ Failed to execute extrude operation" << std::endl;
+            return "";
+        }
+        
+        // Store the feature and resulting shape
+        std::string feature_id = extrude_feature->getId();
+        extrude_features_[feature_id] = extrude_feature;
+        shapes_[feature_id] = extrude_feature->getShape();
+        
+        std::cout << "✅ Extruded sketch successfully: " << feature_id << std::endl;
+        std::cout.flush();
+        
+        return feature_id;
+        
+    } catch (const Standard_Failure& e) {
+        std::cerr << "OCCT Error in extrude operation: " << e.GetMessageString() << std::endl;
+        return "";
+    }
+}
+
+// ==================== SKETCH UTILITY METHODS ====================
+
+bool OCCTEngine::sketchExists(const std::string& sketch_id) const {
+    return sketches_.find(sketch_id) != sketches_.end();
+}
+
+bool OCCTEngine::planeExists(const std::string& plane_id) const {
+    return sketch_planes_.find(plane_id) != sketch_planes_.end();
+}
+
+std::vector<std::string> OCCTEngine::getAvailableSketchIds() const {
+    std::vector<std::string> ids;
+    for (const auto& pair : sketches_) {
+        ids.push_back(pair.first);
+    }
+    return ids;
+}
+
+std::vector<std::string> OCCTEngine::getAvailablePlaneIds() const {
+    std::vector<std::string> ids;
+    for (const auto& pair : sketch_planes_) {
+        ids.push_back(pair.first);
+    }
+    return ids;
 } 

@@ -10,6 +10,11 @@
 #include <gp_Pnt.hxx>
 #include <gp_Vec.hxx>
 
+// Forward declarations for new sketch-based classes
+class SketchPlane;
+class Sketch;
+class ExtrudeFeature;
+
 struct Vector3d {
     double x, y, z;
     Vector3d(double x = 0, double y = 0, double z = 0) : x(x), y(y), z(z) {}
@@ -44,6 +49,11 @@ private:
     std::map<std::string, TopoDS_Shape> shapes_;
     std::map<std::string, double> parameters_;
     
+    // Sketch-based modeling support
+    std::map<std::string, std::shared_ptr<SketchPlane>> sketch_planes_;
+    std::map<std::string, std::shared_ptr<Sketch>> sketches_;
+    std::map<std::string, std::shared_ptr<ExtrudeFeature>> extrude_features_;
+    
 public:
     OCCTEngine();
     ~OCCTEngine();
@@ -62,6 +72,13 @@ public:
     bool updateParameter(const std::string& param_name, double value);
     void rebuildModel();
     
+    // Sketch-based modeling operations
+    std::string createSketchPlane(const std::string& plane_type, const Vector3d& origin = {0,0,0});
+    std::string createSketch(const std::string& plane_id);
+    bool addLineToSketch(const std::string& sketch_id, double x1, double y1, double x2, double y2);
+    bool addCircleToSketch(const std::string& sketch_id, double center_x, double center_y, double radius);
+    std::string extrudeSketch(const std::string& sketch_id, double distance, const std::string& direction = "normal");
+    
     // Export functions
     MeshData tessellate(const std::string& shape_id, double deflection = 0.1);
     bool exportSTEP(const std::string& shape_id, const std::string& filename);
@@ -72,6 +89,12 @@ public:
     void removeShape(const std::string& shape_id);
     void clearAll();
     std::vector<std::string> getAvailableShapeIds() const;
+    
+    // Sketch utility functions
+    bool sketchExists(const std::string& sketch_id) const;
+    bool planeExists(const std::string& plane_id) const;
+    std::vector<std::string> getAvailableSketchIds() const;
+    std::vector<std::string> getAvailablePlaneIds() const;
     
 private:
     bool validateShape(const TopoDS_Shape& shape) const;
