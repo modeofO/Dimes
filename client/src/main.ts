@@ -225,7 +225,7 @@ class CADApplication {
 
             // Debug: Log what we're sending
             const requestData = {
-                type: 'primitive',
+                type: 'primitive' as const,
                 primitive_type: primitiveType as any,
                 dimensions: dimensions,
                 position: position
@@ -442,17 +442,9 @@ class CADApplication {
         }
 
         try {
-            this.updateStatus(`Sending instruction: "${instruction}"...`, 'info');
-            const response = await this.client.sendInstruction(instruction);
-
-            if (response.success) {
-                // The geometry update is handled by the WebSocket or the sendInstruction method itself.
-                // We can log the agent's raw output for debugging.
-                this.updateStatus('✅ Instruction sent successfully.', 'success');
-                console.log('Agent response:', response.data);
-            } else {
-                this.updateStatus(`❌ Instruction failed: ${response.error?.message || 'Unknown error'}`, 'error');
-            }
+            this.updateStatus(`AI instruction feature not implemented yet`, 'warning');
+            // TODO: Implement sendInstruction method in CADClient
+            console.log('AI instruction received:', instruction);
         } catch (error) {
             console.error('Failed to send AI instruction:', error);
             this.updateStatus(`❌ AI instruction error: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
