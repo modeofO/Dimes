@@ -27,6 +27,10 @@ CADController::CADController(8080)
 │   ├── Enable CORS headers
 │   ├── Setup OPTIONS handler
 │   ├── POST /api/v1/models → handleCreateModel()
+│   ├── POST /api/v1/sketch-planes → handleCreateSketchPlane()
+│   ├── POST /api/v1/sketches → handleCreateSketch()
+│   ├── POST /api/v1/sketch-elements → handleAddSketchElement()
+│   ├── POST /api/v1/extrude → handleExtrudeSketch()
 │   ├── POST /api/v1/operations → handleBooleanOperation()
 │   ├── POST /api/v1/tessellate → handleTessellate()
 │   ├── GET /api/v1/health → health check
@@ -38,24 +42,55 @@ CADController::CADController(8080)
 - Sets up HTTP routes using cpp-httplib
 - Configures CORS for browser access
 - Maps HTTP endpoints to handler functions
+- **Primary focus: Sketch-based modeling workflow**
 
-### 3. **HTTP Request Processing Flow**
+### 3. **Sketch-Based CAD Workflow**
 
-When a client sends a request (e.g., create a cylinder):
+The modern professional CAD workflow (SolidWorks-style):
 
 ```
-HTTP POST /api/v1/models
-├── CADController::handleCreateModel()
-│   ├── Parse JSON request body
+Sketch-Based Modeling Flow:
+1. Create Sketch Plane (XY/XZ/YZ)
+2. Create Sketch on Plane
+3. Add 2D Elements (lines, circles, arcs)
+4. Extrude Sketch to 3D Solid
+5. Boolean Operations (optional)
+```
+
+**Complete Request Flow Example:**
+
+```
+HTTP POST /api/v1/sketch-planes
+├── CADController::handleCreateSketchPlane()
+│   ├── Parse JSON: {"plane_type": "XY", "origin_x": 0, "origin_y": 0, "origin_z": 0}
 │   ├── Extract session_id from headers
 │   ├── Get/Create session via SessionManager
-│   ├── Route to appropriate OCCT operation
-│   │   ├── primitive_type == "cylinder" 
-│   │   └── Call engine->createCylinder()
+│   ├── Call engine->createSketchPlane("XY", [0,0,0])
+│   ├── Generate plane_id: "XY_Plane"
+│   └── Return plane_id in JSON response
+
+HTTP POST /api/v1/sketches  
+├── CADController::handleCreateSketch()
+│   ├── Parse JSON: {"plane_id": "XY_Plane"}
+│   ├── Call engine->createSketch("XY_Plane")
+│   ├── Generate sketch_id: "Sketch_1749912478"
+│   └── Return sketch_id in JSON response
+
+HTTP POST /api/v1/sketch-elements
+├── CADController::handleAddSketchElement()
+│   ├── Parse JSON: {"sketch_id": "Sketch_1749912478", "element_type": "circle", "parameters": {...}}
+│   ├── Call engine->addCircleToSketch(sketch_id, x, y, radius)
+│   ├── Add circle to 2D sketch geometry
+│   └── Return element_id in JSON response
+
+HTTP POST /api/v1/extrude
+├── CADController::handleExtrudeSketch()
+│   ├── Parse JSON: {"sketch_id": "Sketch_1749912478", "distance": 10}
+│   ├── Call engine->extrudeSketch(sketch_id, distance)
+│   ├── Create 3D solid from 2D sketch
 │   ├── Generate mesh via engine->tessellate()
 │   ├── Build JSON response with mesh data
-│   └── Return HTTP response
-└── Send response back to client
+│   └── Return feature_id and mesh_data
 ```
 
 ## 🏗️ Core Components Architecture
@@ -78,62 +113,112 @@ SessionManager::getInstance()
 ### **OCCTEngine (Geometry Engine)**
 ```
 OCCTEngine instance per session
-├── createBox(BoxParameters) → shape_id
-├── createCylinder(radius, height, position) → shape_id
-├── createSphere(radius, position) → shape_id
-├── unionShapes(shape1, shape2, result) → bool
-├── cutShapes(shape1, shape2, result) → bool
-├── tessellate(shape_id, quality) → MeshData
-└── exportSTEP/STL(shape_id, filename) → bool
+├── SKETCH-BASED MODELING:
+│   ├── createSketchPlane(type, origin) → plane_id
+│   ├── createSketch(plane_id) → sketch_id
+│   ├── addLineToSketch(sketch_id, x1, y1, x2, y2) → bool
+│   ├── addCircleToSketch(sketch_id, x, y, radius) → bool
+│   └── extrudeSketch(sketch_id, distance, direction) → feature_id
+├── PRIMITIVE MODELING (Legacy):
+│   ├── createBox(dimensions, position) → shape_id
+│   ├── createCylinder(radius, height, position) → shape_id
+│   └── createSphere(radius, position) → shape_id
+├── BOOLEAN OPERATIONS:
+│   ├── unionShapes(shape1, shape2, result) → bool
+│   ├── cutShapes(shape1, shape2, result) → bool
+│   └── intersectShapes(shape1, shape2, result) → bool
+├── VISUALIZATION:
+│   └── tessellate(shape_id, quality) → MeshData
+└── EXPORT:
+    ├── exportSTEP(shape_id, filename) → bool
+    └── exportSTL(shape_id, filename) → bool
 ```
 
 **File:** `server/src/geometry/occt_engine.cpp`
 - Wraps OpenCASCADE Technology (OCCT) operations
-- Stores shapes in memory with generated IDs
+- Stores sketch planes, sketches, and 3D shapes with generated IDs
 - Provides tessellation for 3D visualization
-- Handles CAD operations (create, boolean, export)
+- **Focus: Professional sketch-based CAD modeling**
 
-## 🔄 Request Processing Example
-
-**Creating a Cylinder:**
-
+### **New Sketch System Classes**
 ```
-1. Client sends POST /api/v1/models
-   {
-     "type": "primitive",
-     "primitive_type": "cylinder", 
-     "dimensions": {"radius": 5, "height": 10},
-     "position": [0, 0, 0]
-   }
+SketchPlane Class
+├── plane_type: XY | XZ | YZ
+├── origin: Vector3d
+├── coordinate_system: gp_Ax3
+└── to2D/to3D coordinate conversion
 
-2. CADController::handleCreateModel()
-   ├── Parse JSON → extract cylinder parameters
-   ├── Get session "session_123" 
-   ├── SessionManager returns OCCTEngine instance
-   └── Call engine->createCylinder(5, 10, [0,0,0])
+Sketch Class  
+├── plane_id: string
+├── elements: vector<SketchElement>
+├── createWire() → TopoDS_Wire
+└── createFace() → TopoDS_Face
 
-3. OCCTEngine::createCylinder()
-   ├── Create OCCT cylinder shape
-   ├── Validate shape geometry
-   ├── Generate unique shape_id: "shape_4567"
-   ├── Store in shapes_ map
-   └── Return shape_id
-
-4. Back in handleCreateModel()
-   ├── Call engine->tessellate("shape_4567", 0.1)
-   ├── Generate triangle mesh for visualization
-   ├── Build JSON response with mesh data
-   └── Return HTTP 200 with mesh data
-
-5. Client receives response
-   ├── Extract mesh_data (vertices, faces)
-   ├── Create Three.js geometry
-   └── Render cylinder in 3D viewport
+ExtrudeFeature Class
+├── sketch_id: string
+├── distance: double
+├── direction: string
+└── solid_shape: TopoDS_Solid
 ```
 
-## 📊 Data Structures
+**Files:** `server/src/geometry/sketch_plane.cpp`, `sketch.cpp`, `extrude_feature.cpp`
 
-### **MeshData Structure**
+## 🔄 Complete Workflow Example
+
+**Creating an Extruded Circle (Professional CAD Workflow):**
+
+```
+1. Create Sketch Plane
+   Client: POST /api/v1/sketch-planes
+   Body: {"plane_type": "XY", "origin_x": 0, "origin_y": 0, "origin_z": 0}
+   
+   Backend: 
+   ├── Create gp_Ax3 coordinate system
+   ├── Store as SketchPlane object
+   └── Response: {"plane_id": "XY_Plane"}
+
+2. Create Sketch  
+   Client: POST /api/v1/sketches
+   Body: {"plane_id": "XY_Plane"}
+   
+   Backend:
+   ├── Find SketchPlane by ID
+   ├── Create empty Sketch object
+   └── Response: {"sketch_id": "Sketch_1749912478"}
+
+3. Add Circle to Sketch
+   Client: POST /api/v1/sketch-elements  
+   Body: {"sketch_id": "Sketch_1749912478", "element_type": "circle", 
+          "parameters": {"center_x": 0, "center_y": 0, "radius": 5}}
+   
+   Backend:
+   ├── Create gp_Circ2d circle in 2D plane
+   ├── Convert to TopoDS_Edge
+   ├── Add to Sketch elements
+   └── Response: {"element_id": "Circle_1"}
+
+4. Extrude Sketch to 3D
+   Client: POST /api/v1/extrude
+   Body: {"sketch_id": "Sketch_1749912478", "distance": 10}
+   
+   Backend:
+   ├── Get Sketch object by ID
+   ├── Create TopoDS_Face from sketch elements  
+   ├── Use BRepPrimAPI_MakePrism for extrusion
+   ├── Generate TopoDS_Solid cylinder
+   ├── Tessellate for visualization
+   └── Response: {"feature_id": "Extrude_1749912491", "mesh_data": {...}}
+
+5. Client Visualization
+   ├── Receive mesh_data (106 vertices, 100 faces)
+   ├── Create Three.js BufferGeometry
+   ├── Render 3D cylinder in viewport
+   └── Display: Professional-quality extruded cylinder
+```
+
+## 📊 Updated Data Structures
+
+### **MeshData Structure** (Unchanged)
 ```cpp
 struct MeshData {
     std::vector<float> vertices;     // [x1,y1,z1, x2,y2,z2, ...]
@@ -142,12 +227,49 @@ struct MeshData {
 };
 ```
 
-### **Shape Storage**
+### **Enhanced Shape Storage**
 ```cpp
 class OCCTEngine {
-    std::map<std::string, TopoDS_Shape> shapes_;  // shape_id → OCCT shape
-    std::map<std::string, double> parameters_;    // parameter storage
+    // Legacy primitive storage
+    std::map<std::string, TopoDS_Shape> shapes_;
+    
+    // Professional sketch-based storage  
+    std::map<std::string, SketchPlane> sketch_planes_;
+    std::map<std::string, Sketch> sketches_;
+    std::map<std::string, ExtrudeFeature> extrude_features_;
+    
+    // Parameters and metadata
+    std::map<std::string, double> parameters_;
 };
+```
+
+### **JSON Response Formats**
+```cpp
+// Sketch Plane Response
+{
+  "success": true,
+  "session_id": "session_87agh3hr4ea", 
+  "data": {
+    "plane_id": "XY_Plane",
+    "plane_type": "XY",
+    "origin_x": 0, "origin_y": 0, "origin_z": 0
+  }
+}
+
+// Extrude Response (with mesh data)
+{
+  "success": true,
+  "data": {
+    "feature_id": "Extrude_1749912491",
+    "sketch_id": "Sketch_1749912478", 
+    "distance": 10,
+    "mesh_data": {
+      "vertices": [...],
+      "faces": [...],
+      "metadata": {"vertex_count": 106, "face_count": 100}
+    }
+  }
+}
 ```
 
 ## 🛠️ Key Design Patterns
@@ -156,24 +278,33 @@ class OCCTEngine {
 - `SessionManager` ensures single instance
 - Manages global session state
 
-### **Factory Pattern**
-- `OCCTEngine` creates different primitive types
-- Centralized shape creation logic
+### **Factory Pattern**  
+- `OCCTEngine` creates different sketch elements and features
+- Centralized geometry creation logic
 
 ### **Strategy Pattern**
-- Different tessellation qualities
-- Multiple export formats (STEP, STL)
+- Different sketch element types (line, circle, arc)
+- Multiple extrude directions and types
+- Various tessellation qualities
 
 ### **Session Pattern**
 - Each user gets isolated geometry workspace
 - Prevents interference between users
 
+### **Feature-Based Modeling Pattern**
+- Parametric design workflow
+- History tree of operations
+- Modify-and-update capability
+
 ## 🔍 Error Handling Flow
 
 ```
 Any Exception in Request Processing
+├── JSON Parsing Errors (fixed array parsing issue)
+├── OCCT Geometry Errors (invalid shapes)
+├── Session Management Errors  
 ├── Caught in HTTP handler
-├── Log error details
+├── Log error details with debug output
 ├── Create JSON error response
 ├── Set HTTP 500 status
 └── Return error to client
@@ -182,8 +313,20 @@ Any Exception in Request Processing
 ## 🚀 Performance Considerations
 
 - **Session Isolation**: Each user has separate OCCT engine
-- **Memory Management**: RAII patterns for OCCT objects  
-- **Tessellation Caching**: Mesh data cached per shape
+- **Memory Management**: RAII patterns for OCCT objects
+- **Sketch Storage**: Efficient 2D→3D conversion
+- **Tessellation Caching**: Mesh data cached per feature
 - **Lazy Loading**: Sessions created only when needed
+- **Professional Workflow**: Feature-based parametric modeling
 
-This architecture provides a clean separation between HTTP handling, session management, and geometry operations, making the backend maintainable and scalable. 
+## 🎯 Professional CAD Features
+
+This architecture now provides:
+
+- ✅ **SolidWorks-style workflow**: Sketch → Extrude → 3D Model
+- ✅ **Parametric modeling**: Modify sketches, features update
+- ✅ **Professional UI**: Step-by-step guided process
+- ✅ **Real 3D geometry**: Not just primitives, but feature-based solids
+- ✅ **Industry-standard workflow**: Plane → Sketch → Extrude → Boolean operations
+
+The system successfully bridges web technology with professional CAD capabilities using OpenCASCADE Technology (OCCT), providing a foundation for advanced CAD applications. 
