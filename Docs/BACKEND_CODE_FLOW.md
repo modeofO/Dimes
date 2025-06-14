@@ -26,12 +26,12 @@ CADController::CADController(8080)
 ├── setupRoutes()
 │   ├── Enable CORS headers
 │   ├── Setup OPTIONS handler
-│   ├── POST /api/v1/models → handleCreateModel()
-│   ├── POST /api/v1/sketch-planes → handleCreateSketchPlane()
-│   ├── POST /api/v1/sketches → handleCreateSketch()
-│   ├── POST /api/v1/sketch-elements → handleAddSketchElement()
-│   ├── POST /api/v1/extrude → handleExtrudeSketch()
-│   ├── POST /api/v1/operations → handleBooleanOperation()
+│   ├── POST /api/v1/cad/models → handleCreateModel()
+│   ├── POST /api/v1/cad/sketch-planes → handleCreateSketchPlane()
+│   ├── POST /api/v1/cad/sketches → handleCreateSketch()
+│   ├── POST /api/v1/cad/sketch-elements → handleAddSketchElement()
+│   ├── POST /api/v1/cad/extrude → handleExtrudeSketch()
+│   ├── POST /api/v1/cad/operations → handleBooleanOperation()
 │   ├── POST /api/v1/tessellate → handleTessellate()
 │   ├── GET /api/v1/health → health check
 │   └── GET /api/v1/sessions/{id}/export/{format} → handleExport()
@@ -60,7 +60,7 @@ Sketch-Based Modeling Flow:
 **Complete Request Flow Example:**
 
 ```
-HTTP POST /api/v1/sketch-planes
+HTTP POST /api/v1/cad/sketch-planes
 ├── CADController::handleCreateSketchPlane()
 │   ├── Parse JSON: {"plane_type": "XY", "origin_x": 0, "origin_y": 0, "origin_z": 0}
 │   ├── Extract session_id from headers
@@ -69,21 +69,21 @@ HTTP POST /api/v1/sketch-planes
 │   ├── Generate plane_id: "XY_Plane"
 │   └── Return plane_id in JSON response
 
-HTTP POST /api/v1/sketches  
+HTTP POST /api/v1/cad/sketches  
 ├── CADController::handleCreateSketch()
 │   ├── Parse JSON: {"plane_id": "XY_Plane"}
 │   ├── Call engine->createSketch("XY_Plane")
 │   ├── Generate sketch_id: "Sketch_1749912478"
 │   └── Return sketch_id in JSON response
 
-HTTP POST /api/v1/sketch-elements
+HTTP POST /api/v1/cad/sketch-elements
 ├── CADController::handleAddSketchElement()
 │   ├── Parse JSON: {"sketch_id": "Sketch_1749912478", "element_type": "circle", "parameters": {...}}
 │   ├── Call engine->addCircleToSketch(sketch_id, x, y, radius)
 │   ├── Add circle to 2D sketch geometry
 │   └── Return element_id in JSON response
 
-HTTP POST /api/v1/extrude
+HTTP POST /api/v1/cad/extrude
 ├── CADController::handleExtrudeSketch()
 │   ├── Parse JSON: {"sketch_id": "Sketch_1749912478", "distance": 10}
 │   ├── Call engine->extrudeSketch(sketch_id, distance)
@@ -169,7 +169,7 @@ ExtrudeFeature Class
 
 ```
 1. Create Sketch Plane
-   Client: POST /api/v1/sketch-planes
+   Client: POST /api/v1/cad/sketch-planes
    Body: {"plane_type": "XY", "origin_x": 0, "origin_y": 0, "origin_z": 0}
    
    Backend: 
@@ -178,7 +178,7 @@ ExtrudeFeature Class
    └── Response: {"plane_id": "XY_Plane"}
 
 2. Create Sketch  
-   Client: POST /api/v1/sketches
+   Client: POST /api/v1/cad/sketches
    Body: {"plane_id": "XY_Plane"}
    
    Backend:
@@ -187,7 +187,7 @@ ExtrudeFeature Class
    └── Response: {"sketch_id": "Sketch_1749912478"}
 
 3. Add Circle to Sketch
-   Client: POST /api/v1/sketch-elements  
+   Client: POST /api/v1/cad/sketch-elements  
    Body: {"sketch_id": "Sketch_1749912478", "element_type": "circle", 
           "parameters": {"center_x": 0, "center_y": 0, "radius": 5}}
    
@@ -198,7 +198,7 @@ ExtrudeFeature Class
    └── Response: {"element_id": "Circle_1"}
 
 4. Extrude Sketch to 3D
-   Client: POST /api/v1/extrude
+   Client: POST /api/v1/cad/extrude
    Body: {"sketch_id": "Sketch_1749912478", "distance": 10}
    
    Backend:

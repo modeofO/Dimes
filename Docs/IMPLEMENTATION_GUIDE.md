@@ -268,19 +268,19 @@ cmake --build . --config Release
 ### 2. Test Arc Creation Workflow
 ```bash
 # 1. Create sketch plane
-curl -X POST http://localhost:8080/api/v1/sketch-planes \
+curl -X POST http://localhost:3000/api/v1/cad/sketch-planes \
   -H "Content-Type: application/json" \
   -H "X-Session-ID: test-session" \
   -d '{"plane_type": "XY", "origin_x": 0, "origin_y": 0, "origin_z": 0}'
 
 # 2. Create sketch  
-curl -X POST http://localhost:8080/api/v1/sketches \
+curl -X POST http://localhost:3000/api/v1/cad/sketches \
   -H "Content-Type: application/json" \
   -H "X-Session-ID: test-session" \
   -d '{"plane_id": "XY_Plane"}'
 
 # 3. Add arc element
-curl -X POST http://localhost:8080/api/v1/sketch-elements \
+curl -X POST http://localhost:3000/api/v1/cad/sketch-elements \
   -H "Content-Type: application/json" \
   -H "X-Session-ID: test-session" \
   -d '{
@@ -294,7 +294,7 @@ curl -X POST http://localhost:8080/api/v1/sketch-elements \
   }'
 
 # 4. Extrude sketch
-curl -X POST http://localhost:8080/api/v1/extrude \
+curl -X POST http://localhost:3000/api/v1/cad/extrude \
   -H "Content-Type: application/json" \
   -H "X-Session-ID: test-session" \
   -d '{"sketch_id": "Sketch_123", "distance": 5}'
