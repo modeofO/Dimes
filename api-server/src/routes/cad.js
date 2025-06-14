@@ -12,6 +12,12 @@ export default function() {
   const handleValidationErrors = (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.log('❌ Validation failed:', {
+        url: req.url,
+        method: req.method,
+        body: req.body,
+        errors: errors.array()
+      });
       return res.status(400).json({
         success: false,
         error: 'Validation failed',
@@ -29,6 +35,35 @@ export default function() {
     body('parameters.dimensions').optional().isObject().withMessage('Dimensions must be an object'),
     body('parameters.position').optional().isArray({ min: 3, max: 3 }).withMessage('Position must be an array of 3 numbers'),
     body('parameters.rotation').optional().isArray({ min: 3, max: 3 }).withMessage('Rotation must be an array of 3 numbers'),
+    handleValidationErrors,
+  ];
+
+  // Sketch plane validation
+  const validateSketchPlane = [
+    body('plane_type').isIn(['XY', 'XZ', 'YZ']).withMessage('Invalid plane type'),
+    body('origin').optional().isArray({ min: 3, max: 3 }).withMessage('Origin must be an array of 3 numbers'),
+    handleValidationErrors,
+  ];
+
+  // Sketch validation
+  const validateSketch = [
+    body('plane_id').isString().notEmpty().withMessage('Plane ID is required'),
+    handleValidationErrors,
+  ];
+
+  // Sketch element validation
+  const validateSketchElement = [
+    body('sketch_id').isString().notEmpty().withMessage('Sketch ID is required'),
+    body('element_type').isIn(['line', 'circle']).withMessage('Invalid element type'),
+    body('parameters').isObject().withMessage('Parameters must be an object'),
+    handleValidationErrors,
+  ];
+
+  // Extrude validation
+  const validateExtrude = [
+    body('sketch_id').isString().notEmpty().withMessage('Sketch ID is required'),
+    body('distance').isFloat({ min: 0.001 }).withMessage('Distance must be a positive number'),
+    body('extrude_type').optional().isIn(['blind', 'symmetric']).withMessage('Invalid extrude type'),
     handleValidationErrors,
   ];
 
@@ -82,6 +117,114 @@ export default function() {
 
     } catch (error) {
       next(new ApiError(500, 'Failed to create model', error.message));
+    }
+  });
+
+  /**
+   * POST /api/v1/cad/sketch-planes
+   * Create a new sketch plane
+   */
+  router.post('/sketch-planes', validateSketchPlane, async (req, res, next) => {
+    try {
+      const sessionId = req.sessionId;
+      const planeData = req.body;
+
+      logger.info(`Creating sketch plane for session ${sessionId}`, { planeData });
+
+      const result = await cppBackend.createSketchPlane(sessionId, planeData);
+
+      console.log('🔍 Raw C++ backend createSketchPlane result:', JSON.stringify(result, null, 2));
+
+      res.json({
+        success: true,
+        session_id: sessionId,
+        timestamp: Date.now(),
+        data: result.data || result,
+      });
+
+    } catch (error) {
+      next(new ApiError(500, 'Failed to create sketch plane', error.message));
+    }
+  });
+
+  /**
+   * POST /api/v1/cad/sketches
+   * Create a new sketch
+   */
+  router.post('/sketches', validateSketch, async (req, res, next) => {
+    try {
+      const sessionId = req.sessionId;
+      const sketchData = req.body;
+
+      logger.info(`Creating sketch for session ${sessionId}`, { sketchData });
+
+      const result = await cppBackend.createSketch(sessionId, sketchData);
+
+      console.log('🔍 Raw C++ backend createSketch result:', JSON.stringify(result, null, 2));
+
+      res.json({
+        success: true,
+        session_id: sessionId,
+        timestamp: Date.now(),
+        data: result.data || result,
+      });
+
+    } catch (error) {
+      next(new ApiError(500, 'Failed to create sketch', error.message));
+    }
+  });
+
+  /**
+   * POST /api/v1/cad/sketch-elements
+   * Add element to sketch
+   */
+  router.post('/sketch-elements', validateSketchElement, async (req, res, next) => {
+    try {
+      const sessionId = req.sessionId;
+      const elementData = req.body;
+
+      logger.info(`Adding sketch element for session ${sessionId}`, { elementData });
+
+      console.log('🔍 API Server received sketch element data:', JSON.stringify(elementData, null, 2));
+
+      const result = await cppBackend.addSketchElement(sessionId, elementData);
+
+      console.log('🔍 Raw C++ backend addSketchElement result:', JSON.stringify(result, null, 2));
+
+      res.json({
+        success: true,
+        session_id: sessionId,
+        timestamp: Date.now(),
+        data: result.data || result,
+      });
+
+    } catch (error) {
+      next(new ApiError(500, 'Failed to add sketch element', error.message));
+    }
+  });
+
+  /**
+   * POST /api/v1/cad/extrude
+   * Extrude a sketch
+   */
+  router.post('/extrude', validateExtrude, async (req, res, next) => {
+    try {
+      const sessionId = req.sessionId;
+      const extrudeData = req.body;
+
+      logger.info(`Extruding sketch for session ${sessionId}`, { extrudeData });
+
+      const result = await cppBackend.extrudeSketch(sessionId, extrudeData);
+
+      res.json({
+        success: true,
+        session_id: sessionId,
+        timestamp: Date.now(),
+        data: result.data || result,
+      });
+
+    } catch (error) {
+      next(new ApiError(500, 'Failed to extrude sketch', error.message));
     }
   });
 

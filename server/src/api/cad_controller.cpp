@@ -133,6 +133,55 @@ void CADController::setupRoutes() {
         }
     });
 
+    // Sketch-based modeling endpoints
+    server_->Post("/api/v1/sketch-planes", [this](const httplib::Request& req, httplib::Response& res) {
+        try {
+            std::string session_id = getSessionId(req);
+            std::string response_body;
+            handleCreateSketchPlane(session_id, req.body, response_body);
+            res.set_content(response_body, "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(createErrorResponse(e.what()), "application/json");
+        }
+    });
+
+    server_->Post("/api/v1/sketches", [this](const httplib::Request& req, httplib::Response& res) {
+        try {
+            std::string session_id = getSessionId(req);
+            std::string response_body;
+            handleCreateSketch(session_id, req.body, response_body);
+            res.set_content(response_body, "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(createErrorResponse(e.what()), "application/json");
+        }
+    });
+
+    server_->Post("/api/v1/sketch-elements", [this](const httplib::Request& req, httplib::Response& res) {
+        try {
+            std::string session_id = getSessionId(req);
+            std::string response_body;
+            handleAddSketchElement(session_id, req.body, response_body);
+            res.set_content(response_body, "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(createErrorResponse(e.what()), "application/json");
+        }
+    });
+
+    server_->Post("/api/v1/extrude", [this](const httplib::Request& req, httplib::Response& res) {
+        try {
+            std::string session_id = getSessionId(req);
+            std::string response_body;
+            handleExtrudeSketch(session_id, req.body, response_body);
+            res.set_content(response_body, "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(createErrorResponse(e.what()), "application/json");
+        }
+    });
+
     // Daydreams AI compatibility endpoint
     server_->Post("/api/v1/daydreams/cad", [this](const httplib::Request& req, httplib::Response& res) {
         try {
@@ -692,5 +741,287 @@ void CADController::handleExport(const std::string& session_id, const std::strin
         
     } catch (const std::exception& e) {
         response = createErrorResponse(std::string("Export exception: ") + e.what());
+    }
+}
+
+// ==================== SKETCH-BASED MODELING HANDLERS ====================
+
+void CADController::handleCreateSketchPlane(const std::string& session_id, const std::string& request_body, std::string& response) {
+    try {
+        std::cout << "🎯 Creating sketch plane for session: " << session_id << std::endl;
+        std::cout << "📋 Received request body: '" << request_body << "'" << std::endl;
+        std::cout << "📋 Request body length: " << request_body.length() << std::endl;
+        std::cout.flush();
+        
+        Json::Value request;
+        Json::Reader reader;
+        if (!reader.parse(request_body, request)) {
+            std::cout << "❌ JSON parsing failed!" << std::endl;
+            std::cout << "❌ Request body was: '" << request_body << "'" << std::endl;
+            std::cout.flush();
+            response = createErrorResponse("Invalid JSON in request body");
+            return;
+        }
+        
+        std::cout << "✅ JSON parsed successfully" << std::endl;
+        std::cout.flush();
+        
+        auto engine = SessionManager::getInstance().getOrCreateSession(session_id);
+        if (!engine) {
+            response = createErrorResponse("Failed to get session");
+            return;
+        }
+        
+        std::string plane_type = request.get("plane_type", "XY").asString();
+        Vector3d origin(0, 0, 0);
+        
+        // Get origin from individual x,y,z fields (avoiding array parsing issues)
+        origin.x = request.get("origin_x", 0.0).asDouble();
+        origin.y = request.get("origin_y", 0.0).asDouble(); 
+        origin.z = request.get("origin_z", 0.0).asDouble();
+        
+        std::string plane_id = engine->createSketchPlane(plane_type, origin);
+        
+        if (plane_id.empty()) {
+            response = createErrorResponse("Failed to create sketch plane");
+            return;
+        }
+        
+        Json::Value json_response;
+        json_response["success"] = true;
+        json_response["session_id"] = session_id;
+        json_response["timestamp"] = static_cast<int64_t>(std::time(nullptr));
+        
+        Json::Value data;
+        data["plane_id"] = plane_id;
+        data["plane_type"] = plane_type;
+        // Return origin as individual fields to avoid array parsing issues
+        data["origin_x"] = origin.x;
+        data["origin_y"] = origin.y;
+        data["origin_z"] = origin.z;
+        
+        json_response["data"] = data;
+        response = jsonToString(json_response);
+        
+    } catch (const std::exception& e) {
+        response = createErrorResponse(std::string("Create sketch plane exception: ") + e.what());
+    }
+}
+
+void CADController::handleCreateSketch(const std::string& session_id, const std::string& request_body, std::string& response) {
+    try {
+        std::cout << "📐 Creating sketch for session: " << session_id << std::endl;
+        std::cout << "📋 Received request body: '" << request_body << "'" << std::endl;
+        std::cout.flush();
+        
+        Json::Value request;
+        Json::Reader reader;
+        if (!reader.parse(request_body, request)) {
+            std::cout << "❌ JSON parsing failed for sketch creation!" << std::endl;
+            std::cout << "❌ Request body was: '" << request_body << "'" << std::endl;
+            std::cout.flush();
+            response = createErrorResponse("Invalid JSON in request body");
+            return;
+        }
+        
+        std::cout << "✅ Sketch JSON parsed successfully" << std::endl;
+        std::cout.flush();
+        
+        auto engine = SessionManager::getInstance().getOrCreateSession(session_id);
+        if (!engine) {
+            response = createErrorResponse("Failed to get session");
+            return;
+        }
+        
+        std::string plane_id = request.get("plane_id", "").asString();
+        if (plane_id.empty()) {
+            response = createErrorResponse("plane_id is required");
+            return;
+        }
+        
+        std::string sketch_id = engine->createSketch(plane_id);
+        
+        if (sketch_id.empty()) {
+            response = createErrorResponse("Failed to create sketch");
+            return;
+        }
+        
+        Json::Value json_response;
+        json_response["success"] = true;
+        json_response["session_id"] = session_id;
+        json_response["timestamp"] = static_cast<int64_t>(std::time(nullptr));
+        
+        Json::Value data;
+        data["sketch_id"] = sketch_id;
+        data["plane_id"] = plane_id;
+        
+        json_response["data"] = data;
+        response = jsonToString(json_response);
+        
+    } catch (const std::exception& e) {
+        response = createErrorResponse(std::string("Create sketch exception: ") + e.what());
+    }
+}
+
+void CADController::handleAddSketchElement(const std::string& session_id, const std::string& request_body, std::string& response) {
+    try {
+        std::cout << "✏️ Adding sketch element for session: " << session_id << std::endl;
+        std::cout << "📋 Received request body: '" << request_body << "'" << std::endl;
+        std::cout.flush();
+        
+        Json::Value request;
+        Json::Reader reader;
+        if (!reader.parse(request_body, request)) {
+            std::cout << "❌ JSON parsing failed for sketch element!" << std::endl;
+            std::cout << "❌ Request body was: '" << request_body << "'" << std::endl;
+            std::cout.flush();
+            response = createErrorResponse("Invalid JSON in request body");
+            return;
+        }
+        
+        std::cout << "✅ Sketch element JSON parsed successfully" << std::endl;
+        std::cout.flush();
+        
+        auto engine = SessionManager::getInstance().getOrCreateSession(session_id);
+        if (!engine) {
+            response = createErrorResponse("Failed to get session");
+            return;
+        }
+        
+        std::string sketch_id = request.get("sketch_id", "").asString();
+        std::string element_type = request.get("element_type", "").asString();
+        
+        if (sketch_id.empty() || element_type.empty()) {
+            response = createErrorResponse("sketch_id and element_type are required");
+            return;
+        }
+        
+        bool success = false;
+        std::string element_id;
+        
+        if (element_type == "line") {
+            double x1 = request["x1"].asDouble();
+            double y1 = request["y1"].asDouble();
+            double x2 = request["x2"].asDouble();
+            double y2 = request["y2"].asDouble();
+            
+            success = engine->addLineToSketch(sketch_id, x1, y1, x2, y2);
+            element_id = "line_element";
+            
+        } else if (element_type == "circle") {
+            double center_x = request["center_x"].asDouble();
+            double center_y = request["center_y"].asDouble();
+            double radius = request["radius"].asDouble();
+            
+            success = engine->addCircleToSketch(sketch_id, center_x, center_y, radius);
+            element_id = "circle_element";
+        } else {
+            response = createErrorResponse("Unsupported element_type: " + element_type);
+            return;
+        }
+        
+        if (!success) {
+            response = createErrorResponse("Failed to add sketch element");
+            return;
+        }
+        
+        Json::Value json_response;
+        json_response["success"] = true;
+        json_response["session_id"] = session_id;
+        json_response["timestamp"] = static_cast<int64_t>(std::time(nullptr));
+        
+        Json::Value data;
+        data["sketch_id"] = sketch_id;
+        data["element_type"] = element_type;
+        data["element_id"] = element_id;
+        
+        json_response["data"] = data;
+        response = jsonToString(json_response);
+        
+    } catch (const std::exception& e) {
+        response = createErrorResponse(std::string("Add sketch element exception: ") + e.what());
+    }
+}
+
+void CADController::handleExtrudeSketch(const std::string& session_id, const std::string& request_body, std::string& response) {
+    try {
+        std::cout << "🚀 Extruding sketch for session: " << session_id << std::endl;
+        std::cout << "📋 Received request body: '" << request_body << "'" << std::endl;
+        std::cout.flush();
+        
+        Json::Value request;
+        Json::Reader reader;
+        if (!reader.parse(request_body, request)) {
+            std::cout << "❌ JSON parsing failed for extrude!" << std::endl;
+            std::cout << "❌ Request body was: '" << request_body << "'" << std::endl;
+            std::cout.flush();
+            response = createErrorResponse("Invalid JSON in request body");
+            return;
+        }
+        
+        std::cout << "✅ Extrude JSON parsed successfully" << std::endl;
+        std::cout.flush();
+        
+        auto engine = SessionManager::getInstance().getOrCreateSession(session_id);
+        if (!engine) {
+            response = createErrorResponse("Failed to get session");
+            return;
+        }
+        
+        std::string sketch_id = request.get("sketch_id", "").asString();
+        double distance = request.get("distance", 10.0).asDouble();
+        std::string direction = request.get("direction", "normal").asString();
+        
+        if (sketch_id.empty()) {
+            response = createErrorResponse("sketch_id is required");
+            return;
+        }
+        
+        std::string feature_id = engine->extrudeSketch(sketch_id, distance, direction);
+        
+        if (feature_id.empty()) {
+            response = createErrorResponse("Failed to extrude sketch");
+            return;
+        }
+        
+        // Generate mesh data for visualization
+        MeshData mesh = engine->tessellate(feature_id);
+        
+        Json::Value json_response;
+        json_response["success"] = true;
+        json_response["session_id"] = session_id;
+        json_response["timestamp"] = static_cast<int64_t>(std::time(nullptr));
+        
+        Json::Value data;
+        data["feature_id"] = feature_id;
+        data["sketch_id"] = sketch_id;
+        data["distance"] = distance;
+        data["direction"] = direction;
+        
+        // Include mesh data for immediate visualization
+        Json::Value mesh_data;
+        mesh_data["vertices"] = Json::Value(Json::Value::arrayValue);
+        for (size_t i = 0; i < mesh.vertices.size(); ++i) {
+            mesh_data["vertices"].append(mesh.vertices[i]);
+        }
+        
+        mesh_data["faces"] = Json::Value(Json::Value::arrayValue);
+        for (size_t i = 0; i < mesh.faces.size(); ++i) {
+            mesh_data["faces"].append(mesh.faces[i]);
+        }
+        
+        Json::Value metadata;
+        metadata["vertex_count"] = static_cast<int>(mesh.metadata.vertex_count);
+        metadata["face_count"] = static_cast<int>(mesh.metadata.face_count);
+        metadata["tessellation_quality"] = mesh.metadata.tessellation_quality;
+        mesh_data["metadata"] = metadata;
+        
+        data["mesh_data"] = mesh_data;
+        
+        json_response["data"] = data;
+        response = jsonToString(json_response);
+        
+    } catch (const std::exception& e) {
+        response = createErrorResponse(std::string("Extrude sketch exception: ") + e.what());
     }
 } 

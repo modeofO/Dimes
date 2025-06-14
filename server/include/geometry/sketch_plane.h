@@ -1,5 +1,6 @@
 #pragma once
 
+#include "types.h"
 #include <gp_Ax2.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Dir.hxx>
@@ -7,18 +8,9 @@
 #include <string>
 #include <memory>
 
-// Forward declarations
-struct Vector3d {
-    double x, y, z;
-    Vector3d(double x = 0, double y = 0, double z = 0) : x(x), y(y), z(z) {}
-};
-
-enum class PlaneType {
-    XY,     // World XY plane
-    XZ,     // World XZ plane  
-    YZ,     // World YZ plane
-    CUSTOM  // User-defined plane
-};
+// Using types from Geometry namespace
+using Geometry::Vector3d;
+using Geometry::PlaneType;
 
 class SketchPlane {
 private:

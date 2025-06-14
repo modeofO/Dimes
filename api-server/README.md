@@ -24,6 +24,8 @@ This is the Node.js API layer for the Dimes CAD application. It acts as a secure
 ## Features
 
 - ✅ RESTful API endpoints for CAD operations
+- ✅ Sketch-based CAD modeling workflow (SolidWorks-style)
+- ✅ Primitive-based modeling for quick prototyping
 - ✅ WebSocket support for real-time updates
 - ✅ Session management and validation
 - ✅ Request validation and sanitization
@@ -31,7 +33,7 @@ This is the Node.js API layer for the Dimes CAD application. It acts as a secure
 - ✅ Health checks and monitoring
 - ✅ Error handling and logging
 - ✅ C++ backend communication with retry logic
-- ✅ Daydreams AI integration
+- ✅ MCP (Model Context Protocol) server for AI integration
 
 ## Prerequisites
 
@@ -83,18 +85,178 @@ This is the Node.js API layer for the Dimes CAD application. It acts as a secure
 - `GET /api/v1/health/live` - Liveness probe
 - `GET /api/v1/cad/backend/status` - C++ backend status
 
-### CAD Operations
+### Sketch-Based CAD Operations (Professional Workflow)
+
+The API supports a complete sketch-based CAD workflow similar to SolidWorks:
+
+#### 1. Create Sketch Plane
+```http
+POST /api/v1/cad/sketch-planes
+Content-Type: application/json
+X-Session-ID: your-session-id
+
+{
+  "plane_type": "XY",        // "XY", "XZ", or "YZ"
+  "origin": [0, 0, 0]        // Optional: [x, y, z] coordinates
+}
+```
+
+#### 2. Create Sketch
+```http
+POST /api/v1/cad/sketches
+Content-Type: application/json
+X-Session-ID: your-session-id
+
+{
+  "plane_id": "plane_12345"
+}
+```
+
+#### 3. Add Sketch Elements
+```http
+POST /api/v1/cad/sketch-elements
+Content-Type: application/json
+X-Session-ID: your-session-id
+
+{
+  "sketch_id": "sketch_67890",
+  "element_type": "line",       // "line" or "circle"
+  "parameters": {
+    // For lines:
+    "start_point": [0, 0],      // [x, y] in 2D
+    "end_point": [10, 0]        // [x, y] in 2D
+    
+    // For circles:
+    // "center": [5, 5],        // [x, y] in 2D
+    // "radius": 3              // radius value
+  }
+}
+```
+
+#### 4. Extrude Sketch
+```http
+POST /api/v1/cad/extrude
+Content-Type: application/json
+X-Session-ID: your-session-id
+
+{
+  "sketch_id": "sketch_67890",
+  "distance": 5.0,
+  "extrude_type": "blind"      // "blind" or "symmetric"
+}
+```
+
+### Primitive-Based CAD Operations (Quick Prototyping)
 
 - `POST /api/v1/cad/models` - Create 3D models
 - `PUT /api/v1/cad/parameters` - Update model parameters
 - `POST /api/v1/cad/operations` - Boolean operations
 - `POST /api/v1/cad/tessellate` - Generate meshes
 - `GET /api/v1/cad/sessions/{sessionId}/export/{format}` - Export models
-- `POST /api/v1/cad/daydreams` - AI-powered operations
 
 ### WebSocket
 
 - `ws://localhost:3000/ws?sessionId={sessionId}` - Real-time updates
+
+## CAD Workflow Examples
+
+### Example 1: Create a Simple Rectangular Block
+
+```javascript
+// 1. Create XY plane
+const planeResponse = await fetch('/api/v1/cad/sketch-planes', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'X-Session-ID': sessionId },
+  body: JSON.stringify({ plane_type: 'XY', origin: [0, 0, 0] })
+});
+const { plane_id } = await planeResponse.json();
+
+// 2. Create sketch on plane
+const sketchResponse = await fetch('/api/v1/cad/sketches', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'X-Session-ID': sessionId },
+  body: JSON.stringify({ plane_id })
+});
+const { sketch_id } = await sketchResponse.json();
+
+// 3. Add rectangle (4 lines)
+const lines = [
+  { start_point: [0, 0], end_point: [10, 0] },    // Bottom
+  { start_point: [10, 0], end_point: [10, 5] },   // Right
+  { start_point: [10, 5], end_point: [0, 5] },    // Top
+  { start_point: [0, 5], end_point: [0, 0] }      // Left
+];
+
+for (const line of lines) {
+  await fetch('/api/v1/cad/sketch-elements', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Session-ID': sessionId },
+    body: JSON.stringify({
+      sketch_id,
+      element_type: 'line',
+      parameters: line
+    })
+  });
+}
+
+// 4. Extrude to create 3D block
+const extrudeResponse = await fetch('/api/v1/cad/extrude', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'X-Session-ID': sessionId },
+  body: JSON.stringify({
+    sketch_id,
+    distance: 15.0,
+    extrude_type: 'blind'
+  })
+});
+const result = await extrudeResponse.json();
+console.log('Created block with model ID:', result.data.model_id);
+```
+
+### Example 2: Create a Cylinder Using Circle Sketch
+
+```javascript
+// 1. Create XY plane
+const planeResponse = await fetch('/api/v1/cad/sketch-planes', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'X-Session-ID': sessionId },
+  body: JSON.stringify({ plane_type: 'XY' })
+});
+const { plane_id } = await planeResponse.json();
+
+// 2. Create sketch
+const sketchResponse = await fetch('/api/v1/cad/sketches', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'X-Session-ID': sessionId },
+  body: JSON.stringify({ plane_id })
+});
+const { sketch_id } = await sketchResponse.json();
+
+// 3. Add circle
+await fetch('/api/v1/cad/sketch-elements', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'X-Session-ID': sessionId },
+  body: JSON.stringify({
+    sketch_id,
+    element_type: 'circle',
+    parameters: {
+      center: [0, 0],
+      radius: 5.0
+    }
+  })
+});
+
+// 4. Extrude to create cylinder
+const extrudeResponse = await fetch('/api/v1/cad/extrude', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'X-Session-ID': sessionId },
+  body: JSON.stringify({
+    sketch_id,
+    distance: 10.0,
+    extrude_type: 'blind'
+  })
+});
+```
 
 ## Configuration
 
@@ -128,6 +290,7 @@ This starts the server with nodemon for automatic reloading on file changes.
 ```
 src/
 ├── server.js              # Main server file
+├── mcp-server.js          # MCP server for AI integration
 ├── routes/
 │   ├── health.js          # Health check routes
 │   └── cad.js             # CAD operation routes
@@ -154,6 +317,29 @@ npm run lint
 # Format code
 npm run format
 ```
+
+## Model Context Protocol (MCP) Integration
+
+The server includes an MCP server for AI integration with the following tools:
+
+### Basic Tools
+- `create_primitive` - Create primitive shapes (box, cylinder, sphere, cone)
+- `perform_boolean` - Boolean operations (union, cut, intersect)
+
+### Sketch-Based Tools
+- `create_sketch_plane` - Create sketch planes (XY, XZ, YZ)
+- `create_sketch` - Create sketch on a plane
+- `add_sketch_element` - Add 2D elements (lines, circles)
+- `extrude_sketch` - Extrude sketch to 3D solid
+- `create_sketch_model` - Complete workflow in one operation
+
+### Running MCP Server
+
+```bash
+node src/mcp-server.js
+```
+
+The MCP server provides AI agents with structured tools to create CAD models using natural language instructions.
 
 ## Deployment
 
@@ -280,7 +466,7 @@ const client = new CADClient('http://localhost:8080', sessionId);
 const client = new CADClient('http://localhost:3000', sessionId);
 ```
 
-The API maintains backward compatibility with existing client code.
+The API maintains backward compatibility with existing client code while adding new sketch-based capabilities.
 
 ## Troubleshooting
 
@@ -303,6 +489,11 @@ The API maintains backward compatibility with existing client code.
    - Check session ID format
    - Verify WebSocket URL and protocol
 
+5. **Sketch Workflow Issues**
+   - Ensure proper sequence: plane → sketch → elements → extrude
+   - Validate element parameters (2D coordinates for sketch elements)
+   - Check that plane and sketch IDs are correctly passed between steps
+
 ### Debug Mode
 
 Enable debug logging:
@@ -319,4 +510,4 @@ LOG_LEVEL=debug npm run dev
 
 ## License
 
-This project is licensed under the MIT License. 
+This project is licensed under the MIT License.

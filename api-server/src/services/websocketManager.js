@@ -102,6 +102,25 @@ export class WebSocketManager {
           });
           break;
 
+        case 'subscribe_sketch_updates':
+          // Client wants to receive sketch workflow updates
+          ws.subscribeSketch = true;
+          this.sendToClient(ws.sessionId, { 
+            type: 'subscription_confirmed', 
+            subscription: 'sketch_updates',
+            timestamp: Date.now(),
+          });
+          break;
+
+        case 'unsubscribe_sketch_updates':
+          ws.subscribeSketch = false;
+          this.sendToClient(ws.sessionId, { 
+            type: 'subscription_cancelled', 
+            subscription: 'sketch_updates',
+            timestamp: Date.now(),
+          });
+          break;
+
         case 'request_status':
           this.sendBackendStatus(ws.sessionId);
           break;
@@ -156,6 +175,51 @@ export class WebSocketManager {
     }
   }
 
+  // Send sketch workflow updates to subscribed clients
+  notifySketchPlaneCreated(sessionId, planeData) {
+    const ws = this.clients.get(sessionId);
+    if (ws && ws.subscribeSketch) {
+      this.sendToClient(sessionId, {
+        type: 'sketch_plane_created',
+        data: planeData,
+        timestamp: Date.now(),
+      });
+    }
+  }
+
+  notifySketchCreated(sessionId, sketchData) {
+    const ws = this.clients.get(sessionId);
+    if (ws && ws.subscribeSketch) {
+      this.sendToClient(sessionId, {
+        type: 'sketch_created',
+        data: sketchData,
+        timestamp: Date.now(),
+      });
+    }
+  }
+
+  notifySketchElementAdded(sessionId, elementData) {
+    const ws = this.clients.get(sessionId);
+    if (ws && ws.subscribeSketch) {
+      this.sendToClient(sessionId, {
+        type: 'sketch_element_added',
+        data: elementData,
+        timestamp: Date.now(),
+      });
+    }
+  }
+
+  notifySketchExtruded(sessionId, extrudeData) {
+    const ws = this.clients.get(sessionId);
+    if (ws && ws.subscribeSketch) {
+      this.sendToClient(sessionId, {
+        type: 'sketch_extruded',
+        data: extrudeData,
+        timestamp: Date.now(),
+      });
+    }
+  }
+
   // Send parameter updates to clients
   notifyParameterUpdate(sessionId, parameters) {
     this.sendToClient(sessionId, {
@@ -182,6 +246,46 @@ export class WebSocketManager {
         timestamp: Date.now(),
       });
     }
+  }
+
+  // Send workflow progress updates
+  notifyWorkflowProgress(sessionId, step, total, description) {
+    this.sendToClient(sessionId, {
+      type: 'workflow_progress',
+      data: {
+        step,
+        total,
+        description,
+        progress: (step / total) * 100,
+      },
+      timestamp: Date.now(),
+    });
+  }
+
+  // Send CAD operation completion
+  notifyOperationComplete(sessionId, operation, result) {
+    this.sendToClient(sessionId, {
+      type: 'operation_complete',
+      data: {
+        operation,
+        result,
+        success: true,
+      },
+      timestamp: Date.now(),
+    });
+  }
+
+  // Send CAD operation error
+  notifyOperationError(sessionId, operation, error) {
+    this.sendToClient(sessionId, {
+      type: 'operation_error',
+      data: {
+        operation,
+        error: error.message,
+        success: false,
+      },
+      timestamp: Date.now(),
+    });
   }
 
   // Heartbeat to keep connections alive

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "types.h"
 #include <map>
 #include <string>
 #include <memory>
@@ -15,10 +16,8 @@ class SketchPlane;
 class Sketch;
 class ExtrudeFeature;
 
-struct Vector3d {
-    double x, y, z;
-    Vector3d(double x = 0, double y = 0, double z = 0) : x(x), y(y), z(z) {}
-};
+// Using types from Geometry namespace
+using Geometry::Vector3d;
 
 struct BoxParameters {
     double width = 10.0;

@@ -11,12 +11,26 @@ interface CreatedShape {
     visible: boolean;
 }
 
+interface CreatedPlane {
+    plane_id: string;
+    plane_type: string;
+    origin: [number, number, number];
+}
+
+interface CreatedSketch {
+    sketch_id: string;
+    plane_id: string;
+    elements: number;
+}
+
 class CADApplication {
     private renderer!: CADRenderer;
     private client!: CADClient;
     private sessionId: string;
     private statusElement: HTMLElement | null;
     private createdShapes: CreatedShape[] = [];
+    private createdPlanes: CreatedPlane[] = [];
+    private createdSketches: CreatedSketch[] = [];
 
     constructor() {
         this.sessionId = this.generateSessionId();
@@ -120,19 +134,85 @@ class CADApplication {
     }
 
     private setupUIHandlers(): void {
-        // Primitive type dropdown handler
-        const primitiveType = document.getElementById('primitive-type') as HTMLSelectElement;
-        if (primitiveType) {
-            primitiveType.addEventListener('change', () => {
-                this.updatePrimitiveParams(primitiveType.value);
+        // ==================== SKETCH-BASED WORKFLOW HANDLERS ====================
+        
+        // Create plane button handler
+        const createPlaneBtn = document.getElementById('create-plane') as HTMLButtonElement;
+        if (createPlaneBtn) {
+            createPlaneBtn.addEventListener('click', () => {
+                this.createSketchPlane();
             });
         }
 
-        // Create primitive button handler
-        const createBtn = document.getElementById('create-primitive') as HTMLButtonElement;
-        if (createBtn) {
-            createBtn.addEventListener('click', () => {
-                this.createPrimitive();
+        // Create sketch button handler
+        const createSketchBtn = document.getElementById('create-sketch') as HTMLButtonElement;
+        if (createSketchBtn) {
+            createSketchBtn.addEventListener('click', () => {
+                this.createSketch();
+            });
+        }
+
+        // Element type dropdown handler
+        const elementType = document.getElementById('element-type') as HTMLSelectElement;
+        if (elementType) {
+            elementType.addEventListener('change', () => {
+                this.updateElementParams(elementType.value);
+            });
+        }
+
+        // Add element button handler
+        const addElementBtn = document.getElementById('add-element') as HTMLButtonElement;
+        if (addElementBtn) {
+            addElementBtn.addEventListener('click', () => {
+                this.addSketchElement();
+            });
+        }
+
+        // Extrude sketch button handler
+        const extrudeBtn = document.getElementById('extrude-sketch') as HTMLButtonElement;
+        if (extrudeBtn) {
+            extrudeBtn.addEventListener('click', () => {
+                this.extrudeSketch();
+            });
+        }
+
+        // Dropdown change handlers to enable/disable buttons
+        const sketchPlaneSelect = document.getElementById('sketch-plane-select') as HTMLSelectElement;
+        if (sketchPlaneSelect) {
+            sketchPlaneSelect.addEventListener('change', () => {
+                const createSketchBtn = document.getElementById('create-sketch') as HTMLButtonElement;
+                if (createSketchBtn) {
+                    createSketchBtn.disabled = !sketchPlaneSelect.value;
+                }
+            });
+        }
+
+        const sketchSelect = document.getElementById('sketch-select') as HTMLSelectElement;
+        if (sketchSelect) {
+            sketchSelect.addEventListener('change', () => {
+                console.log('🎯 Sketch selection changed:', {
+                    selectedValue: sketchSelect.value,
+                    selectedIndex: sketchSelect.selectedIndex,
+                    availableSketches: this.createdSketches.map(s => s.sketch_id)
+                });
+                
+                const addElementBtn = document.getElementById('add-element') as HTMLButtonElement;
+                if (addElementBtn) {
+                    const wasDisabled = addElementBtn.disabled;
+                    addElementBtn.disabled = !sketchSelect.value;
+                    console.log('🔘 Add Element button:', { wasDisabled, nowDisabled: addElementBtn.disabled, sketchValue: sketchSelect.value });
+                }
+                // Removed this.updateExtrudeSketchSelect() - copying extrude section's simpler approach
+            });
+        }
+
+        const extrudeSketchSelect = document.getElementById('extrude-sketch-select') as HTMLSelectElement;
+        if (extrudeSketchSelect) {
+            extrudeSketchSelect.addEventListener('change', () => {
+                const extrudeBtn = document.getElementById('extrude-sketch') as HTMLButtonElement;
+                if (extrudeBtn) {
+                    extrudeBtn.disabled = !extrudeSketchSelect.value;
+                }
             });
         }
 
@@ -141,6 +221,14 @@ class CADApplication {
         if (clearBtn) {
             clearBtn.addEventListener('click', () => {
                 this.clearAllShapes();
+            });
+        }
+
+        // Test sketches button handler (temporary for debugging)
+        const testSketchesBtn = document.getElementById('create-test-sketches') as HTMLButtonElement;
+        if (testSketchesBtn) {
+            testSketchesBtn.addEventListener('click', () => {
+                this.createTestSketches();
             });
         }
 
@@ -449,6 +537,313 @@ class CADApplication {
             console.error('Failed to send AI instruction:', error);
             this.updateStatus(`❌ AI instruction error: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
         }
+    }
+
+    // ==================== SKETCH-BASED MODELING METHODS ====================
+
+    private async createSketchPlane(): Promise<void> {
+        try {
+            const planeType = (document.getElementById('plane-type') as HTMLSelectElement).value as any;
+            const originX = parseFloat((document.getElementById('plane-origin-x') as HTMLInputElement).value);
+            const originY = parseFloat((document.getElementById('plane-origin-y') as HTMLInputElement).value);
+            const originZ = parseFloat((document.getElementById('plane-origin-z') as HTMLInputElement).value);
+            
+            const origin: [number, number, number] = [originX, originY, originZ];
+            
+            this.updateStatus(`Creating ${planeType} plane...`, 'info');
+            this.updateLocalStatus('plane-status', 'Creating plane...', 'info');
+            
+            const response = await this.client.createSketchPlane(planeType, origin);
+            
+            if (response.success && response.data) {
+                console.log('🔍 Processing plane response data:', JSON.stringify(response.data, null, 2));
+                
+                const plane: CreatedPlane = {
+                    plane_id: response.data.plane_id,
+                    plane_type: response.data.plane_type,
+                    origin: [response.data.origin_x || 0, response.data.origin_y || 0, response.data.origin_z || 0]
+                };
+                
+                console.log('✨ Created plane object:', JSON.stringify(plane, null, 2));
+                
+                this.createdPlanes.push(plane);
+                
+                this.updatePlaneSelectors();
+                this.updateStatus(`✅ Created plane: ${plane.plane_id}`, 'success');
+                this.updateLocalStatus('plane-status', `✅ Created: ${plane.plane_id}`, 'success');
+            } else {
+                this.updateStatus(`❌ Failed to create plane`, 'error');
+                this.updateLocalStatus('plane-status', '❌ Failed to create plane', 'error');
+            }
+            
+        } catch (error) {
+            console.error('Failed to create sketch plane:', error);
+            this.updateStatus(`❌ Error creating plane: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+            this.updateLocalStatus('plane-status', '❌ Error creating plane', 'error');
+        }
+    }
+
+    private async createSketch(): Promise<void> {
+        try {
+            const planeId = (document.getElementById('sketch-plane-select') as HTMLSelectElement).value;
+            
+            if (!planeId) {
+                this.updateLocalStatus('sketch-status', '❌ Please select a plane', 'error');
+                return;
+            }
+            
+            this.updateStatus(`Creating sketch on plane ${planeId}...`, 'info');
+            this.updateLocalStatus('sketch-status', 'Creating sketch...', 'info');
+            
+            const response = await this.client.createSketch(planeId);
+            
+            if (response.success && response.data) {
+                console.log('🔍 Processing sketch response data:', JSON.stringify(response.data, null, 2));
+                
+                const sketch: CreatedSketch = {
+                    sketch_id: response.data.sketch_id,
+                    plane_id: response.data.plane_id,
+                    elements: 0
+                };
+                
+                console.log('✨ Created sketch object:', JSON.stringify(sketch, null, 2));
+                
+                this.createdSketches.push(sketch);
+                
+                console.log('✅ Created sketch successfully:', {
+                    sketchId: sketch.sketch_id,
+                    totalSketches: this.createdSketches.length,
+                    allSketches: this.createdSketches.map(s => s.sketch_id)
+                });
+                
+                this.updateSketchSelectors();
+                this.updateStatus(`✅ Created sketch: ${sketch.sketch_id}`, 'success');
+                this.updateLocalStatus('sketch-status', `✅ Created: ${sketch.sketch_id}`, 'success');
+            } else {
+                this.updateStatus(`❌ Failed to create sketch`, 'error');
+                this.updateLocalStatus('sketch-status', '❌ Failed to create sketch', 'error');
+            }
+            
+        } catch (error) {
+            console.error('Failed to create sketch:', error);
+            this.updateStatus(`❌ Error creating sketch: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+            this.updateLocalStatus('sketch-status', '❌ Error creating sketch', 'error');
+        }
+    }
+
+    private updateElementParams(type: string): void {
+        // Hide all parameter groups
+        document.querySelectorAll('.param-group').forEach(group => {
+            (group as HTMLElement).style.display = 'none';
+        });
+
+        // Show the selected parameter group
+        const paramGroup = document.getElementById(`${type}-params`);
+        if (paramGroup) {
+            paramGroup.style.display = 'block';
+        }
+    }
+
+    private async addSketchElement(): Promise<void> {
+        try {
+            const sketchSelectElement = document.getElementById('sketch-select') as HTMLSelectElement;
+            const sketchId = sketchSelectElement.value;
+            const elementType = (document.getElementById('element-type') as HTMLSelectElement).value;
+            
+            console.log('🔧 Adding sketch element:', {
+                sketchId,
+                elementType,
+                sketchSelectElement: sketchSelectElement,
+                selectedIndex: sketchSelectElement.selectedIndex,
+                selectedOption: sketchSelectElement.options[sketchSelectElement.selectedIndex]?.text
+            });
+            
+            if (!sketchId) {
+                console.log('❌ No sketch selected - showing error');
+                this.updateLocalStatus('element-status', '❌ Please select a sketch', 'error');
+                return;
+            }
+            
+            this.updateLocalStatus('element-status', `Adding ${elementType}...`, 'info');
+            
+            let response;
+            
+            if (elementType === 'line') {
+                const x1 = parseFloat((document.getElementById('line-x1') as HTMLInputElement).value);
+                const y1 = parseFloat((document.getElementById('line-y1') as HTMLInputElement).value);
+                const x2 = parseFloat((document.getElementById('line-x2') as HTMLInputElement).value);
+                const y2 = parseFloat((document.getElementById('line-y2') as HTMLInputElement).value);
+                
+                response = await this.client.addLineToSketch(sketchId, x1, y1, x2, y2);
+                
+            } else if (elementType === 'circle') {
+                const centerX = parseFloat((document.getElementById('circle-x') as HTMLInputElement).value);
+                const centerY = parseFloat((document.getElementById('circle-y') as HTMLInputElement).value);
+                const radius = parseFloat((document.getElementById('circle-radius') as HTMLInputElement).value);
+                
+                response = await this.client.addCircleToSketch(sketchId, centerX, centerY, radius);
+            } else {
+                this.updateLocalStatus('element-status', '❌ Unknown element type', 'error');
+                return;
+            }
+            
+            if (response.success && response.data) {
+                // Update element count
+                const sketch = this.createdSketches.find(s => s.sketch_id === sketchId);
+                if (sketch) {
+                    sketch.elements++;
+                }
+                
+                this.updateStatus(`✅ Added ${elementType} to sketch`, 'success');
+                this.updateLocalStatus('element-status', `✅ Added ${elementType}`, 'success');
+            } else {
+                this.updateStatus(`❌ Failed to add ${elementType}`, 'error');
+                this.updateLocalStatus('element-status', `❌ Failed to add ${elementType}`, 'error');
+            }
+            
+        } catch (error) {
+            console.error('Failed to add sketch element:', error);
+            this.updateStatus(`❌ Error adding element: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+            this.updateLocalStatus('element-status', '❌ Error adding element', 'error');
+        }
+    }
+
+    private async extrudeSketch(): Promise<void> {
+        try {
+            const sketchId = (document.getElementById('extrude-sketch-select') as HTMLSelectElement).value;
+            const distance = parseFloat((document.getElementById('extrude-distance') as HTMLInputElement).value);
+            
+            if (!sketchId) {
+                this.updateLocalStatus('extrude-status', '❌ Please select a sketch', 'error');
+                return;
+            }
+            
+            this.updateStatus(`Extruding sketch ${sketchId}...`, 'info');
+            this.updateLocalStatus('extrude-status', 'Extruding...', 'info');
+            
+            const response = await this.client.extrudeSketch(sketchId, distance);
+            
+            if (response.success && response.data) {
+                // Add to shapes list
+                const shape: CreatedShape = {
+                    id: response.data.feature_id,
+                    type: `Extruded Sketch (${sketchId})`,
+                    dimensions: { distance: distance },
+                    visible: true
+                };
+                this.createdShapes.push(shape);
+                
+                // Update geometry in viewport if mesh data is provided
+                if (response.data.mesh_data) {
+                    this.renderer.updateGeometry(shape.id, response.data.mesh_data);
+                }
+                
+                this.updateShapesList();
+                this.updateShapeSelectors();
+                this.updateStatus(`✅ Extruded sketch: ${response.data.feature_id}`, 'success');
+                this.updateLocalStatus('extrude-status', `✅ Created: ${response.data.feature_id}`, 'success');
+            } else {
+                this.updateStatus(`❌ Failed to extrude sketch`, 'error');
+                this.updateLocalStatus('extrude-status', '❌ Failed to extrude', 'error');
+            }
+            
+        } catch (error) {
+            console.error('Failed to extrude sketch:', error);
+            this.updateStatus(`❌ Error extruding sketch: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+            this.updateLocalStatus('extrude-status', '❌ Error extruding', 'error');
+        }
+    }
+
+    private updatePlaneSelectors(): void {
+        const sketchPlaneSelect = document.getElementById('sketch-plane-select') as HTMLSelectElement;
+        
+        if (sketchPlaneSelect) {
+            const options = this.createdPlanes.map(plane => 
+                `<option value="${plane.plane_id}">${plane.plane_id} (${plane.plane_type})</option>`
+            ).join('');
+            
+            sketchPlaneSelect.innerHTML = '<option value="">Select a plane</option>' + options;
+        }
+    }
+
+    private updateSketchSelectors(): void {
+        const sketchSelect = document.getElementById('sketch-select') as HTMLSelectElement;
+        const extrudeSketchSelect = document.getElementById('extrude-sketch-select') as HTMLSelectElement;
+        
+        const options = this.createdSketches.map(sketch => 
+            `<option value="${sketch.sketch_id}">${sketch.sketch_id} (${sketch.elements} elements)</option>`
+        ).join('');
+        
+        console.log('🔄 Updating sketch selectors:', {
+            sketchCount: this.createdSketches.length,
+            sketches: this.createdSketches.map(s => s.sketch_id),
+            generatedOptions: options
+        });
+        
+        if (sketchSelect) {
+            const newHTML = '<option value="">Select a sketch</option>' + options;
+            sketchSelect.innerHTML = newHTML;
+            console.log('📝 Updated sketch-select dropdown with:', newHTML);
+        }
+        
+        if (extrudeSketchSelect) {
+            extrudeSketchSelect.innerHTML = '<option value="">Select a sketch</option>' + options;
+        }
+    }
+
+    // Removed updateExtrudeSketchSelect - it was causing circular updates
+    // Now both dropdowns are updated directly by updateSketchSelectors()
+    
+    // Temporary method to create test sketches for UI debugging
+    private createTestSketches(): void {
+        console.log('🧪 Creating test sketches for UI debugging...');
+        
+        // Create test plane
+        const testPlane: CreatedPlane = {
+            plane_id: 'test_plane_1',
+            plane_type: 'XY',
+            origin: [0, 0, 0]
+        };
+        this.createdPlanes.push(testPlane);
+        
+        // Create test sketches
+        const testSketch1: CreatedSketch = {
+            sketch_id: 'test_sketch_1',
+            plane_id: 'test_plane_1',
+            elements: 2
+        };
+        
+        const testSketch2: CreatedSketch = {
+            sketch_id: 'test_sketch_2', 
+            plane_id: 'test_plane_1',
+            elements: 1
+        };
+        
+        this.createdSketches.push(testSketch1, testSketch2);
+        
+        // Update UI
+        this.updatePlaneSelectors();
+        this.updateSketchSelectors();
+        
+        console.log('🧪 Test sketches created:', {
+            planes: this.createdPlanes.length,
+            sketches: this.createdSketches.length
+        });
+        
+        this.updateStatus('🧪 Test sketches created for UI debugging', 'info');
+    }
+
+    private updateLocalStatus(elementId: string, message: string, type: 'info' | 'success' | 'warning' | 'error'): void {
+        const element = document.getElementById(elementId);
+        if (!element) return;
+        
+        element.textContent = message;
+        
+        // Remove existing status classes
+        element.classList.remove('success', 'error', 'info', 'warning');
+        
+        // Add new status class
+        element.classList.add(type);
     }
 }
 

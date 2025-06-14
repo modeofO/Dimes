@@ -1,5 +1,17 @@
-import { CADResponse, ModelCreateRequest, ModelResponse } from '../types/api';
-import { MeshData, ExportFormat, PrimitiveType } from '../types/geometry';
+import { 
+    CADResponse, 
+    ModelCreateRequest, 
+    ModelResponse,
+    CreateSketchPlaneRequest,
+    CreateSketchPlaneResponse,
+    CreateSketchRequest,
+    CreateSketchResponse,
+    AddSketchElementRequest,
+    AddSketchElementResponse,
+    ExtrudeSketchRequest,
+    ExtrudeSketchResponse
+} from '../types/api';
+import { MeshData, ExportFormat, PrimitiveType, PlaneType, SketchElementType } from '../types/geometry';
 
 export class CADClient {
     private baseUrl: string;
@@ -55,6 +67,93 @@ export class CADClient {
         tool_id: string;
     }): Promise<CADResponse> {
         return this.makeRequest<CADResponse>('/api/v1/cad/operations', 'POST', operation);
+    }
+    
+    // ==================== SKETCH-BASED MODELING METHODS ====================
+    
+    public async createSketchPlane(planeType: PlaneType, origin?: [number, number, number]): Promise<CreateSketchPlaneResponse> {
+        const request: CreateSketchPlaneRequest = {
+            plane_type: planeType,
+            origin: origin
+        };
+        
+        console.log('🎯 Creating sketch plane:', request);
+        
+        const response = await this.makeRequest<CreateSketchPlaneResponse>('/api/v1/cad/sketch-planes', 'POST', request);
+        
+        console.log('📨 Received createSketchPlane response:', JSON.stringify(response, null, 2));
+        return response;
+    }
+    
+    public async createSketch(planeId: string): Promise<CreateSketchResponse> {
+        const request: CreateSketchRequest = {
+            plane_id: planeId
+        };
+        
+        console.log('📐 Creating sketch:', request);
+        
+        const response = await this.makeRequest<CreateSketchResponse>('/api/v1/cad/sketches', 'POST', request);
+        
+        console.log('📨 Received createSketch response:', JSON.stringify(response, null, 2));
+        return response;
+    }
+    
+    public async addLineToSketch(sketchId: string, x1: number, y1: number, x2: number, y2: number): Promise<AddSketchElementResponse> {
+        const request: AddSketchElementRequest = {
+            sketch_id: sketchId,
+            element_type: 'line',
+            parameters: {
+                x1, y1, x2, y2
+            }
+        };
+        
+        console.log('📏 Adding line to sketch:', request);
+        
+        const response = await this.makeRequest<AddSketchElementResponse>('/api/v1/cad/sketch-elements', 'POST', request);
+        
+        console.log('📨 Received addLineToSketch response:', response);
+        return response;
+    }
+    
+    public async addCircleToSketch(sketchId: string, centerX: number, centerY: number, radius: number): Promise<AddSketchElementResponse> {
+        const request: AddSketchElementRequest = {
+            sketch_id: sketchId,
+            element_type: 'circle',
+            parameters: {
+                center_x: centerX,
+                center_y: centerY,
+                radius: radius
+            }
+        };
+        
+        console.log('⭕ Adding circle to sketch:', request);
+        
+        const response = await this.makeRequest<AddSketchElementResponse>('/api/v1/cad/sketch-elements', 'POST', request);
+        
+        console.log('📨 Received addCircleToSketch response:', response);
+        return response;
+    }
+    
+    public async extrudeSketch(sketchId: string, distance: number, direction: 'normal' | 'custom' = 'normal'): Promise<ExtrudeSketchResponse> {
+        const request: ExtrudeSketchRequest = {
+            sketch_id: sketchId,
+            distance: distance,
+            direction: direction
+        };
+        
+        console.log('🚀 Extruding sketch:', request);
+        
+        const response = await this.makeRequest<ExtrudeSketchResponse>('/api/v1/cad/extrude', 'POST', request);
+        
+        console.log('📨 Received extrudeSketch response:', response);
+        
+        // If mesh data is included, trigger geometry update
+        if (response.data?.mesh_data && this.geometryUpdateCallback) {
+            console.log('🎯 Updating geometry with extruded mesh data:', response.data.mesh_data.metadata);
+            this.geometryUpdateCallback(response.data.mesh_data);
+        }
+        
+        return response;
     }
     
     public async tessellate(modelId: string, quality: number = 0.1): Promise<MeshData> {

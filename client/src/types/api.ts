@@ -1,4 +1,16 @@
-import { MeshData, BoundingBox, PrimitiveType, BooleanOperation, ExportFormat } from './geometry';
+import { 
+    MeshData, 
+    BoundingBox, 
+    PrimitiveType, 
+    BooleanOperation, 
+    ExportFormat,
+    PlaneType,
+    SketchElementType,
+    ExtrudeParameters,
+    SketchPlane,
+    Sketch,
+    ExtrudeFeature
+} from './geometry';
 
 export interface CADResponse {
     success: boolean;
@@ -34,6 +46,74 @@ export interface ModelResponse extends CADResponse {
         mesh_data?: MeshData;
         bounding_box: BoundingBox;
         file_urls?: Record<string, string>; // format -> download URL
+    };
+}
+
+// Sketch-based modeling requests/responses
+export interface CreateSketchPlaneRequest {
+    plane_type: PlaneType;
+    origin?: [number, number, number];
+}
+
+export interface CreateSketchPlaneResponse extends CADResponse {
+    data: {
+        plane_id: string;
+        plane_type: PlaneType;
+        origin_x: number;
+        origin_y: number;
+        origin_z: number;
+    };
+}
+
+export interface CreateSketchRequest {
+    plane_id: string;
+}
+
+export interface CreateSketchResponse extends CADResponse {
+    data: {
+        sketch_id: string;
+        plane_id: string;
+    };
+}
+
+export interface AddSketchElementRequest {
+    sketch_id: string;
+    element_type: SketchElementType;
+    parameters: {
+        // For lines
+        x1?: number;
+        y1?: number;
+        x2?: number;
+        y2?: number;
+        
+        // For circles
+        center_x?: number;
+        center_y?: number;
+        radius?: number;
+    };
+}
+
+export interface AddSketchElementResponse extends CADResponse {
+    data: {
+        sketch_id: string;
+        element_type: SketchElementType;
+        element_id: string;
+    };
+}
+
+export interface ExtrudeSketchRequest {
+    sketch_id: string;
+    distance: number;
+    direction?: 'normal' | 'custom';
+}
+
+export interface ExtrudeSketchResponse extends CADResponse {
+    data: {
+        feature_id: string;
+        sketch_id: string;
+        distance: number;
+        direction: string;
+        mesh_data?: MeshData;
     };
 }
 

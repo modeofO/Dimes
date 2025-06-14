@@ -118,6 +118,138 @@ export class CppBackendClient {
   }
 
   /**
+   * Create a sketch plane in the C++ backend
+   */
+  async createSketchPlane(sessionId, planeData) {
+    try {
+      const origin = planeData.origin || [0, 0, 0];
+      const requestBody = {
+        session_id: sessionId,
+        plane_type: planeData.plane_type,
+        origin_x: origin[0],
+        origin_y: origin[1], 
+        origin_z: origin[2],
+      };
+
+      const jsonString = JSON.stringify(requestBody);
+      
+      console.log('🔧 Node.js sending sketch plane request to C++:');
+      console.log('📋 Request body object:', JSON.stringify(requestBody, null, 2));
+      console.log('📋 JSON string:', jsonString);
+      console.log('📋 JSON string length:', jsonString.length);
+
+      logger.debug('Creating sketch plane:', requestBody);
+
+      const response = await this.makeRequest('/api/v1/sketch-planes', {
+        method: 'POST',
+        headers: {
+          'X-Session-ID': sessionId,
+        },
+        body: jsonString,
+      });
+      return response;
+    } catch (error) {
+      logger.error('Failed to create sketch plane in C++ backend:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a sketch in the C++ backend
+   */
+  async createSketch(sessionId, sketchData) {
+    try {
+      const requestBody = {
+        session_id: sessionId,
+        plane_id: sketchData.plane_id,
+      };
+
+      const jsonString = JSON.stringify(requestBody);
+      
+      console.log('🔧 Node.js sending sketch request to C++:');
+      console.log('📋 Request body object:', JSON.stringify(requestBody, null, 2));
+      console.log('📋 JSON string:', jsonString);
+
+      logger.debug('Creating sketch:', requestBody);
+
+      const response = await this.makeRequest('/api/v1/sketches', {
+        method: 'POST',
+        headers: {
+          'X-Session-ID': sessionId,
+        },
+        body: jsonString,
+      });
+      return response;
+    } catch (error) {
+      logger.error('Failed to create sketch in C++ backend:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Add element to sketch in the C++ backend
+   */
+  async addSketchElement(sessionId, elementData) {
+    try {
+      const requestBody = {
+        session_id: sessionId,
+        sketch_id: elementData.sketch_id,
+        element_type: elementData.element_type,
+        parameters: elementData.parameters,
+      };
+
+      const jsonString = JSON.stringify(requestBody);
+      
+      console.log('🔧 Node.js sending sketch element request to C++:');
+      console.log('📋 Element data received:', JSON.stringify(elementData, null, 2));
+      console.log('📋 Request body object:', JSON.stringify(requestBody, null, 2));
+      console.log('📋 JSON string:', jsonString);
+
+      logger.debug('Adding sketch element:', requestBody);
+
+      const response = await this.makeRequest('/api/v1/sketch-elements', {
+        method: 'POST',
+        headers: {
+          'X-Session-ID': sessionId,
+        },
+        body: jsonString,
+      });
+      return response;
+    } catch (error) {
+      logger.error('Failed to add sketch element in C++ backend:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Extrude sketch in the C++ backend
+   */
+  async extrudeSketch(sessionId, extrudeData) {
+    try {
+      const requestBody = {
+        session_id: sessionId,
+        sketch_id: extrudeData.sketch_id,
+        distance: extrudeData.distance,
+        extrude_type: extrudeData.extrude_type || 'blind',
+      };
+
+      logger.debug('Extruding sketch:', requestBody);
+
+      const response = await this.makeRequest('/api/v1/extrude', {
+        method: 'POST',
+        headers: {
+          'X-Session-ID': sessionId,
+        },
+        body: JSON.stringify(requestBody),
+      });
+      return response;
+    } catch (error) {
+      logger.error('Failed to extrude sketch in C++ backend:', error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Perform boolean operation in the C++ backend
    */
   async performBooleanOperation(sessionId, operation) {

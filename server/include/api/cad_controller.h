@@ -41,6 +41,12 @@ private:
     void handleTessellate(const std::string& session_id, const std::string& request_body, std::string& response);
     void handleExport(const std::string& session_id, const std::string& format, std::string& response);
     
+    // Sketch-based modeling handlers
+    void handleCreateSketchPlane(const std::string& session_id, const std::string& request_body, std::string& response);
+    void handleCreateSketch(const std::string& session_id, const std::string& request_body, std::string& response);
+    void handleAddSketchElement(const std::string& session_id, const std::string& request_body, std::string& response);
+    void handleExtrudeSketch(const std::string& session_id, const std::string& request_body, std::string& response);
+    
     // Daydreams compatibility endpoint
     void handleDaydreamsCAD(const std::string& request_body, std::string& response);
     

@@ -138,6 +138,32 @@
             transform: translate(-50%, -50%);
             text-align: center;
         }
+        
+        .status-text {
+            font-size: 11px;
+            padding: 4px;
+            margin-top: 4px;
+            border-radius: 3px;
+            min-height: 16px;
+        }
+        
+        .status-text.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status-text.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status-text.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
     </style>
 </head>
 <body>
@@ -151,64 +177,105 @@
                 </div>
             </div>
             <div id="control-panel">
+                <!-- Sketch-Based Modeling Workflow -->
                 <div class="control-section">
-                    <h3>Create Primitive</h3>
+                    <h3>1. Create Sketch Plane</h3>
                     <div class="control-row">
-                        <label>Type:</label>
-                        <select id="primitive-type">
-                            <option value="box">Box</option>
-                            <option value="cylinder">Cylinder</option>
-                            <option value="sphere">Sphere</option>
+                        <label>Plane:</label>
+                        <select id="plane-type">
+                            <option value="XY">XY Plane</option>
+                            <option value="XZ">XZ Plane</option>
+                            <option value="YZ">YZ Plane</option>
+                        </select>
+                    </div>
+                    <div class="control-row">
+                        <label>Origin X:</label>
+                        <input type="number" id="plane-origin-x" value="0" step="0.1">
+                        <label>Y:</label>
+                        <input type="number" id="plane-origin-y" value="0" step="0.1">
+                        <label>Z:</label>
+                        <input type="number" id="plane-origin-z" value="0" step="0.1">
+                    </div>
+                    <button class="btn" id="create-plane">Create Plane</button>
+                    <div id="plane-status" class="status-text"></div>
+                </div>
+
+                <div class="control-section">
+                    <h3>2. Create Sketch</h3>
+                    <div class="control-row">
+                        <label>Plane:</label>
+                        <select id="sketch-plane-select">
+                            <option value="">Select a plane</option>
+                        </select>
+                    </div>
+                    <button class="btn" id="create-sketch" disabled>Create Sketch</button>
+                    <div id="sketch-status" class="status-text"></div>
+                </div>
+
+                <div class="control-section">
+                    <h3>3. Add Sketch Elements</h3>
+                    <div class="control-row">
+                        <label>Sketch:</label>
+                        <select id="sketch-select">
+                            <option value="">Select a sketch</option>
+                        </select>
+                    </div>
+                    <div class="control-row">
+                        <label>Element:</label>
+                        <select id="element-type">
+                            <option value="line">Line</option>
+                            <option value="circle">Circle</option>
                         </select>
                     </div>
                     
-                    <!-- Box Parameters -->
-                    <div id="box-params" class="param-group">
+                    <!-- Line Parameters -->
+                    <div id="line-params" class="param-group">
                         <div class="control-row">
-                            <label>Width:</label>
-                            <input type="number" id="box-width" value="10" step="0.1">
+                            <label>Start X:</label>
+                            <input type="number" id="line-x1" value="0" step="0.1">
+                            <label>Y:</label>
+                            <input type="number" id="line-y1" value="0" step="0.1">
                         </div>
                         <div class="control-row">
-                            <label>Height:</label>
-                            <input type="number" id="box-height" value="10" step="0.1">
-                        </div>
-                        <div class="control-row">
-                            <label>Depth:</label>
-                            <input type="number" id="box-depth" value="10" step="0.1">
+                            <label>End X:</label>
+                            <input type="number" id="line-x2" value="10" step="0.1">
+                            <label>Y:</label>
+                            <input type="number" id="line-y2" value="0" step="0.1">
                         </div>
                     </div>
                     
-                    <!-- Cylinder Parameters -->
-                    <div id="cylinder-params" class="param-group" style="display: none;">
+                    <!-- Circle Parameters -->
+                    <div id="circle-params" class="param-group" style="display: none;">
+                        <div class="control-row">
+                            <label>Center X:</label>
+                            <input type="number" id="circle-x" value="0" step="0.1">
+                            <label>Y:</label>
+                            <input type="number" id="circle-y" value="0" step="0.1">
+                        </div>
                         <div class="control-row">
                             <label>Radius:</label>
-                            <input type="number" id="cylinder-radius" value="5" step="0.1">
-                        </div>
-                        <div class="control-row">
-                            <label>Height:</label>
-                            <input type="number" id="cylinder-height" value="10" step="0.1">
+                            <input type="number" id="circle-radius" value="5" step="0.1">
                         </div>
                     </div>
                     
-                    <!-- Sphere Parameters -->
-                    <div id="sphere-params" class="param-group" style="display: none;">
+                    <button class="btn" id="add-element" disabled>Add Element</button>
+                    <div id="element-status" class="status-text"></div>
+                </div>
+
+                <div class="control-section">
+                    <h3>4. Extrude Sketch</h3>
                         <div class="control-row">
-                            <label>Radius:</label>
-                            <input type="number" id="sphere-radius" value="5" step="0.1">
-                        </div>
+                        <label>Sketch:</label>
+                        <select id="extrude-sketch-select">
+                            <option value="">Select a sketch</option>
+                        </select>
                     </div>
-                    
-                    <!-- Position -->
                     <div class="control-row">
-                        <label>X:</label>
-                        <input type="number" id="pos-x" value="0" step="0.1">
-                        <label>Y:</label>
-                        <input type="number" id="pos-y" value="0" step="0.1">
-                        <label>Z:</label>
-                        <input type="number" id="pos-z" value="0" step="0.1">
+                        <label>Distance:</label>
+                        <input type="number" id="extrude-distance" value="10" step="0.1">
                     </div>
-                    
-                    <button class="btn" id="create-primitive">Create Primitive</button>
+                    <button class="btn" id="extrude-sketch" disabled>Extrude</button>
+                    <div id="extrude-status" class="status-text"></div>
                 </div>
                 
                 <div class="control-section">
@@ -219,6 +286,7 @@
                         </div>
                     </div>
                     <button class="btn danger" id="clear-all" style="margin-top: 5px;">Clear All</button>
+                    <button class="btn" id="create-test-sketches" style="margin-top: 5px; background-color: #ffc107; color: #000;">🧪 Create Test Sketches</button>
                 </div>
                 
                 <div class="control-section">
