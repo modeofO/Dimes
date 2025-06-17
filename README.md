@@ -1,14 +1,12 @@
-# CAD Engine - Professional 3D CAD Application
+# CAD Engine - Agentic CAD Design
 
-A sophisticated CAD application built to replace OpenSCAD in the Daydreams AI workflow. Features a three-tier architecture with a **Node.js API layer**, **OpenCASCADE (OCCT)** C++ backend, and modern **Three.js** client frontend.
-
-![CAD Engine Screenshot](https://via.placeholder.com/800x400/f0f0f0/333333?text=CAD+Engine+3D+Viewport)
+A sophisticated CAD application built in the Daydreams AI workflow.
 
 ## 🎯 Project Overview
 
 This CAD engine provides:
 
-- **🔧 Professional CAD Backend**: OpenCASCADE (OCCT) C++ engine for robust geometric modeling
+- **🔧 CAD Backend**: OpenCASCADE (OCCT) C++ engine for robust geometric modeling
 - **🌐 Secure API Layer**: Node.js middleware for authentication, validation, and protocol translation
 - **🎨 Modern 3D Frontend**: Three.js TypeScript client with professional viewport controls  
 - **⚡ Real-time Updates**: WebSocket communication for live geometry updates
@@ -16,61 +14,6 @@ This CAD engine provides:
 - **🛡️ Security & Monitoring**: Rate limiting, input validation, health checks, and logging
 - **🤖 AI Integration**: Daydreams AI compatible endpoints for natural language CAD operations
 - **📤 Multi-format Export**: STEP, STL, OBJ, IGES format support
-
-## 🏗️ Architecture
-
-### System Overview
-
-```mermaid
-graph TB
-    subgraph "Frontend (Port 5173)"
-        UI[Three.js UI]
-        Renderer[CAD Renderer]
-        Controls[Camera Controls]
-        Client[CAD Client]
-    end
-    
-    subgraph "Node.js API (Port 3000)"
-        Routes[API Routes]
-        WS[WebSocket Manager]
-        Validation[Request Validation]
-        Auth[Authentication]
-        Backend[C++ Backend Client]
-    end
-    
-    subgraph "C++ Backend (Port 8080)"
-        OCCT[OCCT Engine]
-        Session[Session Manager]
-        Tess[Tessellation]
-        Export[Export Engine]
-    end
-    
-    subgraph "External"
-        Daydreams[Daydreams AI]
-        Files[CAD Files]
-    end
-    
-    UI --> Controls
-    UI --> Renderer
-    Client --> Routes
-    Client --> WS
-    Routes --> Validation
-    Routes --> Auth
-    Validation --> Backend
-    Auth --> Backend
-    Backend --> OCCT
-    WS --> Backend
-    OCCT --> Session
-    OCCT --> Tess
-    OCCT --> Export
-    Export --> Files
-    Daydreams --> Routes
-    
-    Tess -.->|Mesh Data| Backend
-    Backend -.->|Real-time Updates| WS
-    WS -.->|WebSocket| Client
-    Client -.->|Geometry Updates| Renderer
-```
 
 ### Three-Tier Architecture
 
@@ -93,34 +36,6 @@ The application uses a modern three-tier architecture for better security, scala
    - Tessellation and mesh generation
    - File export (STEP, STL, OBJ, IGES)
    - Session-based geometry storage
-
-### Data Flow
-
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant F as Frontend (Three.js)
-    participant N as Node.js API
-    participant C as C++ Backend
-    participant W as WebSocket
-    
-    U->>F: Create Box (10x10x10)
-    F->>N: POST /api/v1/cad/models
-    N->>N: Validate Request & Session
-    N->>C: POST /api/v1/models
-    C->>C: CreatePrimitive(box, dimensions)
-    C->>C: Generate Solid Geometry
-    C->>N: Return Model ID + BBox
-    N->>F: ModelResponse
-    
-    N->>C: POST /api/v1/tessellate
-    C->>C: Generate Triangle Mesh
-    C->>N: Return MeshData
-    N->>W: Send geometry_update
-    W->>F: WebSocket message
-    F->>F: Update Three.js Scene
-    F->>U: Display 3D Model
-```
 
 ## 🚀 Quick Start
 
@@ -514,5 +429,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **TypeScript**: Type-safe JavaScript development
 
 ---
-
-**Built with ❤️ for the Daydreams AI ecosystem** 
