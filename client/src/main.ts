@@ -1,6 +1,7 @@
 import { CADRenderer } from './renderer/cad-renderer';
 import { CADClient } from './api/cad-client';
-import { MeshData } from './types/geometry';
+import { MeshData } from '../../shared/types/geometry';
+import { UIManager } from './ui/ui-manager';
 
 console.log('CAD Engine starting...');
 
@@ -17,15 +18,21 @@ interface CreatedPlane {
     origin: [number, number, number];
 }
 
+interface SketchElementInfo {
+    id: string;
+    type: string;
+}
+
 interface CreatedSketch {
     sketch_id: string;
     plane_id: string;
-    elements: number;
+    elements: SketchElementInfo[];
 }
 
 class CADApplication {
     private renderer!: CADRenderer;
     private client!: CADClient;
+    private uiManager!: UIManager;
     private sessionId: string;
     private statusElement: HTMLElement | null;
     private createdShapes: CreatedShape[] = [];
@@ -45,6 +52,10 @@ class CADApplication {
             // Initialize Three.js renderer
             this.updateStatus('Setting up 3D viewport...', 'info');
             await this.initializeRenderer();
+            
+            // Initialize UI Manager
+            this.updateStatus('Initializing UI...', 'info');
+            this.uiManager = new UIManager('scene-tree');
             
             // Initialize CAD client (OCCT server connection)
             this.updateStatus('Connecting to CAD server...', 'info');
@@ -97,16 +108,19 @@ class CADApplication {
         this.client.onPlaneVisualization((data) => {
             console.log('Received plane visualization:', data);
             this.renderer.addPlaneVisualization(data);
+            this.uiManager.addPlane(data.plane_id, data.plane_type);
         });
         
         this.client.onSketchVisualization((data) => {
             console.log('Received sketch visualization:', data);
             this.renderer.addSketchVisualization(data);
+            this.uiManager.addSketch(data.sketch_id, data.plane_id);
         });
         
         this.client.onElementVisualization((data) => {
             console.log('Received element visualization:', data);
             this.renderer.addSketchElementVisualization(data);
+            this.uiManager.addSketchElement(data.element_id, data.sketch_id, data.element_type);
         });
         
         console.log('✅ CAD client initialized');
@@ -470,6 +484,7 @@ class CADApplication {
         
         // Clear all visualizations (planes, sketches, elements)
         this.renderer.clearAllGeometry();
+        this.uiManager.clear();
         
         // Clear internal data structures
         this.createdPlanes = [];
@@ -628,7 +643,7 @@ class CADApplication {
                 const sketch: CreatedSketch = {
                     sketch_id: response.data.sketch_id,
                     plane_id: response.data.plane_id,
-                    elements: 0
+                    elements: []
                 };
                 
                 console.log('✨ Created sketch object:', JSON.stringify(sketch, null, 2));
@@ -716,7 +731,7 @@ class CADApplication {
                 // Update element count
                 const sketch = this.createdSketches.find(s => s.sketch_id === sketchId);
                 if (sketch) {
-                    sketch.elements++;
+                    sketch.elements.push({ id: response.data.element_id, type: elementType });
                 }
                 
                 this.updateStatus(`✅ Added ${elementType} to sketch`, 'success');
@@ -763,6 +778,14 @@ class CADApplication {
                     this.renderer.updateGeometry(shape.id, response.data.mesh_data);
                 }
                 
+                // Add to tree view
+                const sketch = this.createdSketches.find(s => s.sketch_id === sketchId);
+                let featureType = 'Extrusion'; // Default
+                if (sketch && sketch.elements.length === 1 && sketch.elements[0].type === 'circle') {
+                    featureType = 'Cylinder';
+                }
+                this.uiManager.addExtrudedFeature(response.data.feature_id, sketchId, featureType);
+
                 this.updateShapesList();
                 this.updateShapeSelectors();
                 this.updateStatus(`✅ Extruded sketch: ${response.data.feature_id}`, 'success');
@@ -796,7 +819,7 @@ class CADApplication {
         const extrudeSketchSelect = document.getElementById('extrude-sketch-select') as HTMLSelectElement;
         
         const options = this.createdSketches.map(sketch => 
-            `<option value="${sketch.sketch_id}">${sketch.sketch_id} (${sketch.elements} elements)</option>`
+            `<option value="${sketch.sketch_id}">${sketch.sketch_id} (${sketch.elements.length} elements)</option>`
         ).join('');
         
         console.log('🔄 Updating sketch selectors:', {
@@ -835,13 +858,13 @@ class CADApplication {
         const testSketch1: CreatedSketch = {
             sketch_id: 'test_sketch_1',
             plane_id: 'test_plane_1',
-            elements: 2
+            elements: [{id: 'el1', type: 'circle'}, {id: 'el2', type: 'line'}]
         };
         
         const testSketch2: CreatedSketch = {
             sketch_id: 'test_sketch_2', 
             plane_id: 'test_plane_1',
-            elements: 1
+            elements: [{id: 'el3', type: 'circle'}]
         };
         
         this.createdSketches.push(testSketch1, testSketch2);

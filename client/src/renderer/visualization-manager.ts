@@ -47,10 +47,6 @@ export class VisualizationManager {
         const axesGroup = this.createCoordinateAxes(20, origin, uAxis, vAxis, normal);
         group.add(axesGroup);
         
-        // Add plane label
-        const labelSprite = this.createLabel(`${data.plane_type} Plane`, origin);
-        group.add(labelSprite);
-        
         this.scene.add(group);
         this.planeMeshes.set(data.plane_id, group);
         
@@ -70,10 +66,6 @@ export class VisualizationManager {
         // Add smaller coordinate axes for the sketch
         const axesGroup = this.createCoordinateAxes(15, origin, uAxis, vAxis, normal);
         group.add(axesGroup);
-        
-        // Add sketch label
-        const labelSprite = this.createLabel(`Sketch`, origin.clone().add(normal.clone().multiplyScalar(2)));
-        group.add(labelSprite);
         
         this.scene.add(group);
         this.sketchMeshes.set(data.sketch_id, group);
@@ -209,37 +201,6 @@ export class VisualizationManager {
         axesGroup.add(zLine);
         
         return axesGroup;
-    }
-    
-    private createLabel(text: string, position: THREE.Vector3): THREE.Sprite {
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d')!;
-        
-        context.font = '48px Arial';
-        context.fillStyle = 'white';
-        context.strokeStyle = 'black';
-        context.lineWidth = 2;
-        
-        const textWidth = context.measureText(text).width;
-        canvas.width = textWidth + 20;
-        canvas.height = 60;
-        
-        context.font = '48px Arial';
-        context.fillStyle = 'white';
-        context.strokeStyle = 'black';
-        context.lineWidth = 2;
-        
-        context.strokeText(text, 10, 40);
-        context.fillText(text, 10, 40);
-        
-        const texture = new THREE.CanvasTexture(canvas);
-        const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
-        const sprite = new THREE.Sprite(spriteMaterial);
-        
-        sprite.position.copy(position);
-        sprite.scale.set(10, 5, 1);
-        
-        return sprite;
     }
     
     private disposeMeshGroup(group: THREE.Group): void {

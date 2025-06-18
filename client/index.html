@@ -24,6 +24,29 @@
             background-color: #2a2a2a;
             display: flex;
         }
+        #tree-view {
+            width: 250px;
+            background-color: #2a2a2a;
+            border-right: 1px solid #555;
+            padding: 15px;
+            overflow-y: auto;
+            box-sizing: border-box;
+            color: #ccc;
+        }
+        #tree-view h3 {
+            margin-top: 0;
+            color: #fff;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        #tree-view ul {
+            padding-left: 15px;
+            list-style-type: none;
+        }
+        #tree-view li {
+            padding: 3px 0;
+        }
         #status {
             padding: 10px;
             background-color: #333;
@@ -170,6 +193,10 @@
     <div id="app">
         <div id="status">Initializing CAD Engine...</div>
         <div id="cad-viewport">
+            <div id="tree-view">
+                <h3>Scene</h3>
+                <div id="scene-tree"></div>
+            </div>
             <div id="viewport-3d">
                 <div class="loading-placeholder">
                     <h2>CAD Engine</h2>
