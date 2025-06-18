@@ -6,6 +6,9 @@
 # C++ / CMake / OCCT Server
 # ========================================
 
+# Compilation with vscode on Windows
+.vscode
+
 # Build directories
 server/build/
 server/out/

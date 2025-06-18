@@ -1,7 +1,13 @@
 import * as THREE from 'three';
 import { MeshManager } from '../mesh/mesh-manager';
 import { CADControls } from '../controls/cad-controls';
+import { VisualizationManager } from './visualization-manager';
 import { MeshData } from '../types/geometry';
+import { 
+    PlaneVisualizationData, 
+    SketchVisualizationData, 
+    SketchElementVisualizationData 
+} from '../../../shared/types/geometry';
 
 export class CADRenderer {
     private scene!: THREE.Scene;
@@ -9,6 +15,7 @@ export class CADRenderer {
     private renderer!: THREE.WebGLRenderer;
     private controls!: CADControls;
     private meshManager!: MeshManager;
+    private visualizationManager!: VisualizationManager;
     private container: HTMLElement;
     
     constructor(container: HTMLElement) {
@@ -87,6 +94,7 @@ export class CADRenderer {
     
     private setupMeshManager(): void {
         this.meshManager = new MeshManager(this.scene);
+        this.visualizationManager = new VisualizationManager(this.scene);
     }
     
     private animate = (): void => {
@@ -102,10 +110,36 @@ export class CADRenderer {
 
     public clearAllGeometry(): void {
         this.meshManager.clearAllMeshes();
+        this.visualizationManager.clearAll();
     }
     
     public removeGeometry(modelId: string): void {
         this.meshManager.removeMesh(modelId);
+    }
+    
+    // New visualization methods
+    public addPlaneVisualization(data: PlaneVisualizationData): void {
+        this.visualizationManager.addPlaneVisualization(data);
+    }
+    
+    public addSketchVisualization(data: SketchVisualizationData): void {
+        this.visualizationManager.addSketchVisualization(data);
+    }
+    
+    public addSketchElementVisualization(data: SketchElementVisualizationData): void {
+        this.visualizationManager.addSketchElementVisualization(data);
+    }
+    
+    public removePlaneVisualization(planeId: string): void {
+        this.visualizationManager.removePlaneVisualization(planeId);
+    }
+    
+    public removeSketchVisualization(sketchId: string): void {
+        this.visualizationManager.removeSketchVisualization(sketchId);
+    }
+    
+    public removeElementVisualization(elementId: string): void {
+        this.visualizationManager.removeElementVisualization(elementId);
     }
     
     public handleResize(): void {
@@ -120,6 +154,7 @@ export class CADRenderer {
     public dispose(): void {
         this.controls.dispose();
         this.meshManager.dispose();
+        this.visualizationManager.dispose();
         this.renderer.dispose();
         
         if (this.renderer.domElement.parentNode) {

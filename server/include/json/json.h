@@ -4,238 +4,217 @@
 #include <map>
 #include <vector>
 #include <sstream>
-#include <memory>
+#include <iostream>
 
+// Simple JSON implementation that avoids enum scope issues
 namespace Json {
 
 class Value {
-public:
-    enum ValueType {
-        nullValue = 0,
-        intValue,
-        uintValue,
-        realValue,
-        stringValue,
-        booleanValue,
-        arrayValue,
-        objectValue
-    };
-
-    ValueType type_;
+private:
+    enum Type { NULL_TYPE, INT_TYPE, DOUBLE_TYPE, BOOL_TYPE, STRING_TYPE, ARRAY_TYPE, OBJECT_TYPE };
+    
+    Type type_;
     union {
-        bool bool_value;
-        int int_value;
-        double real_value;
-        int64_t long_value;
-    } value_;
-    std::string string_value;
-    std::vector<Value> array_value;
-    std::map<std::string, Value> object_value;
+        int int_val;
+        double double_val;
+        bool bool_val;
+    } data_;
+    std::string string_val;
+    std::vector<Value> array_val;
+    std::map<std::string, Value> object_val;
 
 public:
-    Value() : type_(nullValue) {}
-    Value(bool value) : type_(booleanValue) { value_.bool_value = value; }
-    Value(int value) : type_(intValue) { value_.int_value = value; }
-    Value(int64_t value) : type_(intValue) { value_.long_value = value; }
-    Value(double value) : type_(realValue) { value_.real_value = value; }
-    Value(const std::string& value) : type_(stringValue), string_value(value) {}
-    Value(const char* value) : type_(stringValue), string_value(value) {}
-    Value(ValueType type) : type_(type) {
-        if (type == arrayValue) {
-            array_value = std::vector<Value>();
-        } else if (type == objectValue) {
-            object_value = std::map<std::string, Value>();
-        }
+    // Constructors
+    Value() : type_(NULL_TYPE) {}
+    Value(int val) : type_(INT_TYPE) { data_.int_val = val; }
+    Value(long val) : type_(INT_TYPE) { data_.int_val = static_cast<int>(val); }
+    Value(long long val) : type_(INT_TYPE) { data_.int_val = static_cast<int>(val); }
+    Value(unsigned int val) : type_(INT_TYPE) { data_.int_val = static_cast<int>(val); }
+    Value(double val) : type_(DOUBLE_TYPE) { data_.double_val = val; }
+    Value(bool val) : type_(BOOL_TYPE) { data_.bool_val = val; }
+    Value(const char* val) : type_(STRING_TYPE), string_val(val) {}
+    Value(const std::string& val) : type_(STRING_TYPE), string_val(val) {}
+    
+    // Static factory methods to avoid enum issues
+    static Value createArray() {
+        Value v;
+        v.type_ = ARRAY_TYPE;
+        v.array_val.clear();
+        return v;
+    }
+    
+    static Value createObject() {
+        Value v;
+        v.type_ = OBJECT_TYPE;
+        v.object_val.clear();
+        return v;
     }
 
-    // Copy constructor
-    Value(const Value& other) : type_(other.type_) {
+    // Type checking
+    bool isNull() const { return type_ == NULL_TYPE; }
+    bool isInt() const { return type_ == INT_TYPE; }
+    bool isDouble() const { return type_ == DOUBLE_TYPE; }
+    bool isBool() const { return type_ == BOOL_TYPE; }
+    bool isString() const { return type_ == STRING_TYPE; }
+    bool isArray() const { return type_ == ARRAY_TYPE; }
+    bool isObject() const { return type_ == OBJECT_TYPE; }
+    bool isMember(const std::string& key) const {
+        return type_ == OBJECT_TYPE && object_val.find(key) != object_val.end();
+    }
+
+    // Value accessors
+    int asInt() const {
         switch (type_) {
-            case booleanValue:
-                value_.bool_value = other.value_.bool_value;
-                break;
-            case intValue:
-                value_.int_value = other.value_.int_value;
-                break;
-            case realValue:
-                value_.real_value = other.value_.real_value;
-                break;
-            case stringValue:
-                string_value = other.string_value;
-                break;
-            case arrayValue:
-                array_value = other.array_value;
-                break;
-            case objectValue:
-                object_value = other.object_value;
-                break;
-            default:
-                break;
+            case INT_TYPE: return data_.int_val;
+            case DOUBLE_TYPE: return static_cast<int>(data_.double_val);
+            case BOOL_TYPE: return data_.bool_val ? 1 : 0;
+            case STRING_TYPE: return std::stoi(string_val);
+            default: return 0;
         }
     }
 
-    // Assignment operator
-    Value& operator=(const Value& other) {
-        if (this != &other) {
-            type_ = other.type_;
-            switch (type_) {
-                case booleanValue:
-                    value_.bool_value = other.value_.bool_value;
-                    break;
-                case intValue:
-                    value_.int_value = other.value_.int_value;
-                    break;
-                case realValue:
-                    value_.real_value = other.value_.real_value;
-                    break;
-                case stringValue:
-                    string_value = other.string_value;
-                    break;
-                case arrayValue:
-                    array_value = other.array_value;
-                    break;
-                case objectValue:
-                    object_value = other.object_value;
-                    break;
-                default:
-                    break;
-            }
+    double asDouble() const {
+        switch (type_) {
+            case INT_TYPE: return static_cast<double>(data_.int_val);
+            case DOUBLE_TYPE: return data_.double_val;
+            case BOOL_TYPE: return data_.bool_val ? 1.0 : 0.0;
+            case STRING_TYPE: return std::stod(string_val);
+            default: return 0.0;
         }
-        return *this;
     }
 
-    // Move assignment operator
-    Value& operator=(Value&& other) noexcept {
-        if (this != &other) {
-            type_ = other.type_;
-            switch (type_) {
-                case booleanValue:
-                    value_.bool_value = other.value_.bool_value;
-                    break;
-                case intValue:
-                    value_.int_value = other.value_.int_value;
-                    break;
-                case realValue:
-                    value_.real_value = other.value_.real_value;
-                    break;
-                case stringValue:
-                    string_value = std::move(other.string_value);
-                    break;
-                case arrayValue:
-                    array_value = std::move(other.array_value);
-                    break;
-                case objectValue:
-                    object_value = std::move(other.object_value);
-                    break;
-                default:
-                    break;
-            }
-            other.type_ = nullValue;
+    bool asBool() const {
+        switch (type_) {
+            case INT_TYPE: return data_.int_val != 0;
+            case DOUBLE_TYPE: return data_.double_val != 0.0;
+            case BOOL_TYPE: return data_.bool_val;
+            case STRING_TYPE: return !string_val.empty() && string_val != "false" && string_val != "0";
+            case ARRAY_TYPE: return !array_val.empty();
+            case OBJECT_TYPE: return !object_val.empty();
+            default: return false;
         }
-        return *this;
     }
 
-    // Array access
-    Value& operator[](int index) {
-        if (type_ != arrayValue) {
-            type_ = arrayValue;
-            array_value = std::vector<Value>();
+    std::string asString() const {
+        switch (type_) {
+            case STRING_TYPE: return string_val;
+            case INT_TYPE: return std::to_string(data_.int_val);
+            case DOUBLE_TYPE: return std::to_string(data_.double_val);
+            case BOOL_TYPE: return data_.bool_val ? "true" : "false";
+            case NULL_TYPE: return "null";
+            default: return "";
         }
-        if (index >= static_cast<int>(array_value.size())) {
-            array_value.resize(index + 1);
-        }
-        return array_value[index];
     }
 
     // Object access
     Value& operator[](const std::string& key) {
-        if (type_ != objectValue) {
-            type_ = objectValue;
-            object_value = std::map<std::string, Value>();
+        if (type_ != OBJECT_TYPE) {
+            type_ = OBJECT_TYPE;
+            object_val.clear();
         }
-        return object_value[key];
+        return object_val[key];
     }
 
-    // Get methods with defaults
-    Value get(const std::string& key, const Value& defaultValue) const {
-        if (type_ == objectValue) {
-            auto it = object_value.find(key);
-            if (it != object_value.end()) {
-                return it->second;
-            }
+    const Value& operator[](const std::string& key) const {
+        static Value null_value;
+        if (type_ != OBJECT_TYPE) return null_value;
+        auto it = object_val.find(key);
+        return (it != object_val.end()) ? it->second : null_value;
+    }
+
+    Value get(const std::string& key, const Value& default_value) const {
+        if (type_ != OBJECT_TYPE) return default_value;
+        auto it = object_val.find(key);
+        return (it != object_val.end()) ? it->second : default_value;
+    }
+
+    // Array access
+    Value& operator[](int index) {
+        if (type_ != ARRAY_TYPE) {
+            type_ = ARRAY_TYPE;
+            array_val.clear();
         }
-        return defaultValue;
-    }
-
-    std::string asString() const {
-        if (type_ == stringValue) return string_value;
-        if (type_ == intValue) return std::to_string(value_.int_value);
-        if (type_ == realValue) return std::to_string(value_.real_value);
-        if (type_ == booleanValue) return value_.bool_value ? "true" : "false";
-        return "";
-    }
-
-    int asInt() const {
-        if (type_ == intValue) return value_.int_value;
-        if (type_ == realValue) return static_cast<int>(value_.real_value);
-        if (type_ == stringValue) return std::stoi(string_value);
-        return 0;
-    }
-
-    double asDouble() const {
-        if (type_ == realValue) return value_.real_value;
-        if (type_ == intValue) return static_cast<double>(value_.int_value);
-        if (type_ == stringValue) return std::stod(string_value);
-        return 0.0;
-    }
-
-    bool asBool() const {
-        if (type_ == booleanValue) return value_.bool_value;
-        return false;
-    }
-
-    bool isMember(const std::string& key) const {
-        if (type_ == objectValue) {
-            return object_value.find(key) != object_value.end();
+        if (index >= static_cast<int>(array_val.size())) {
+            array_val.resize(index + 1);
         }
-        return false;
+        return array_val[index];
     }
 
     void append(const Value& value) {
-        if (type_ != arrayValue) {
-            type_ = arrayValue;
-            array_value = std::vector<Value>();
+        if (type_ != ARRAY_TYPE) {
+            type_ = ARRAY_TYPE;
+            array_val.clear();
         }
-        array_value.push_back(value);
+        array_val.push_back(value);
     }
 
     size_t size() const {
-        if (type_ == arrayValue) return array_value.size();
-        if (type_ == objectValue) return object_value.size();
-        return 0;
+        switch (type_) {
+            case ARRAY_TYPE: return array_val.size();
+            case OBJECT_TYPE: return object_val.size();
+            case STRING_TYPE: return string_val.size();
+            default: return 0;
+        }
+    }
+
+    // Serialization - simple version
+    std::string toStyledString() const {
+        return toString();
+    }
+
+private:
+    std::string toString() const {
+        switch (type_) {
+            case NULL_TYPE: return "null";
+            case INT_TYPE: return std::to_string(data_.int_val);
+            case DOUBLE_TYPE: return std::to_string(data_.double_val);
+            case BOOL_TYPE: return data_.bool_val ? "true" : "false";
+            case STRING_TYPE: return "\"" + string_val + "\"";
+            case ARRAY_TYPE: {
+                std::string result = "[";
+                for (size_t i = 0; i < array_val.size(); ++i) {
+                    if (i > 0) result += ",";
+                    result += array_val[i].toString();
+                }
+                result += "]";
+                return result;
+            }
+            case OBJECT_TYPE: {
+                std::string result = "{";
+                bool first = true;
+                for (const auto& pair : object_val) {
+                    if (!first) result += ",";
+                    first = false;
+                    result += "\"" + pair.first + "\":" + pair.second.toString();
+                }
+                result += "}";
+                return result;
+            }
+        }
+        return "null";
     }
 };
 
+// Simple JSON parser
 class Reader {
 public:
     bool parse(const std::string& document, Value& root) {
-        // Simple JSON parsing - for basic cases only
-        // This is a minimal implementation for basic object/string parsing
-        
-        // Skip whitespace
-        std::string trimmed = document;
-        size_t start = trimmed.find_first_not_of(" \t\n\r");
-        if (start == std::string::npos) return false;
-        trimmed = trimmed.substr(start);
-        
+        // Simple parser for basic JSON
+        std::string trimmed = trim(document);
         if (trimmed.empty()) return false;
         
         if (trimmed[0] == '{') {
+            root = Value::createObject();
             return parseObject(trimmed, root);
         } else if (trimmed[0] == '[') {
+            root = Value::createArray();
             return parseArray(trimmed, root);
         } else if (trimmed[0] == '"') {
-            return parseString(trimmed, root);
+            size_t end = trimmed.find('"', 1);
+            if (end != std::string::npos) {
+                root = Value(trimmed.substr(1, end - 1));
+                return true;
+            }
         } else if (trimmed == "true" || trimmed == "false") {
             root = Value(trimmed == "true");
             return true;
@@ -252,16 +231,21 @@ public:
                 return false;
             }
         }
+        return false;
     }
 
 private:
+    std::string trim(const std::string& str) {
+        size_t start = str.find_first_not_of(" \t\n\r");
+        if (start == std::string::npos) return "";
+        size_t end = str.find_last_not_of(" \t\n\r");
+        return str.substr(start, end - start + 1);
+    }
+
     bool parseObject(const std::string& str, Value& root) {
-        root = Value(Value::objectValue);
-        
-        // Find pairs between { and }
-        if (str.length() < 2 || str[0] != '{') return false;
-        
-        size_t pos = 1;
+        // Very simple object parser - just handles basic key-value pairs
+        // This is sufficient for our CAD use case
+        size_t pos = 1; // Skip opening '{'
         while (pos < str.length() && str[pos] != '}') {
             // Skip whitespace
             while (pos < str.length() && isspace(str[pos])) pos++;
@@ -284,7 +268,7 @@ private:
             // Skip whitespace
             while (pos < str.length() && isspace(str[pos])) pos++;
             
-            // Parse value (simplified - only handles strings and numbers)
+            // Parse value (simplified)
             if (str[pos] == '"') {
                 size_t valueStart = pos + 1;
                 size_t valueEnd = str.find('"', valueStart);
@@ -295,14 +279,7 @@ private:
                 // Try to parse number or boolean
                 size_t valueStart = pos;
                 while (pos < str.length() && str[pos] != ',' && str[pos] != '}') pos++;
-                std::string valueStr = str.substr(valueStart, pos - valueStart);
-                
-                // Trim
-                size_t start = valueStr.find_first_not_of(" \t\n\r");
-                size_t end = valueStr.find_last_not_of(" \t\n\r");
-                if (start != std::string::npos && end != std::string::npos) {
-                    valueStr = valueStr.substr(start, end - start + 1);
-                }
+                std::string valueStr = trim(str.substr(valueStart, pos - valueStart));
                 
                 if (valueStr == "true" || valueStr == "false") {
                     root[key] = Value(valueStr == "true");
@@ -323,60 +300,18 @@ private:
             while (pos < str.length() && isspace(str[pos])) pos++;
             if (pos < str.length() && str[pos] == ',') pos++;
         }
-        
         return true;
     }
     
     bool parseArray(const std::string& str, Value& root) {
-        root = Value(Value::arrayValue);
-        // Simplified array parsing - not implemented for brevity
-        return true;
-    }
-    
-    bool parseString(const std::string& str, Value& root) {
-        if (str.length() < 2 || str[0] != '"') return false;
-        size_t end = str.find('"', 1);
-        if (end == std::string::npos) return false;
-        root = Value(str.substr(1, end - 1));
+        // Simple array parsing - not fully implemented for brevity
         return true;
     }
 };
 
-// Function to convert Value to string
-std::string valueToString(const Value& value) {
-    switch (value.type_) {
-        case Value::nullValue:
-            return "null";
-        case Value::booleanValue:
-            return value.asBool() ? "true" : "false";
-        case Value::intValue:
-            return std::to_string(value.asInt());
-        case Value::realValue:
-            return std::to_string(value.asDouble());
-        case Value::stringValue:
-            return "\"" + value.asString() + "\"";
-        case Value::arrayValue: {
-            std::string result = "[";
-            for (size_t i = 0; i < value.size(); ++i) {
-                if (i > 0) result += ",";
-                result += valueToString(value.array_value[i]);
-            }
-            result += "]";
-            return result;
-        }
-        case Value::objectValue: {
-            std::string result = "{";
-            bool first = true;
-            for (const auto& pair : value.object_value) {
-                if (!first) result += ",";
-                first = false;
-                result += "\"" + pair.first + "\":" + valueToString(pair.second);
-            }
-            result += "}";
-            return result;
-        }
-    }
-    return "null";
+// Utility function
+inline std::string valueToString(const Value& value) {
+    return value.toStyledString();
 }
 
 } // namespace Json 

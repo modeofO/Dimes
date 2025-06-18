@@ -1,6 +1,7 @@
 #pragma once
 
 #include "types.h"
+#include "json/json.h"
 #include <map>
 #include <string>
 #include <memory>
@@ -74,8 +75,8 @@ public:
     // Sketch-based modeling operations
     std::string createSketchPlane(const std::string& plane_type, const Vector3d& origin = {0,0,0});
     std::string createSketch(const std::string& plane_id);
-    bool addLineToSketch(const std::string& sketch_id, double x1, double y1, double x2, double y2);
-    bool addCircleToSketch(const std::string& sketch_id, double center_x, double center_y, double radius);
+    std::string addLineToSketch(const std::string& sketch_id, double x1, double y1, double x2, double y2);
+    std::string addCircleToSketch(const std::string& sketch_id, double center_x, double center_y, double radius);
     std::string extrudeSketch(const std::string& sketch_id, double distance, const std::string& direction = "normal");
     
     // Export functions
@@ -94,6 +95,11 @@ public:
     bool planeExists(const std::string& plane_id) const;
     std::vector<std::string> getAvailableSketchIds() const;
     std::vector<std::string> getAvailablePlaneIds() const;
+    
+    // Visualization data generation
+    Json::Value getPlaneVisualizationData(const std::string& plane_id);
+    Json::Value getSketchVisualizationData(const std::string& sketch_id);
+    Json::Value getSketchElementVisualizationData(const std::string& sketch_id, const std::string& element_id);
     
 private:
     bool validateShape(const TopoDS_Shape& shape) const;

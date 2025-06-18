@@ -191,18 +191,20 @@ export class CppBackendClient {
    */
   async addSketchElement(sessionId, elementData) {
     try {
+      console.log('📋 Element data received:', elementData);
+
       const requestBody = {
         session_id: sessionId,
         sketch_id: elementData.sketch_id,
         element_type: elementData.element_type,
-        parameters: elementData.parameters,
+        ...elementData.parameters
       };
-
+      
+      console.log('📋 Request body object:', requestBody);
+      
       const jsonString = JSON.stringify(requestBody);
       
       console.log('🔧 Node.js sending sketch element request to C++:');
-      console.log('📋 Element data received:', JSON.stringify(elementData, null, 2));
-      console.log('📋 Request body object:', JSON.stringify(requestBody, null, 2));
       console.log('📋 JSON string:', jsonString);
 
       logger.debug('Adding sketch element:', requestBody);

@@ -363,12 +363,12 @@ void CADController::handleCreateModel(const std::string& session_id, const std::
         
         // Include mesh data
         Json::Value mesh_data;
-        mesh_data["vertices"] = Json::Value(Json::Value::arrayValue);
+        mesh_data["vertices"] = Json::Value::createArray();
         for (size_t i = 0; i < mesh.vertices.size(); ++i) {
             mesh_data["vertices"].append(mesh.vertices[i]);
         }
         
-        mesh_data["faces"] = Json::Value(Json::Value::arrayValue);
+        mesh_data["faces"] = Json::Value::createArray();
         for (size_t i = 0; i < mesh.faces.size(); ++i) {
             mesh_data["faces"].append(mesh.faces[i]);
         }
@@ -382,9 +382,9 @@ void CADController::handleCreateModel(const std::string& session_id, const std::
         data["mesh_data"] = mesh_data;
         
         // Add bounding box
-        Json::Value bbox;
-        bbox["min"] = Json::Value(Json::Value::arrayValue);
-        bbox["max"] = Json::Value(Json::Value::arrayValue);
+        Json::Value bbox = Json::Value::createObject();
+        bbox["min"] = Json::Value::createArray();
+        bbox["max"] = Json::Value::createArray();
         for (int i = 0; i < 3; ++i) {
             bbox["min"].append(0.0); // TODO: Get actual bounding box from OCCT
             bbox["max"].append(10.0);
@@ -424,8 +424,8 @@ void CADController::handleDaydreamsCAD(const std::string& request_body, std::str
         
         Json::Value model_data;
         Json::Value mesh;
-        mesh["vertices"] = Json::Value(Json::Value::arrayValue);
-        mesh["faces"] = Json::Value(Json::Value::arrayValue);
+        mesh["vertices"] = Json::Value::createArray();
+        mesh["faces"] = Json::Value::createArray();
         
         Json::Value metadata;
         metadata["vertex_count"] = 0;
@@ -434,8 +434,8 @@ void CADController::handleDaydreamsCAD(const std::string& request_body, std::str
         mesh["metadata"] = metadata;
         
         model_data["mesh"] = mesh;
-        model_data["files"] = Json::Value(Json::Value::objectValue);
-        model_data["parameters"] = Json::Value(Json::Value::objectValue);
+        model_data["files"] = Json::Value::createObject();
+        model_data["parameters"] = Json::Value::createObject();
         
         json_response["model_data"] = model_data;
         
@@ -592,12 +592,12 @@ void CADController::handleBooleanOperation(const std::string& session_id, const 
         
         // Include mesh data
         Json::Value mesh_data;
-        mesh_data["vertices"] = Json::Value(Json::Value::arrayValue);
+        mesh_data["vertices"] = Json::Value::createArray();
         for (size_t i = 0; i < mesh.vertices.size(); ++i) {
             mesh_data["vertices"].append(mesh.vertices[i]);
         }
         
-        mesh_data["faces"] = Json::Value(Json::Value::arrayValue);
+        mesh_data["faces"] = Json::Value::createArray();
         for (size_t i = 0; i < mesh.faces.size(); ++i) {
             mesh_data["faces"].append(mesh.faces[i]);
         }
@@ -661,12 +661,12 @@ void CADController::handleTessellate(const std::string& session_id, const std::s
         
         // Include mesh data
         Json::Value mesh_data;
-        mesh_data["vertices"] = Json::Value(Json::Value::arrayValue);
+        mesh_data["vertices"] = Json::Value::createArray();
         for (size_t i = 0; i < mesh.vertices.size(); ++i) {
             mesh_data["vertices"].append(mesh.vertices[i]);
         }
         
-        mesh_data["faces"] = Json::Value(Json::Value::arrayValue);
+        mesh_data["faces"] = Json::Value::createArray();
         for (size_t i = 0; i < mesh.faces.size(); ++i) {
             mesh_data["faces"].append(mesh.faces[i]);
         }
@@ -787,6 +787,9 @@ void CADController::handleCreateSketchPlane(const std::string& session_id, const
             return;
         }
         
+        // Get plane visualization data
+        Json::Value plane_viz_data = engine->getPlaneVisualizationData(plane_id);
+        
         Json::Value json_response;
         json_response["success"] = true;
         json_response["session_id"] = session_id;
@@ -799,6 +802,9 @@ void CADController::handleCreateSketchPlane(const std::string& session_id, const
         data["origin_x"] = origin.x;
         data["origin_y"] = origin.y;
         data["origin_z"] = origin.z;
+        
+        // Always add visualization data
+        data["visualization_data"] = plane_viz_data;
         
         json_response["data"] = data;
         response = jsonToString(json_response);
@@ -846,6 +852,9 @@ void CADController::handleCreateSketch(const std::string& session_id, const std:
             return;
         }
         
+        // Get sketch visualization data
+        Json::Value sketch_viz_data = engine->getSketchVisualizationData(sketch_id);
+        
         Json::Value json_response;
         json_response["success"] = true;
         json_response["session_id"] = session_id;
@@ -854,6 +863,9 @@ void CADController::handleCreateSketch(const std::string& session_id, const std:
         Json::Value data;
         data["sketch_id"] = sketch_id;
         data["plane_id"] = plane_id;
+        
+        // Always add visualization data
+        data["visualization_data"] = sketch_viz_data;
         
         json_response["data"] = data;
         response = jsonToString(json_response);
@@ -905,25 +917,26 @@ void CADController::handleAddSketchElement(const std::string& session_id, const 
             double x2 = request["x2"].asDouble();
             double y2 = request["y2"].asDouble();
             
-            success = engine->addLineToSketch(sketch_id, x1, y1, x2, y2);
-            element_id = "line_element";
+            element_id = engine->addLineToSketch(sketch_id, x1, y1, x2, y2);
             
         } else if (element_type == "circle") {
             double center_x = request["center_x"].asDouble();
             double center_y = request["center_y"].asDouble();
             double radius = request["radius"].asDouble();
             
-            success = engine->addCircleToSketch(sketch_id, center_x, center_y, radius);
-            element_id = "circle_element";
+            element_id = engine->addCircleToSketch(sketch_id, center_x, center_y, radius);
         } else {
             response = createErrorResponse("Unsupported element_type: " + element_type);
             return;
         }
         
-        if (!success) {
+        if (element_id.empty()) {
             response = createErrorResponse("Failed to add sketch element");
             return;
         }
+        
+        // Get sketch element visualization data
+        Json::Value element_viz_data = engine->getSketchElementVisualizationData(sketch_id, element_id);
         
         Json::Value json_response;
         json_response["success"] = true;
@@ -934,6 +947,9 @@ void CADController::handleAddSketchElement(const std::string& session_id, const 
         data["sketch_id"] = sketch_id;
         data["element_type"] = element_type;
         data["element_id"] = element_id;
+        
+        // Always add visualization data
+        data["visualization_data"] = element_viz_data;
         
         json_response["data"] = data;
         response = jsonToString(json_response);
@@ -1000,12 +1016,12 @@ void CADController::handleExtrudeSketch(const std::string& session_id, const std
         
         // Include mesh data for immediate visualization
         Json::Value mesh_data;
-        mesh_data["vertices"] = Json::Value(Json::Value::arrayValue);
+        mesh_data["vertices"] = Json::Value::createArray();
         for (size_t i = 0; i < mesh.vertices.size(); ++i) {
             mesh_data["vertices"].append(mesh.vertices[i]);
         }
         
-        mesh_data["faces"] = Json::Value(Json::Value::arrayValue);
+        mesh_data["faces"] = Json::Value::createArray();
         for (size_t i = 0; i < mesh.faces.size(); ++i) {
             mesh_data["faces"].append(mesh.faces[i]);
         }

@@ -9,7 +9,10 @@ import {
     ExtrudeParameters,
     SketchPlane,
     Sketch,
-    ExtrudeFeature
+    ExtrudeFeature,
+    PlaneVisualizationData,
+    SketchVisualizationData,
+    SketchElementVisualizationData
 } from './geometry';
 
 export interface CADResponse {
@@ -62,6 +65,7 @@ export interface CreateSketchPlaneResponse extends CADResponse {
         origin_x: number;
         origin_y: number;
         origin_z: number;
+        visualization_data?: PlaneVisualizationData;
     };
 }
 
@@ -73,6 +77,7 @@ export interface CreateSketchResponse extends CADResponse {
     data: {
         sketch_id: string;
         plane_id: string;
+        visualization_data?: SketchVisualizationData;
     };
 }
 
@@ -98,6 +103,7 @@ export interface AddSketchElementResponse extends CADResponse {
         sketch_id: string;
         element_type: SketchElementType;
         element_id: string;
+        visualization_data?: SketchElementVisualizationData;
     };
 }
 

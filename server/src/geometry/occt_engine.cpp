@@ -28,6 +28,11 @@
 #include <iostream>
 #include <sstream>
 #include <random>
+#include <cmath>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 OCCTEngine::OCCTEngine() {
     std::cout << "OCCT Engine initialized" << std::endl;
@@ -408,13 +413,13 @@ std::string OCCTEngine::createSketch(const std::string& plane_id) {
     }
 }
 
-bool OCCTEngine::addLineToSketch(const std::string& sketch_id, double x1, double y1, double x2, double y2) {
+std::string OCCTEngine::addLineToSketch(const std::string& sketch_id, double x1, double y1, double x2, double y2) {
     std::cout << "📏 Adding line to sketch " << sketch_id << ": (" << x1 << "," << y1 << ") to (" << x2 << "," << y2 << ")" << std::endl;
     std::cout.flush();
     
     if (!sketchExists(sketch_id)) {
         std::cerr << "❌ Sketch not found: " << sketch_id << std::endl;
-        return false;
+        return "";
     }
     
     try {
@@ -426,21 +431,21 @@ bool OCCTEngine::addLineToSketch(const std::string& sketch_id, double x1, double
         std::cout << "✅ Added line " << line_id << " to sketch " << sketch_id << std::endl;
         std::cout.flush();
         
-        return true;
+        return line_id;
         
     } catch (const Standard_Failure& e) {
         std::cerr << "OCCT Error adding line to sketch: " << e.GetMessageString() << std::endl;
-        return false;
+        return "";
     }
 }
 
-bool OCCTEngine::addCircleToSketch(const std::string& sketch_id, double center_x, double center_y, double radius) {
+std::string OCCTEngine::addCircleToSketch(const std::string& sketch_id, double center_x, double center_y, double radius) {
     std::cout << "⭕ Adding circle to sketch " << sketch_id << ": center(" << center_x << "," << center_y << ") radius=" << radius << std::endl;
     std::cout.flush();
     
     if (!sketchExists(sketch_id)) {
         std::cerr << "❌ Sketch not found: " << sketch_id << std::endl;
-        return false;
+        return "";
     }
     
     try {
@@ -451,11 +456,11 @@ bool OCCTEngine::addCircleToSketch(const std::string& sketch_id, double center_x
         std::cout << "✅ Added circle " << circle_id << " to sketch " << sketch_id << std::endl;
         std::cout.flush();
         
-        return true;
+        return circle_id;
         
     } catch (const Standard_Failure& e) {
         std::cerr << "OCCT Error adding circle to sketch: " << e.GetMessageString() << std::endl;
-        return false;
+        return "";
     }
 }
 
@@ -523,4 +528,234 @@ std::vector<std::string> OCCTEngine::getAvailablePlaneIds() const {
         ids.push_back(pair.first);
     }
     return ids;
+}
+
+// ==================== VISUALIZATION DATA METHODS ====================
+
+Json::Value OCCTEngine::getPlaneVisualizationData(const std::string& plane_id) {
+    Json::Value viz_data;
+    
+    if (!planeExists(plane_id)) {
+        std::cerr << "❌ Plane not found for visualization: " << plane_id << std::endl;
+        return viz_data;
+    }
+    
+    try {
+        auto plane = sketch_planes_[plane_id];
+        Vector3d origin = plane->getOrigin();
+        Vector3d normal = plane->getNormal();
+        
+        // Get coordinate system for U and V axes
+        const gp_Ax2& coord_system = plane->getCoordinateSystem();
+        gp_Dir u_dir = coord_system.XDirection();
+        gp_Dir v_dir = coord_system.YDirection();
+        
+        viz_data = Json::Value::createObject();
+        viz_data["plane_id"] = plane_id;
+        viz_data["plane_type"] = (plane->getPlaneType() == Geometry::PlaneType::XY) ? "XY" : 
+                                 (plane->getPlaneType() == Geometry::PlaneType::XZ) ? "XZ" : "YZ";
+        
+        // Origin
+        Json::Value origin_array = Json::Value::createArray();
+        origin_array.append(origin.x);
+        origin_array.append(origin.y);
+        origin_array.append(origin.z);
+        viz_data["origin"] = origin_array;
+        
+        // Normal vector
+        Json::Value normal_array = Json::Value::createArray();
+        normal_array.append(normal.x);
+        normal_array.append(normal.y);
+        normal_array.append(normal.z);
+        viz_data["normal"] = normal_array;
+        
+        // U axis (local X)
+        Json::Value u_axis_array = Json::Value::createArray();
+        u_axis_array.append(u_dir.X());
+        u_axis_array.append(u_dir.Y());
+        u_axis_array.append(u_dir.Z());
+        viz_data["u_axis"] = u_axis_array;
+        
+        // V axis (local Y)
+        Json::Value v_axis_array = Json::Value::createArray();
+        v_axis_array.append(v_dir.X());
+        v_axis_array.append(v_dir.Y());
+        v_axis_array.append(v_dir.Z());
+        viz_data["v_axis"] = v_axis_array;
+        
+        // Grid size for visualization
+        viz_data["size"] = 50.0; // Default grid size
+        
+        std::cout << "✅ Generated plane visualization data for: " << plane_id << std::endl;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "❌ Error generating plane visualization data: " << e.what() << std::endl;
+        return Json::Value();
+    }
+    
+    return viz_data;
+}
+
+Json::Value OCCTEngine::getSketchVisualizationData(const std::string& sketch_id) {
+    Json::Value viz_data;
+    
+    if (!sketchExists(sketch_id)) {
+        std::cerr << "❌ Sketch not found for visualization: " << sketch_id << std::endl;
+        return viz_data;
+    }
+    
+    try {
+        auto sketch = sketches_[sketch_id];
+        auto plane = sketch->getPlane();
+        Vector3d origin = plane->getOrigin();
+        Vector3d normal = plane->getNormal();
+        
+        // Get coordinate system for U and V axes
+        const gp_Ax2& coord_system = plane->getCoordinateSystem();
+        gp_Dir u_dir = coord_system.XDirection();
+        gp_Dir v_dir = coord_system.YDirection();
+        
+        viz_data = Json::Value::createObject();
+        viz_data["sketch_id"] = sketch_id;
+        viz_data["plane_id"] = plane->getPlaneId();
+        
+        // Origin
+        Json::Value origin_array = Json::Value::createArray();
+        origin_array.append(origin.x);
+        origin_array.append(origin.y);
+        origin_array.append(origin.z);
+        viz_data["origin"] = origin_array;
+        
+        // Normal vector
+        Json::Value normal_array = Json::Value::createArray();
+        normal_array.append(normal.x);
+        normal_array.append(normal.y);
+        normal_array.append(normal.z);
+        viz_data["normal"] = normal_array;
+        
+        // U axis (local X)
+        Json::Value u_axis_array = Json::Value::createArray();
+        u_axis_array.append(u_dir.X());
+        u_axis_array.append(u_dir.Y());
+        u_axis_array.append(u_dir.Z());
+        viz_data["u_axis"] = u_axis_array;
+        
+        // V axis (local Y)
+        Json::Value v_axis_array = Json::Value::createArray();
+        v_axis_array.append(v_dir.X());
+        v_axis_array.append(v_dir.Y());
+        v_axis_array.append(v_dir.Z());
+        viz_data["v_axis"] = v_axis_array;
+        
+        std::cout << "✅ Generated sketch visualization data for: " << sketch_id << std::endl;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "❌ Error generating sketch visualization data: " << e.what() << std::endl;
+        return Json::Value();
+    }
+    
+    return viz_data;
+}
+
+Json::Value OCCTEngine::getSketchElementVisualizationData(const std::string& sketch_id, const std::string& element_id) {
+    Json::Value viz_data;
+    
+    if (!sketchExists(sketch_id)) {
+        std::cerr << "❌ Sketch not found for element visualization: " << sketch_id << std::endl;
+        return viz_data;
+    }
+    
+    try {
+        auto sketch = sketches_[sketch_id];
+        auto plane = sketch->getPlane();
+        const auto& elements = sketch->getElements();
+        
+        // Find the specific element
+        const SketchElement* target_element = nullptr;
+        for (const auto& element : elements) {
+            if (element.id == element_id) {
+                target_element = &element;
+                break;
+            }
+        }
+        
+        if (!target_element) {
+            std::cerr << "❌ Element not found: " << element_id << std::endl;
+            return viz_data;
+        }
+        
+        viz_data = Json::Value::createObject();
+        viz_data["element_id"] = element_id;
+        viz_data["sketch_id"] = sketch_id;
+        
+        // Determine element type
+        std::string element_type;
+        switch (target_element->type) {
+            case SketchElement::LINE: element_type = "line"; break;
+            case SketchElement::CIRCLE: element_type = "circle"; break;
+            case SketchElement::ARC: element_type = "arc"; break;
+            default: element_type = "unknown"; break;
+        }
+        viz_data["element_type"] = element_type;
+        
+        // Convert 2D points to 3D world coordinates
+        Json::Value points_3d_array = Json::Value::createArray();
+        Json::Value parameters_2d = Json::Value::createObject();
+        
+        if (target_element->type == SketchElement::LINE) {
+            // Convert start and end points to 3D
+            gp_Pnt start_3d = plane->to3D(target_element->start_point);
+            gp_Pnt end_3d = plane->to3D(target_element->end_point);
+            
+            // Add 3D points (start and end for line)
+            points_3d_array.append(start_3d.X());
+            points_3d_array.append(start_3d.Y());
+            points_3d_array.append(start_3d.Z());
+            points_3d_array.append(end_3d.X());
+            points_3d_array.append(end_3d.Y());
+            points_3d_array.append(end_3d.Z());
+            
+            // Store 2D parameters
+            parameters_2d["x1"] = target_element->start_point.X();
+            parameters_2d["y1"] = target_element->start_point.Y();
+            parameters_2d["x2"] = target_element->end_point.X();
+            parameters_2d["y2"] = target_element->end_point.Y();
+            
+        } else if (target_element->type == SketchElement::CIRCLE) {
+            // For circles, generate points around the circumference
+            gp_Pnt center_3d = plane->to3D(target_element->center_point);
+            double radius = target_element->parameters[0];
+            
+            // Generate circle points (16 segments for smooth visualization)
+            const int segments = 16;
+            for (int i = 0; i <= segments; ++i) {
+                double angle = 2.0 * M_PI * i / segments;
+                gp_Pnt2d circle_pt(
+                    target_element->center_point.X() + radius * cos(angle),
+                    target_element->center_point.Y() + radius * sin(angle)
+                );
+                gp_Pnt circle_3d = plane->to3D(circle_pt);
+                
+                points_3d_array.append(circle_3d.X());
+                points_3d_array.append(circle_3d.Y());
+                points_3d_array.append(circle_3d.Z());
+            }
+            
+            // Store 2D parameters
+            parameters_2d["center_x"] = target_element->center_point.X();
+            parameters_2d["center_y"] = target_element->center_point.Y();
+            parameters_2d["radius"] = radius;
+        }
+        
+        viz_data["points_3d"] = points_3d_array;
+        viz_data["parameters_2d"] = parameters_2d;
+        
+        std::cout << "✅ Generated element visualization data for: " << element_id << std::endl;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "❌ Error generating element visualization data: " << e.what() << std::endl;
+        return Json::Value();
+    }
+    
+    return viz_data;
 } 

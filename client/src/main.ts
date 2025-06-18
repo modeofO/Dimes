@@ -93,6 +93,22 @@ class CADApplication {
             this.renderer.updateGeometry('current-model', meshData);
         });
         
+        // Set up visualization callbacks
+        this.client.onPlaneVisualization((data) => {
+            console.log('Received plane visualization:', data);
+            this.renderer.addPlaneVisualization(data);
+        });
+        
+        this.client.onSketchVisualization((data) => {
+            console.log('Received sketch visualization:', data);
+            this.renderer.addSketchVisualization(data);
+        });
+        
+        this.client.onElementVisualization((data) => {
+            console.log('Received element visualization:', data);
+            this.renderer.addSketchElementVisualization(data);
+        });
+        
         console.log('✅ CAD client initialized');
     }
 
@@ -452,11 +468,20 @@ class CADApplication {
         // Clear shapes list
         this.createdShapes = [];
         
+        // Clear all visualizations (planes, sketches, elements)
+        this.renderer.clearAllGeometry();
+        
+        // Clear internal data structures
+        this.createdPlanes = [];
+        this.createdSketches = [];
+        
         // Update UI
         this.updateShapesList();
         this.updateShapeSelectors();
+        this.updatePlaneSelectors();
+        this.updateSketchSelectors();
         
-        this.updateStatus('Cleared all shapes', 'info');
+        this.updateStatus('Cleared all shapes and visualizations', 'info');
     }
 
     private async testServerConnection(): Promise<void> {

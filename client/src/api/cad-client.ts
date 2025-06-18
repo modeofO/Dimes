@@ -12,12 +12,20 @@ import {
     ExtrudeSketchResponse
 } from '../types/api';
 import { MeshData, ExportFormat, PrimitiveType, PlaneType, SketchElementType } from '../types/geometry';
+import { 
+    PlaneVisualizationData, 
+    SketchVisualizationData, 
+    SketchElementVisualizationData 
+} from '../../../shared/types/geometry';
 
 export class CADClient {
     private baseUrl: string;
     private sessionId: string;
     private ws: WebSocket | null = null;
     private geometryUpdateCallback?: (meshData: MeshData) => void;
+    private planeVisualizationCallback?: (data: PlaneVisualizationData) => void;
+    private sketchVisualizationCallback?: (data: SketchVisualizationData) => void;
+    private elementVisualizationCallback?: (data: SketchElementVisualizationData) => void;
     
     constructor(baseUrl: string, sessionId: string) {
         this.baseUrl = baseUrl.replace(/\/$/, ''); // Remove trailing slash
@@ -82,6 +90,13 @@ export class CADClient {
         const response = await this.makeRequest<CreateSketchPlaneResponse>('/api/v1/cad/sketch-planes', 'POST', request);
         
         console.log('📨 Received createSketchPlane response:', JSON.stringify(response, null, 2));
+        
+        // If visualization data is included, trigger visualization callback
+        if (response.data?.visualization_data && this.planeVisualizationCallback) {
+            console.log('🎯 Updating plane visualization with data:', response.data.visualization_data);
+            this.planeVisualizationCallback(response.data.visualization_data);
+        }
+        
         return response;
     }
     
@@ -95,6 +110,13 @@ export class CADClient {
         const response = await this.makeRequest<CreateSketchResponse>('/api/v1/cad/sketches', 'POST', request);
         
         console.log('📨 Received createSketch response:', JSON.stringify(response, null, 2));
+        
+        // If visualization data is included, trigger visualization callback
+        if (response.data?.visualization_data && this.sketchVisualizationCallback) {
+            console.log('🎯 Updating sketch visualization with data:', response.data.visualization_data);
+            this.sketchVisualizationCallback(response.data.visualization_data);
+        }
+        
         return response;
     }
     
@@ -112,6 +134,13 @@ export class CADClient {
         const response = await this.makeRequest<AddSketchElementResponse>('/api/v1/cad/sketch-elements', 'POST', request);
         
         console.log('📨 Received addLineToSketch response:', response);
+        
+        // If visualization data is included, trigger visualization callback
+        if (response.data?.visualization_data && this.elementVisualizationCallback) {
+            console.log('🎯 Updating element visualization with data:', response.data.visualization_data);
+            this.elementVisualizationCallback(response.data.visualization_data);
+        }
+        
         return response;
     }
     
@@ -131,6 +160,13 @@ export class CADClient {
         const response = await this.makeRequest<AddSketchElementResponse>('/api/v1/cad/sketch-elements', 'POST', request);
         
         console.log('📨 Received addCircleToSketch response:', response);
+        
+        // If visualization data is included, trigger visualization callback
+        if (response.data?.visualization_data && this.elementVisualizationCallback) {
+            console.log('🎯 Updating element visualization with data:', response.data.visualization_data);
+            this.elementVisualizationCallback(response.data.visualization_data);
+        }
+        
         return response;
     }
     
@@ -197,6 +233,19 @@ export class CADClient {
         } catch (error) {
             console.log('WebSocket not available, using REST API only:', error);
         }
+    }
+    
+    // Visualization callbacks
+    public onPlaneVisualization(callback: (data: PlaneVisualizationData) => void): void {
+        this.planeVisualizationCallback = callback;
+    }
+    
+    public onSketchVisualization(callback: (data: SketchVisualizationData) => void): void {
+        this.sketchVisualizationCallback = callback;
+    }
+    
+    public onElementVisualization(callback: (data: SketchElementVisualizationData) => void): void {
+        this.elementVisualizationCallback = callback;
     }
     
     private setupWebSocket(): void {
