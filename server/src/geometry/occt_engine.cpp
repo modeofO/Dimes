@@ -20,9 +20,11 @@
 #include <Poly_Triangulation.hxx>
 #include <TColgp_Array1OfPnt.hxx>
 #include <Poly_Array1OfTriangle.hxx>
+#include <Poly.hxx>
+#include <TColgp_Array1OfDir.hxx>
 // Additional OCCT includes for STEP export - temporarily disabled
 // #include <Interface_Static.hxx>
-// #include <IFSelect_ReturnStatus.hxx>
+#include <IFSelect_ReturnStatus.hxx>
 // #include <STEPControl_StepModelType.hxx>
 
 #include <iostream>
@@ -142,12 +144,8 @@ bool OCCTEngine::unionShapes(const std::string& shape1_id, const std::string& sh
 MeshData OCCTEngine::tessellate(const std::string& shape_id, double deflection) {
     MeshData meshData;
     
-    std::cout << "🔍 OCCT tessellate called for shape: " << shape_id << std::endl;
-    std::cout.flush();
-    
     if (!shapeExists(shape_id)) {
-        std::cout << "❌ Shape " << shape_id << " does not exist!" << std::endl;
-        std::cout.flush();
+        std::cerr << "❌ Shape " << shape_id << " does not exist!" << std::endl;
         return meshData;
     }
     
@@ -174,15 +172,32 @@ MeshData OCCTEngine::tessellate(const std::string& shape_id, double deflection) 
                     meshData.vertices.push_back(pnt.Y());
                     meshData.vertices.push_back(pnt.Z());
                 }
+
+                // Calculate normals
+                Poly::ComputeNormals(triangulation);
+                if (triangulation->HasNormals()) {
+                    for (int i = 1; i <= triangulation->NbNodes(); i++) {
+                        gp_Dir normal = triangulation->Normal(i);
+                        meshData.normals.push_back(normal.X());
+                        meshData.normals.push_back(normal.Y());
+                        meshData.normals.push_back(normal.Z());
+                    }
+                }
                 
                 // Add faces using newer API
                 for (int i = 1; i <= triangulation->NbTriangles(); i++) {
                     int n1, n2, n3;
                     triangulation->Triangle(i).Get(n1, n2, n3);
-                    
-                    meshData.faces.push_back(base_vertex_index + n1 - 1);
-                    meshData.faces.push_back(base_vertex_index + n2 - 1);
-                    meshData.faces.push_back(base_vertex_index + n3 - 1);
+
+                    if (face.Orientation() == TopAbs_REVERSED) {
+                        meshData.faces.push_back(base_vertex_index + n1 - 1);
+                        meshData.faces.push_back(base_vertex_index + n3 - 1);
+                        meshData.faces.push_back(base_vertex_index + n2 - 1);
+                    } else {
+                        meshData.faces.push_back(base_vertex_index + n1 - 1);
+                        meshData.faces.push_back(base_vertex_index + n2 - 1);
+                        meshData.faces.push_back(base_vertex_index + n3 - 1);
+                    }
                 }
             }
         }

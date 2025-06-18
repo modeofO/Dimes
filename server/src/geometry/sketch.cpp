@@ -167,7 +167,9 @@ TopoDS_Face Sketch::createFace() const {
         BRepBuilderAPI_MakeFace faceBuilder(wire);
         
         if (faceBuilder.IsDone()) {
-            return faceBuilder.Face();
+            TopoDS_Face face = faceBuilder.Face();
+            face.Orientation(TopAbs_FORWARD);
+            return face;
         } else {
             std::cerr << "Failed to create face from wire" << std::endl;
         }
@@ -207,7 +209,9 @@ TopoDS_Face Sketch::createFaceFromElement(const std::string& element_id) const {
 
     BRepBuilderAPI_MakeFace faceBuilder(wireBuilder.Wire());
     if (faceBuilder.IsDone()) {
-        return faceBuilder.Face();
+        TopoDS_Face face = faceBuilder.Face();
+        face.Orientation(TopAbs_FORWARD);
+        return face;
     }
 
     std::cerr << "Failed to create face for element: " << element_id << std::endl;

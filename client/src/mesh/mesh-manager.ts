@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { MeshData } from '../../../shared/types/geometry';
 
 export class MeshManager {
@@ -18,7 +19,9 @@ export class MeshManager {
             color: 0x888888,
             metalness: 0.9,
             roughness: 0.1,
-            envMapIntensity: 1.0
+            envMapIntensity: 1.0,
+            side: THREE.DoubleSide,
+            flatShading: true
         });
         this.materialCache.set('metal', metalMaterial);
         
@@ -27,7 +30,8 @@ export class MeshManager {
             color: 0x4444ff,
             metalness: 0.0,
             roughness: 0.3,
-            envMapIntensity: 0.5
+            envMapIntensity: 0.5,
+            side: THREE.DoubleSide
         });
         this.materialCache.set('plastic', plasticMaterial);
         
@@ -130,7 +134,7 @@ export class MeshManager {
             return null;
         }
         
-        const geometry = new THREE.BufferGeometry();
+        let geometry = new THREE.BufferGeometry();
         
         // Convert arrays to typed arrays
         const vertices = new Float32Array(meshData.vertices);
@@ -142,11 +146,19 @@ export class MeshManager {
             geometry.setIndex(new THREE.BufferAttribute(indices, 1));
         }
         
-        // Set normals if provided, otherwise compute them
-        if (meshData.normals && meshData.normals.length > 0) {
+        // Check if normals are provided by backend
+        const hasBackendNormals = meshData.normals && meshData.normals.length > 0;
+        
+        if (hasBackendNormals && meshData.normals) {
+            // Use backend normals but apply seam smoothing
             const normals = new Float32Array(meshData.normals);
             geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+            
+            // Apply seam smoothing to reduce seam visibility
+            this.smoothSeamNormals(geometry);
         } else {
+            // No backend normals - merge vertices and compute normals
+            geometry = BufferGeometryUtils.mergeVertices(geometry, 0.01);
             geometry.computeVertexNormals();
         }
         
@@ -177,5 +189,55 @@ export class MeshManager {
         }
         
         return true;
+    }
+    
+    private smoothSeamNormals(geometry: THREE.BufferGeometry): void {
+        const positionAttribute = geometry.getAttribute('position') as THREE.BufferAttribute;
+        const normalAttribute = geometry.getAttribute('normal') as THREE.BufferAttribute;
+        
+        if (!positionAttribute || !normalAttribute) return;
+        
+        const positions = positionAttribute.array as Float32Array;
+        const normals = normalAttribute.array as Float32Array;
+        const vertexCount = positions.length / 3;
+        const tolerance = 1e-4;
+        
+        const vertexMap = new Map<string, number[]>();
+        
+        for (let i = 0; i < vertexCount; i++) {
+            const x = positions[i * 3];
+            const y = positions[i * 3 + 1];
+            const z = positions[i * 3 + 2];
+            const key = `${Math.round(x / tolerance)}_${Math.round(y / tolerance)}_${Math.round(z / tolerance)}`;
+            
+            if (!vertexMap.has(key)) {
+                vertexMap.set(key, []);
+            }
+            vertexMap.get(key)!.push(i);
+        }
+        
+        for (const indices of vertexMap.values()) {
+            if (indices.length > 1) {
+                const averageNormal = new THREE.Vector3(0, 0, 0);
+                
+                for (const index of indices) {
+                    averageNormal.add(new THREE.Vector3(
+                        normals[index * 3],
+                        normals[index * 3 + 1],
+                        normals[index * 3 + 2]
+                    ));
+                }
+                
+                averageNormal.normalize();
+                
+                for (const index of indices) {
+                    normals[index * 3] = averageNormal.x;
+                    normals[index * 3 + 1] = averageNormal.y;
+                    normals[index * 3 + 2] = averageNormal.z;
+                }
+            }
+        }
+        
+        normalAttribute.needsUpdate = true;
     }
 } 

@@ -389,6 +389,14 @@ void CADController::handleCreateModel(const std::string& session_id, const std::
             mesh_data["faces"].append(mesh.faces[i]);
         }
         
+        // Include normals if available
+        if (!mesh.normals.empty()) {
+            mesh_data["normals"] = Json::Value::createArray();
+            for (size_t i = 0; i < mesh.normals.size(); ++i) {
+                mesh_data["normals"].append(mesh.normals[i]);
+            }
+        }
+        
         Json::Value metadata;
         metadata["vertex_count"] = static_cast<int>(mesh.metadata.vertex_count);
         metadata["face_count"] = static_cast<int>(mesh.metadata.face_count);
@@ -602,6 +610,14 @@ void CADController::handleBooleanOperation(const std::string& session_id, const 
             mesh_data["faces"].append(mesh.faces[i]);
         }
         
+        // Include normals if available
+        if (!mesh.normals.empty()) {
+            mesh_data["normals"] = Json::Value::createArray();
+            for (size_t i = 0; i < mesh.normals.size(); ++i) {
+                mesh_data["normals"].append(mesh.normals[i]);
+            }
+        }
+        
         Json::Value metadata;
         metadata["vertex_count"] = static_cast<int>(mesh.metadata.vertex_count);
         metadata["face_count"] = static_cast<int>(mesh.metadata.face_count);
@@ -669,6 +685,14 @@ void CADController::handleTessellate(const std::string& session_id, const std::s
         mesh_data["faces"] = Json::Value::createArray();
         for (size_t i = 0; i < mesh.faces.size(); ++i) {
             mesh_data["faces"].append(mesh.faces[i]);
+        }
+        
+        // Include normals if available
+        if (!mesh.normals.empty()) {
+            mesh_data["normals"] = Json::Value::createArray();
+            for (size_t i = 0; i < mesh.normals.size(); ++i) {
+                mesh_data["normals"].append(mesh.normals[i]);
+            }
         }
         
         Json::Value metadata;
@@ -1027,6 +1051,14 @@ void CADController::handleExtrudeFeature(const std::string& session_id, const st
         mesh_data["faces"] = Json::Value::createArray();
         for (size_t i = 0; i < mesh.faces.size(); ++i) {
             mesh_data["faces"].append(mesh.faces[i]);
+        }
+        
+        // Include normals if available
+        if (!mesh.normals.empty()) {
+            mesh_data["normals"] = Json::Value::createArray();
+            for (size_t i = 0; i < mesh.normals.size(); ++i) {
+                mesh_data["normals"].append(mesh.normals[i]);
+            }
         }
         
         Json::Value metadata;
