@@ -167,13 +167,40 @@ export class CADRenderer {
             }
 
             if (clickedObject.name) {
-                selectedId = clickedObject.name;
-                // This is a bit of a hack to determine the type
-                selectedType = selectedId.includes('Extrude') ? 'feature' 
-                             : selectedId.includes('Sketch') ? 'sketch' 
-                             : selectedId.includes('Plane') ? 'plane' 
-                             : 'element';
-                console.log(`Clicked object ID: ${selectedId}`);
+                const name = clickedObject.name;
+                const parts = name.split('-');
+                if (parts.length > 1) {
+                    const typePrefix = parts[0];
+                    selectedId = parts.slice(1).join('-'); // Re-join in case ID has hyphens
+                    switch(typePrefix) {
+                        case 'plane':
+                            selectedType = 'plane';
+                            break;
+                        case 'sketch':
+                            selectedType = 'sketch';
+                            break;
+                        case 'element':
+                            // For elements, we need to determine if it's a line, circle, etc.
+                            // The 'type' is stored in the element's user data, but that's not easily accessible here.
+                            // For now, we'll just use a generic 'element' type.
+                            // The logic in main.ts can handle this.
+                            selectedType = 'element';
+                            break;
+                        default:
+                            selectedId = name; // Revert if prefix is unknown
+                            selectedType = 'feature';
+                            break;
+                    }
+                } else {
+                     selectedId = name;
+                     // Assume things without prefix are features (e.g., from boolean ops)
+                     if (name.toLowerCase().includes('extru')) {
+                         selectedType = 'feature';
+                     } else {
+                         selectedType = 'unknown';
+                     }
+                }
+                console.log(`Clicked object ID: ${selectedId}, Type: ${selectedType}`);
             }
         }
         

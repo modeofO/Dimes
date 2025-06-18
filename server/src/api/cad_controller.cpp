@@ -174,7 +174,7 @@ void CADController::setupRoutes() {
         try {
             std::string session_id = getSessionId(req);
             std::string response_body;
-            handleExtrudeSketch(session_id, req.body, response_body);
+            handleExtrudeFeature(session_id, req.body, response_body);
             res.set_content(response_body, "application/json");
         } catch (const std::exception& e) {
             res.status = 500;
@@ -234,16 +234,32 @@ std::string CADController::getSessionId(const httplib::Request& req) {
     return "default-session";
 }
 
+std::string CADController::jsonToString(const Json::Value& json) {
+    return Json::valueToString(json);
+}
+
+std::string CADController::createErrorResponse(const std::string& message) {
+    Json::Value error_response;
+    error_response["success"] = false;
+    error_response["error"] = message;
+    error_response["timestamp"] = static_cast<int64_t>(std::time(nullptr));
+    return jsonToString(error_response);
+}
+
+std::string CADController::createSuccessResponse(const std::string& data) {
+    Json::Value success_response;
+    success_response["success"] = true;
+    success_response["data"] = data;
+    success_response["timestamp"] = static_cast<int64_t>(std::time(nullptr));
+    return jsonToString(success_response);
+}
+
 std::string CADController::getContentType(const std::string& format) {
     if (format == "step" || format == "stp") return "application/step";
     if (format == "stl") return "application/vnd.ms-pki.stl";
     if (format == "obj") return "application/wavefront-obj";
     if (format == "iges" || format == "igs") return "application/iges";
     return "application/octet-stream";
-}
-
-std::string CADController::jsonToString(const Json::Value& json) {
-    return Json::valueToString(json);
 }
 
 void CADController::handleCreateModel(const std::string& session_id, const std::string& request_body, std::string& response) {
@@ -444,22 +460,6 @@ void CADController::handleDaydreamsCAD(const std::string& request_body, std::str
     } catch (const std::exception& e) {
         response = createErrorResponse(std::string("Daydreams handler exception: ") + e.what());
     }
-}
-
-std::string CADController::createErrorResponse(const std::string& message) {
-    Json::Value error_response;
-    error_response["success"] = false;
-    error_response["error"] = message;
-    error_response["timestamp"] = static_cast<int64_t>(std::time(nullptr));
-    return jsonToString(error_response);
-}
-
-std::string CADController::createSuccessResponse(const std::string& data) {
-    Json::Value success_response;
-    success_response["success"] = true;
-    success_response["data"] = data;
-    success_response["timestamp"] = static_cast<int64_t>(std::time(nullptr));
-    return jsonToString(success_response);
 }
 
 // Placeholder implementations
@@ -959,24 +959,18 @@ void CADController::handleAddSketchElement(const std::string& session_id, const 
     }
 }
 
-void CADController::handleExtrudeSketch(const std::string& session_id, const std::string& request_body, std::string& response) {
+void CADController::handleExtrudeFeature(const std::string& session_id, const std::string& request_body, std::string& response) {
     try {
-        std::cout << "🚀 Extruding sketch for session: " << session_id << std::endl;
+        std::cout << "🚀 Extruding feature for session: " << session_id << std::endl;
         std::cout << "📋 Received request body: '" << request_body << "'" << std::endl;
         std::cout.flush();
         
         Json::Value request;
         Json::Reader reader;
         if (!reader.parse(request_body, request)) {
-            std::cout << "❌ JSON parsing failed for extrude!" << std::endl;
-            std::cout << "❌ Request body was: '" << request_body << "'" << std::endl;
-            std::cout.flush();
-            response = createErrorResponse("Invalid JSON in request body");
+            response = createErrorResponse("Invalid JSON in request body for extrude");
             return;
         }
-        
-        std::cout << "✅ Extrude JSON parsed successfully" << std::endl;
-        std::cout.flush();
         
         auto engine = SessionManager::getInstance().getOrCreateSession(session_id);
         if (!engine) {
@@ -985,6 +979,7 @@ void CADController::handleExtrudeSketch(const std::string& session_id, const std
         }
         
         std::string sketch_id = request.get("sketch_id", "").asString();
+        std::string element_id = request.get("element_id", "").asString();
         double distance = request.get("distance", 10.0).asDouble();
         std::string direction = request.get("direction", "normal").asString();
         
@@ -993,10 +988,15 @@ void CADController::handleExtrudeSketch(const std::string& session_id, const std
             return;
         }
         
-        std::string feature_id = engine->extrudeSketch(sketch_id, distance, direction);
+        std::string feature_id;
+        if (element_id.empty()) {
+            feature_id = engine->extrudeSketch(sketch_id, distance, direction);
+        } else {
+            feature_id = engine->extrudeSketchElement(sketch_id, element_id, distance, direction);
+        }
         
         if (feature_id.empty()) {
-            response = createErrorResponse("Failed to extrude sketch");
+            response = createErrorResponse("Failed to extrude feature");
             return;
         }
         
@@ -1010,7 +1010,10 @@ void CADController::handleExtrudeSketch(const std::string& session_id, const std
         
         Json::Value data;
         data["feature_id"] = feature_id;
-        data["sketch_id"] = sketch_id;
+        data["source_sketch_id"] = sketch_id;
+        if (!element_id.empty()) {
+            data["source_element_id"] = element_id;
+        }
         data["distance"] = distance;
         data["direction"] = direction;
         
@@ -1038,6 +1041,6 @@ void CADController::handleExtrudeSketch(const std::string& session_id, const std
         response = jsonToString(json_response);
         
     } catch (const std::exception& e) {
-        response = createErrorResponse(std::string("Extrude sketch exception: ") + e.what());
+        response = createErrorResponse(std::string("Extrude feature exception: ") + e.what());
     }
 } 

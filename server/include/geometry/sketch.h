@@ -48,6 +48,7 @@ public:
     // Sketch operations
     TopoDS_Wire createWire() const;          // Create 3D wire from sketch elements
     TopoDS_Face createFace() const;          // Create face from closed wire
+    TopoDS_Face createFaceFromElement(const std::string& element_id) const;
     bool isClosed() const;                   // Check if sketch forms closed profile
     void close();                            // Attempt to close the sketch
     

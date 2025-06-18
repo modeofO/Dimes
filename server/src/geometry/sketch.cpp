@@ -91,10 +91,18 @@ TopoDS_Edge Sketch::createElement2D(const SketchElement& element) const {
             
             case SketchElement::CIRCLE: {
                 double radius = element.parameters[0];
-                gp_Pnt center_3d = sketch_plane_->to3D(element.center_point);
                 
-                // Create circle on the sketch plane
-                Handle(Geom_Circle) circle = new Geom_Circle(plane_cs, radius);
+                // Get the sketch plane's coordinate system
+                const gp_Ax2& plane_cs = sketch_plane_->getCoordinateSystem();
+
+                // Create a new coordinate system for the circle, located at the circle's center
+                // but with the same orientation as the sketch plane.
+                gp_Ax2 circle_cs = plane_cs; // Copy orientation
+                gp_Pnt center_3d = sketch_plane_->to3D(element.center_point); // Get the 3D center point
+                circle_cs.SetLocation(center_3d); // Set the location of the new coordinate system
+
+                // Create circle on the sketch plane at the correct location
+                Handle(Geom_Circle) circle = new Geom_Circle(circle_cs, radius);
                 BRepBuilderAPI_MakeEdge circleBuilder(circle);
                 edge = circleBuilder.Edge();
                 break;
@@ -169,6 +177,41 @@ TopoDS_Face Sketch::createFace() const {
     }
     
     return TopoDS_Face();  // Return null face on failure
+}
+
+TopoDS_Face Sketch::createFaceFromElement(const std::string& element_id) const {
+    const SketchElement* target_element = nullptr;
+    for (const auto& element : elements_) {
+        if (element.id == element_id) {
+            target_element = &element;
+            break;
+        }
+    }
+
+    if (!target_element) {
+        std::cerr << "Element not found for face creation: " << element_id << std::endl;
+        return TopoDS_Face();
+    }
+
+    TopoDS_Edge edge = createElement2D(*target_element);
+    if (edge.IsNull()) {
+        std::cerr << "Failed to create edge for element: " << element_id << std::endl;
+        return TopoDS_Face();
+    }
+
+    BRepBuilderAPI_MakeWire wireBuilder(edge);
+    if (!wireBuilder.IsDone()) {
+        std::cerr << "Failed to create wire for element: " << element_id << std::endl;
+        return TopoDS_Face();
+    }
+
+    BRepBuilderAPI_MakeFace faceBuilder(wireBuilder.Wire());
+    if (faceBuilder.IsDone()) {
+        return faceBuilder.Face();
+    }
+
+    std::cerr << "Failed to create face for element: " << element_id << std::endl;
+    return TopoDS_Face();
 }
 
 bool Sketch::isClosed() const {

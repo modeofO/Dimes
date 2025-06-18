@@ -19,6 +19,18 @@ ExtrudeFeature::ExtrudeFeature(std::shared_ptr<Sketch> sketch, const ExtrudePara
     std::cout << "Created extrude feature: " << feature_id_ << " for sketch: " << sketch->getId() << std::endl;
 }
 
+ExtrudeFeature::ExtrudeFeature(const TopoDS_Face& face, std::shared_ptr<SketchPlane> plane, const ExtrudeParameters& params, const std::string& id)
+    : sketch_plane_(plane), face_to_extrude_(face), parameters_(params), is_valid_(false) {
+    if (id.empty()) {
+        std::stringstream ss;
+        ss << "Extrude_" << std::time(nullptr);
+        feature_id_ = ss.str();
+    } else {
+        feature_id_ = id;
+    }
+    std::cout << "Created extrude feature: " << feature_id_ << " from a face." << std::endl;
+}
+
 bool ExtrudeFeature::execute() {
     if (!canExtrude()) {
         std::cerr << "Cannot execute extrude: validation failed" << std::endl;
@@ -74,8 +86,14 @@ bool ExtrudeFeature::regenerate() {
 }
 
 TopoDS_Shape ExtrudeFeature::performBlindExtrude() const {
-    // Get the face from the sketch
-    TopoDS_Face sketch_face = base_sketch_->createFace();
+    // Get the face from the sketch or the directly provided face
+    TopoDS_Face sketch_face;
+    if (!face_to_extrude_.IsNull()) {
+        sketch_face = face_to_extrude_;
+    } else if (base_sketch_) {
+        sketch_face = base_sketch_->createFace();
+    }
+
     if (sketch_face.IsNull()) {
         std::cerr << "Cannot extrude: sketch face is null" << std::endl;
         return TopoDS_Shape();
@@ -102,7 +120,13 @@ TopoDS_Shape ExtrudeFeature::performBlindExtrude() const {
 
 TopoDS_Shape ExtrudeFeature::performSymmetricExtrude() const {
     // Get the face from the sketch
-    TopoDS_Face sketch_face = base_sketch_->createFace();
+    TopoDS_Face sketch_face;
+    if (!face_to_extrude_.IsNull()) {
+        sketch_face = face_to_extrude_;
+    } else if (base_sketch_) {
+        sketch_face = base_sketch_->createFace();
+    }
+    
     if (sketch_face.IsNull()) {
         std::cerr << "Cannot extrude: sketch face is null" << std::endl;
         return TopoDS_Shape();
@@ -134,15 +158,17 @@ TopoDS_Shape ExtrudeFeature::performSymmetricExtrude() const {
 
 gp_Vec ExtrudeFeature::calculateExtrudeDirection() const {
     // For now, use the sketch plane normal as default direction
-    Vector3d plane_normal = base_sketch_->getPlane()->getNormal();
-    gp_Vec sketch_normal(plane_normal.x, plane_normal.y, plane_normal.z);
-    
-    // If a custom direction is specified, use it
-    if (parameters_.direction.Magnitude() > 1e-6) {
-        return parameters_.direction;
+    if (base_sketch_) {
+        Vector3d plane_normal = base_sketch_->getPlane()->getNormal();
+        return gp_Vec(plane_normal.x, plane_normal.y, plane_normal.z);
+    }
+    if (sketch_plane_) {
+        Vector3d plane_normal = sketch_plane_->getNormal();
+        return gp_Vec(plane_normal.x, plane_normal.y, plane_normal.z);
     }
     
-    return sketch_normal;
+    // Fallback if no sketch or plane is available
+    return gp_Vec(0, 0, 1);
 }
 
 void ExtrudeFeature::setDistance(double distance) {
@@ -174,12 +200,12 @@ void ExtrudeFeature::setSymmetricDistances(double dist1, double dist2) {
 std::vector<std::string> ExtrudeFeature::getValidationErrors() const {
     std::vector<std::string> errors;
     
-    if (!base_sketch_) {
-        errors.push_back("No base sketch provided");
+    if (!base_sketch_ && face_to_extrude_.IsNull()) {
+        errors.push_back("No base sketch or face provided");
         return errors;
     }
     
-    if (!base_sketch_->isValid()) {
+    if (base_sketch_ && !base_sketch_->isValid()) {
         errors.push_back("Base sketch is invalid");
         auto sketch_errors = base_sketch_->getValidationErrors();
         errors.insert(errors.end(), sketch_errors.begin(), sketch_errors.end());

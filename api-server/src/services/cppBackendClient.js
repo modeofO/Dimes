@@ -224,18 +224,22 @@ export class CppBackendClient {
   }
 
   /**
-   * Extrude sketch in the C++ backend
+   * Extrude sketch or element in the C++ backend
    */
-  async extrudeSketch(sessionId, extrudeData) {
+  async extrudeFeature(sessionId, extrudeData) {
     try {
       const requestBody = {
         session_id: sessionId,
         sketch_id: extrudeData.sketch_id,
         distance: extrudeData.distance,
-        extrude_type: extrudeData.extrude_type || 'blind',
+        direction: extrudeData.direction || 'normal',
       };
 
-      logger.debug('Extruding sketch:', requestBody);
+      if (extrudeData.element_id) {
+        requestBody.element_id = extrudeData.element_id;
+      }
+
+      logger.debug('Extruding feature:', requestBody);
 
       const response = await this.makeRequest('/api/v1/extrude', {
         method: 'POST',
@@ -246,7 +250,7 @@ export class CppBackendClient {
       });
       return response;
     } catch (error) {
-      logger.error('Failed to extrude sketch in C++ backend:', error.message);
+      logger.error('Failed to extrude feature in C++ backend:', error.message);
       throw error;
     }
   }

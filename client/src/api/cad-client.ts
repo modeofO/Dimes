@@ -8,8 +8,8 @@ import {
     CreateSketchResponse,
     AddSketchElementRequest,
     AddSketchElementResponse,
-    ExtrudeSketchRequest,
-    ExtrudeSketchResponse
+    ExtrudeFeatureRequest,
+    ExtrudeFeatureResponse
 } from '../types/api';
 import { 
     MeshData, 
@@ -174,18 +174,22 @@ export class CADClient {
         return response;
     }
     
-    public async extrudeSketch(sketchId: string, distance: number, direction: 'normal' | 'custom' = 'normal'): Promise<ExtrudeSketchResponse> {
-        const request: ExtrudeSketchRequest = {
+    public async extrudeFeature(sketchId: string, distance: number, elementId?: string): Promise<ExtrudeFeatureResponse> {
+        const request: ExtrudeFeatureRequest = {
             sketch_id: sketchId,
             distance: distance,
-            direction: direction
+            direction: 'normal',
         };
+
+        if (elementId) {
+            request.element_id = elementId;
+        }
         
-        console.log('🚀 Extruding sketch:', request);
+        console.log('🚀 Extruding feature:', request);
         
-        const response = await this.makeRequest<ExtrudeSketchResponse>('/api/v1/cad/extrude', 'POST', request);
+        const response = await this.makeRequest<ExtrudeFeatureResponse>('/api/v1/cad/extrude', 'POST', request);
         
-        console.log('📨 Received extrudeSketch response:', response);
+        console.log('📨 Received extrudeFeature response:', response);
         
         // If mesh data is included, trigger geometry update
         if (response.data?.mesh_data && this.geometryUpdateCallback) {

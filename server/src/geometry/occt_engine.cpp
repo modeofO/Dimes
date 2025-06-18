@@ -504,6 +504,54 @@ std::string OCCTEngine::extrudeSketch(const std::string& sketch_id, double dista
     }
 }
 
+std::string OCCTEngine::extrudeSketchElement(const std::string& sketch_id, const std::string& element_id, double distance, const std::string& direction) {
+    std::cout << "🚀 Extruding element " << element_id << " from sketch " << sketch_id << " by distance " << distance << std::endl;
+    std::cout.flush();
+
+    if (!sketchExists(sketch_id)) {
+        std::cerr << "❌ Sketch not found: " << sketch_id << std::endl;
+        return "";
+    }
+
+    try {
+        auto sketch = sketches_[sketch_id];
+        
+        // Create a face from the single element. This preserves its position.
+        TopoDS_Face element_face = sketch->createFaceFromElement(element_id);
+
+        if (element_face.IsNull()) {
+            std::cerr << "❌ Could not create a face from element: " << element_id << std::endl;
+            return "";
+        }
+        
+        // Create extrude parameters
+        ExtrudeParameters params(distance);
+        
+        // Create extrude feature from the face and the sketch plane
+        auto extrude_feature = std::make_shared<ExtrudeFeature>(element_face, sketch->getPlane(), params);
+        
+        // Execute the extrude
+        if (!extrude_feature->execute()) {
+            std::cerr << "❌ Failed to execute extrude operation for element" << std::endl;
+            return "";
+        }
+        
+        // Store the feature and resulting shape
+        std::string feature_id = extrude_feature->getId();
+        extrude_features_[feature_id] = extrude_feature;
+        shapes_[feature_id] = extrude_feature->getShape();
+        
+        std::cout << "✅ Extruded element successfully: " << feature_id << std::endl;
+        std::cout.flush();
+        
+        return feature_id;
+        
+    } catch (const Standard_Failure& e) {
+        std::cerr << "OCCT Error in element extrude operation: " << e.GetMessageString() << std::endl;
+        return "";
+    }
+}
+
 // ==================== SKETCH UTILITY METHODS ====================
 
 bool OCCTEngine::sketchExists(const std::string& sketch_id) const {

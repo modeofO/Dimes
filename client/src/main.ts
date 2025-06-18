@@ -201,10 +201,10 @@ class CADApplication {
         }
 
         // Extrude sketch button handler
-        const extrudeBtn = document.getElementById('extrude-sketch') as HTMLButtonElement;
+        const extrudeBtn = document.getElementById('extrude-feature') as HTMLButtonElement;
         if (extrudeBtn) {
             extrudeBtn.addEventListener('click', () => {
-                this.extrudeSketch();
+                this.extrudeFeature();
             });
         }
 
@@ -241,7 +241,7 @@ class CADApplication {
         const extrudeSketchSelect = document.getElementById('extrude-sketch-select') as HTMLSelectElement;
         if (extrudeSketchSelect) {
             extrudeSketchSelect.addEventListener('change', () => {
-                const extrudeBtn = document.getElementById('extrude-sketch') as HTMLButtonElement;
+                const extrudeBtn = document.getElementById('extrude-feature') as HTMLButtonElement;
                 if (extrudeBtn) {
                     extrudeBtn.disabled = !extrudeSketchSelect.value;
                 }
@@ -764,56 +764,82 @@ class CADApplication {
         }
     }
 
-    private async extrudeSketch(): Promise<void> {
+    private findSketchOfElement(elementId: string): { sketch: CreatedSketch, element: SketchElementInfo } | undefined {
+        for (const sketch of this.createdSketches) {
+            const element = sketch.elements.find(e => e.id === elementId);
+            if (element) {
+                return { sketch, element };
+            }
+        }
+        return undefined;
+    }
+
+    private async extrudeFeature(): Promise<void> {
         try {
-            const sketchId = (document.getElementById('extrude-sketch-select') as HTMLSelectElement).value;
             const distance = parseFloat((document.getElementById('extrude-distance') as HTMLInputElement).value);
             
+            if (!this.selectedObjectId) {
+                this.updateLocalStatus('extrude-status', '❌ Please select a sketch or element to extrude', 'error');
+                return;
+            }
+
+            const { id: selectedId, type: selectedType } = this.selectedObjectId;
+
+            let sketchId: string | undefined;
+            let elementId: string | undefined;
+
+            if (selectedType === 'sketch') {
+                sketchId = selectedId;
+            } else if (selectedType === 'element') {
+                const found = this.findSketchOfElement(selectedId);
+                if (found) {
+                    sketchId = found.sketch.sketch_id;
+                    elementId = found.element.id;
+                }
+            } else {
+                this.updateLocalStatus('extrude-status', `❌ Cannot extrude object of type: ${selectedType}`, 'error');
+                return;
+            }
+
             if (!sketchId) {
-                this.updateLocalStatus('extrude-status', '❌ Please select a sketch', 'error');
+                this.updateLocalStatus('extrude-status', '❌ Could not determine sketch for extrusion.', 'error');
                 return;
             }
             
-            this.updateStatus(`Extruding sketch ${sketchId}...`, 'info');
+            this.updateStatus(`Extruding ${elementId ? `element ${elementId}` : `sketch ${sketchId}`}...`, 'info');
             this.updateLocalStatus('extrude-status', 'Extruding...', 'info');
             
-            const response = await this.client.extrudeSketch(sketchId, distance);
+            const response = await this.client.extrudeFeature(sketchId, distance, elementId);
             
             if (response.success && response.data) {
-                // Add to shapes list
                 const shape: CreatedShape = {
                     id: response.data.feature_id,
-                    type: `Extruded Sketch (${sketchId})`,
-                    dimensions: { distance: distance },
+                    type: `Extruded ${selectedType} (${selectedId})`,
+                    dimensions: { distance },
                     visible: true
                 };
                 this.createdShapes.push(shape);
                 
-                // Update geometry in viewport if mesh data is provided
                 if (response.data.mesh_data) {
                     this.renderer.updateGeometry(shape.id, response.data.mesh_data);
                 }
                 
                 // Add to tree view
-                const sketch = this.createdSketches.find(s => s.sketch_id === sketchId);
-                let featureType = 'Extrusion'; // Default
-                if (sketch && sketch.elements.length === 1 && sketch.elements[0].type === 'circle') {
-                    featureType = 'Cylinder';
-                }
-                this.uiManager.addExtrudedFeature(response.data.feature_id, sketchId, featureType);
+                const featureType = 'Extrusion'; // Could be more specific later
+                this.uiManager.addExtrudedFeature(response.data.feature_id, response.data.source_sketch_id, featureType);
 
                 this.updateShapesList();
                 this.updateShapeSelectors();
-                this.updateStatus(`✅ Extruded sketch: ${response.data.feature_id}`, 'success');
+                this.updateStatus(`✅ Extruded object: ${response.data.feature_id}`, 'success');
                 this.updateLocalStatus('extrude-status', `✅ Created: ${response.data.feature_id}`, 'success');
             } else {
-                this.updateStatus(`❌ Failed to extrude sketch`, 'error');
+                this.updateStatus(`❌ Failed to extrude object`, 'error');
                 this.updateLocalStatus('extrude-status', '❌ Failed to extrude', 'error');
             }
             
         } catch (error) {
-            console.error('Failed to extrude sketch:', error);
-            this.updateStatus(`❌ Error extruding sketch: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+            console.error('Failed to extrude feature:', error);
+            this.updateStatus(`❌ Error extruding: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
             this.updateLocalStatus('extrude-status', '❌ Error extruding', 'error');
         }
     }

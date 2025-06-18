@@ -13,7 +13,7 @@ import {
     PlaneVisualizationData,
     SketchVisualizationData,
     SketchElementVisualizationData
-} from './geometry';
+} from '../../../shared/types/geometry';
 
 export interface CADResponse {
     success: boolean;
@@ -107,16 +107,18 @@ export interface AddSketchElementResponse extends CADResponse {
     };
 }
 
-export interface ExtrudeSketchRequest {
+export interface ExtrudeFeatureRequest {
     sketch_id: string;
+    element_id?: string; // If present, extrude only this element from the sketch
     distance: number;
     direction?: 'normal' | 'custom';
 }
 
-export interface ExtrudeSketchResponse extends CADResponse {
+export interface ExtrudeFeatureResponse extends CADResponse {
     data: {
         feature_id: string;
-        sketch_id: string;
+        source_sketch_id: string;
+        source_element_id?: string;
         distance: number;
         direction: string;
         mesh_data?: MeshData;

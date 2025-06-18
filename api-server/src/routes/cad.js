@@ -62,8 +62,9 @@ export default function() {
   // Extrude validation
   const validateExtrude = [
     body('sketch_id').isString().notEmpty().withMessage('Sketch ID is required'),
+    body('element_id').optional().isString().withMessage('Element ID must be a string'),
     body('distance').isFloat({ min: 0.001 }).withMessage('Distance must be a positive number'),
-    body('extrude_type').optional().isIn(['blind', 'symmetric']).withMessage('Invalid extrude type'),
+    body('direction').optional().isIn(['normal', 'custom']).withMessage('Invalid extrude direction'),
     handleValidationErrors,
   ];
 
@@ -205,16 +206,16 @@ export default function() {
 
   /**
    * POST /api/v1/cad/extrude
-   * Extrude a sketch
+   * Extrude a sketch or a sketch element
    */
   router.post('/extrude', validateExtrude, async (req, res, next) => {
     try {
       const sessionId = req.sessionId;
       const extrudeData = req.body;
 
-      logger.info(`Extruding sketch for session ${sessionId}`, { extrudeData });
+      logger.info(`Extruding feature for session ${sessionId}`, { extrudeData });
 
-      const result = await cppBackend.extrudeSketch(sessionId, extrudeData);
+      const result = await cppBackend.extrudeFeature(sessionId, extrudeData);
 
       res.json({
         success: true,
@@ -224,7 +225,7 @@ export default function() {
       });
 
     } catch (error) {
-      next(new ApiError(500, 'Failed to extrude sketch', error.message));
+      next(new ApiError(500, 'Failed to extrude feature', error.message));
     }
   });
 

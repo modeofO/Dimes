@@ -32,6 +32,8 @@ struct ExtrudeParameters {
 class ExtrudeFeature {
 private:
     std::shared_ptr<Sketch> base_sketch_;
+    std::shared_ptr<SketchPlane> sketch_plane_;
+    TopoDS_Face face_to_extrude_;
     ExtrudeParameters parameters_;
     std::string feature_id_;
     TopoDS_Shape result_shape_;
@@ -44,6 +46,7 @@ private:
 
 public:
     ExtrudeFeature(std::shared_ptr<Sketch> sketch, const ExtrudeParameters& params, const std::string& id = "");
+    ExtrudeFeature(const TopoDS_Face& face, std::shared_ptr<SketchPlane> plane, const ExtrudeParameters& params, const std::string& id = "");
     
     // Extrude operations
     bool execute();                      // Execute the extrude operation
