@@ -81,7 +81,7 @@
             border-radius: 5px;
         }
         .control-section h3 {
-            margin-top: 0;
+            margin-top: 5;
             margin-bottom: 10px;
             color: #fff;
             font-size: 14px;
@@ -92,21 +92,45 @@
             display: flex;
             align-items: center;
             margin-bottom: 8px;
-            gap: 8px;
+            gap: 5px;
+            max-width: 10px;
         }
         .control-row label {
-            min-width: 60px;
+            min-width: 50px;
             font-size: 12px;
             color: #ccc;
         }
         .control-row input, .control-row select {
             flex: 1;
-            padding: 4px 8px;
+            padding: 4px 6px;
             background-color: #444;
             border: 1px solid #666;
             border-radius: 3px;
             color: #fff;
             font-size: 12px;
+            max-width: 70px;
+        }
+        .control-row-plane {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            gap: 5px;
+            max-width: 10px;
+        }
+        .control-row-plane label {
+            min-width: 50px;
+            font-size: 12px;
+            color: #ccc;
+        }
+        .control-row-plane input, .control-row-plane select {
+            flex: 1;
+            padding: 4px 6px;
+            background-color: #444;
+            border: 1px solid #666;
+            border-radius: 3px;
+            color: #fff;
+            font-size: 12px;
+            max-width: 40px;
         }
         .btn {
             width: 100%;
@@ -224,13 +248,11 @@
                             <option value="YZ">YZ Plane</option>
                         </select>
                     </div>
-                    <div class="control-row">
-                        <label>Origin X:</label>
-                        <input type="number" id="plane-origin-x" value="0" step="0.1">
-                        <label>Y:</label>
-                        <input type="number" id="plane-origin-y" value="0" step="0.1">
-                        <label>Z:</label>
-                        <input type="number" id="plane-origin-z" value="0" step="0.1">
+                    <div class="control-row-plane">
+                        <label>Origin:</label>
+                        <input type="number" id="plane-origin-x" value="0" step="0.1" title="Origin X">
+                        <input type="number" id="plane-origin-y" value="0" step="0.1" title="Origin Y">
+                        <input type="number" id="plane-origin-z" value="0" step="0.1" title="Origin Z">
                     </div>
                     <button class="btn" id="create-plane">Create Plane</button>
                     <div id="plane-status" class="status-text"></div>
@@ -267,26 +289,23 @@
                     <!-- Line Parameters -->
                     <div id="line-params" class="param-group">
                         <div class="control-row">
-                            <label>Start X:</label>
-                            <input type="number" id="line-x1" value="0" step="0.1">
-                            <label>Y:</label>
-                            <input type="number" id="line-y1" value="0" step="0.1">
+                            <label>Start:</label>
+                            <input type="number" id="line-x1" value="0" step="0.1" title="Start X">
+                            <input type="number" id="line-y1" value="0" step="0.1" title="Start Y">
                         </div>
                         <div class="control-row">
-                            <label>End X:</label>
-                            <input type="number" id="line-x2" value="10" step="0.1">
-                            <label>Y:</label>
-                            <input type="number" id="line-y2" value="0" step="0.1">
+                            <label>End:</label>
+                            <input type="number" id="line-x2" value="10" step="0.1" title="End X">
+                            <input type="number" id="line-y2" value="0" step="0.1" title="End Y">
                         </div>
                     </div>
                     
                     <!-- Circle Parameters -->
                     <div id="circle-params" class="param-group" style="display: none;">
                         <div class="control-row">
-                            <label>Center X:</label>
-                            <input type="number" id="circle-x" value="0" step="0.1">
-                            <label>Y:</label>
-                            <input type="number" id="circle-y" value="0" step="0.1">
+                            <label>Center:</label>
+                            <input type="number" id="circle-x" value="0" step="0.1" title="Center X">
+                            <input type="number" id="circle-y" value="0" step="0.1" title="Center Y">
                         </div>
                         <div class="control-row">
                             <label>Radius:</label>
@@ -323,31 +342,6 @@
                     </div>
                     <button class="btn danger" id="clear-all" style="margin-top: 5px;">Clear All</button>
                     <button class="btn" id="create-test-sketches" style="margin-top: 5px; background-color: #ffc107; color: #000;">🧪 Create Test Sketches</button>
-                </div>
-                
-                <div class="control-section">
-                    <h3>Boolean Operations</h3>
-                    <div class="control-row">
-                        <label>Operation:</label>
-                        <select id="boolean-op">
-                            <option value="union">Union</option>
-                            <option value="cut">Cut</option>
-                            <option value="intersect">Intersect</option>
-                        </select>
-                    </div>
-                    <div class="control-row">
-                        <label>Target:</label>
-                        <select id="target-shape">
-                            <option value="">Select shape</option>
-                        </select>
-                    </div>
-                    <div class="control-row">
-                        <label>Tool:</label>
-                        <select id="tool-shape">
-                            <option value="">Select shape</option>
-                        </select>
-                    </div>
-                    <button class="btn" id="perform-boolean" disabled>Perform Operation</button>
                 </div>
                 
                 <div class="control-section">
