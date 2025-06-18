@@ -2,11 +2,11 @@ import * as THREE from 'three';
 import { MeshManager } from '../mesh/mesh-manager';
 import { CADControls } from '../controls/cad-controls';
 import { VisualizationManager } from './visualization-manager';
-import { MeshData } from '../types/geometry';
 import { 
     PlaneVisualizationData, 
     SketchVisualizationData, 
-    SketchElementVisualizationData 
+    SketchElementVisualizationData,
+    MeshData
 } from '../../../shared/types/geometry';
 
 export class CADRenderer {
@@ -17,6 +17,10 @@ export class CADRenderer {
     private meshManager!: MeshManager;
     private visualizationManager!: VisualizationManager;
     private container: HTMLElement;
+    private raycaster = new THREE.Raycaster();
+    private pointerDownPos = new THREE.Vector2();
+    private selectionBox: THREE.BoxHelper | null = null;
+    public onObjectSelected: ((id: string | null, type: string | null) => void) | null = null;
     
     constructor(container: HTMLElement) {
         this.container = container;
@@ -67,6 +71,9 @@ export class CADRenderer {
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         
         this.container.appendChild(this.renderer.domElement);
+
+        this.renderer.domElement.addEventListener('pointerdown', this.onPointerDown);
+        this.renderer.domElement.addEventListener('pointerup', this.onPointerUp);
     }
     
     private setupControls(): void {
@@ -108,7 +115,75 @@ export class CADRenderer {
         this.meshManager.updateMesh(modelId, meshData);
     }
 
+    public setHighlight(id: string | null): void {
+        // Clear previous highlight
+        if (this.selectionBox) {
+            this.scene.remove(this.selectionBox);
+            this.selectionBox.dispose();
+            this.selectionBox = null;
+        }
+
+        if (id === null) {
+            return;
+        }
+
+        // Find and highlight new object
+        const objectToHighlight = this.scene.getObjectByName(id);
+        if (objectToHighlight) {
+            this.selectionBox = new THREE.BoxHelper(objectToHighlight, 0x00ff00);
+            this.scene.add(this.selectionBox);
+        }
+    }
+
+    private onPointerDown = (event: PointerEvent): void => {
+        this.pointerDownPos.set(event.clientX, event.clientY);
+    }
+
+    private onPointerUp = (event: PointerEvent): void => {
+        const pointerUpPos = new THREE.Vector2(event.clientX, event.clientY);
+        if (this.pointerDownPos.distanceTo(pointerUpPos) > 2) {
+            return; // It was a drag, not a click
+        }
+        this.performRaycasting(event);
+    }
+
+    private performRaycasting(event: PointerEvent): void {
+        const rect = this.renderer.domElement.getBoundingClientRect();
+        const mouse = new THREE.Vector2();
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+        this.raycaster.setFromCamera(mouse, this.camera);
+        const intersects = this.raycaster.intersectObjects(this.scene.children, true);
+
+        let selectedId: string | null = null;
+        let selectedType: string | null = null;
+
+        if (intersects.length > 0) {
+            let clickedObject = intersects[0].object;
+            // Traverse up to find the parent group with a meaningful name
+            while (clickedObject.parent && !clickedObject.name) {
+                clickedObject = clickedObject.parent;
+            }
+
+            if (clickedObject.name) {
+                selectedId = clickedObject.name;
+                // This is a bit of a hack to determine the type
+                selectedType = selectedId.includes('Extrude') ? 'feature' 
+                             : selectedId.includes('Sketch') ? 'sketch' 
+                             : selectedId.includes('Plane') ? 'plane' 
+                             : 'element';
+                console.log(`Clicked object ID: ${selectedId}`);
+            }
+        }
+        
+        if (this.onObjectSelected) {
+            this.onObjectSelected(selectedId, selectedType);
+        }
+    }
+
     public clearAllGeometry(): void {
+        this.setHighlight(null);
         this.meshManager.clearAllMeshes();
         this.visualizationManager.clearAll();
     }
@@ -157,6 +232,9 @@ export class CADRenderer {
         this.visualizationManager.dispose();
         this.renderer.dispose();
         
+        this.renderer.domElement.removeEventListener('pointerdown', this.onPointerDown);
+        this.renderer.domElement.removeEventListener('pointerup', this.onPointerUp);
+
         if (this.renderer.domElement.parentNode) {
             this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
         }

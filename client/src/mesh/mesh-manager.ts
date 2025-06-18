@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MeshData } from '../types/geometry';
+import { MeshData } from '../../../shared/types/geometry';
 
 export class MeshManager {
     private scene: THREE.Scene;
@@ -55,6 +55,8 @@ export class MeshManager {
         // Create mesh with default material
         const material = this.materialCache.get('metal') || new THREE.MeshBasicMaterial();
         const mesh = new THREE.Mesh(geometry, material);
+        
+        mesh.name = id;
         
         // Enable shadows
         mesh.castShadow = true;
@@ -170,7 +172,7 @@ export class MeshManager {
             return false;
         }
         
-        if (meshData.faces && meshData.faces.some(i => i >= meshData.vertices.length / 3)) {
+        if (meshData.faces && meshData.faces.some((i: number) => i >= meshData.vertices.length / 3)) {
             return false;
         }
         

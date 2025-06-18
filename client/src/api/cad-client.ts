@@ -11,8 +11,12 @@ import {
     ExtrudeSketchRequest,
     ExtrudeSketchResponse
 } from '../types/api';
-import { MeshData, ExportFormat, PrimitiveType, PlaneType, SketchElementType } from '../types/geometry';
 import { 
+    MeshData, 
+    ExportFormat, 
+    PrimitiveType, 
+    PlaneType, 
+    SketchElementType,
     PlaneVisualizationData, 
     SketchVisualizationData, 
     SketchElementVisualizationData 

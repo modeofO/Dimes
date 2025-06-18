@@ -38,6 +38,7 @@ class CADApplication {
     private createdShapes: CreatedShape[] = [];
     private createdPlanes: CreatedPlane[] = [];
     private createdSketches: CreatedSketch[] = [];
+    private selectedObjectId: { id: string; type: string; } | null = null;
 
     constructor() {
         this.sessionId = this.generateSessionId();
@@ -55,7 +56,7 @@ class CADApplication {
             
             // Initialize UI Manager
             this.updateStatus('Initializing UI...', 'info');
-            this.uiManager = new UIManager('scene-tree');
+            this.uiManager = new UIManager('scene-tree', this.handleSelection);
             
             // Initialize CAD client (OCCT server connection)
             this.updateStatus('Connecting to CAD server...', 'info');
@@ -87,6 +88,7 @@ class CADApplication {
         
         // Create renderer
         this.renderer = new CADRenderer(viewport);
+        this.renderer.onObjectSelected = this.handleSelection;
         
         // Clear any existing geometry (including fallback cubes)
         this.renderer.clearAllGeometry();
@@ -560,6 +562,20 @@ class CADApplication {
         }
     }
 
+    private handleSelection = (id: string | null, type: string | null): void => {
+        const currentId = this.selectedObjectId ? this.selectedObjectId.id : null;
+        if (currentId === id) return;
+
+        console.log(`Selection handled: id=${id}, type=${type}`);
+        this.selectedObjectId = id && type ? { id, type } : null;
+
+        // Update renderer highlight
+        this.renderer.setHighlight(id);
+
+        // Update UI selection
+        this.uiManager.setSelected(id, type);
+    }
+
     private async sendAiInstruction(): Promise<void> {
         const instructionInput = document.getElementById('ai-instruction') as HTMLInputElement;
         const instruction = instructionInput.value;
@@ -839,9 +855,6 @@ class CADApplication {
         }
     }
 
-    // Removed updateExtrudeSketchSelect - it was causing circular updates
-    // Now both dropdowns are updated directly by updateSketchSelectors()
-    
     // Temporary method to create test sketches for UI debugging
     private createTestSketches(): void {
         console.log('🧪 Creating test sketches for UI debugging...');
@@ -925,4 +938,4 @@ window.addEventListener('beforeunload', () => {
     if (app && app.dispose) {
         app.dispose();
     }
-}); 
+});
