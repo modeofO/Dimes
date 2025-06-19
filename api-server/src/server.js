@@ -5,7 +5,6 @@ import compression from 'compression';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
-import { WebSocketServer } from 'ws';
 import dotenv from 'dotenv';
 // Removed all Daydreams and AI SDK related imports
 
@@ -16,63 +15,61 @@ import healthRoutes from './routes/health.js';
 import { WebSocketManager } from './services/websocketManager.js';
 import { CppBackendClient } from './services/cppBackendClient.js';
 import { logger } from './utils/logger.js';
+import { initializeAgent } from './agent/index.ts';
 
 // Load environment variables
 dotenv.config();
 
+// Basic security and performance middleware
 const app = express();
-const server = createServer(app);
-const port = process.env.PORT || 3000;
-
-// CORS configuration
+app.use(helmet());
 app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-ID'],
+}));
+app.use(compression());
+
+// Request logging
+app.use(morgan('dev', {
+  stream: { write: (message) => logger.info(message.trim()) },
 }));
 
-// Initialize services
-const cppBackend = new CppBackendClient();
-const wsManager = new WebSocketManager(server, cppBackend);
-
-// All agent creation code has been removed.
-
-// Security middleware (moved up for proper ordering)
-app.use(helmet());
-
 // Rate limiting
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.API_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
-  max: parseInt(process.env.API_RATE_LIMIT_MAX) || 100,
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
   standardHeaders: true,
   legacyHeaders: false,
 });
-app.use(limiter);
+app.use('/api/', apiLimiter);
 
-// General middleware
-app.use(compression());
-app.use(morgan('combined'));
+// JSON body parser with size limit
 app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Create HTTP server
+const server = createServer(app);
 
-// Session validation middleware for CAD routes
-app.use('/api/v1/cad', validateSession);
+// Initialize WebSocketManager with the HTTP server
+const webSocketManager = new WebSocketManager(server);
+const agent = await initializeAgent(webSocketManager);
 
-// Routes
+// Session validation middleware
+app.use(validateSession);
+
+// API Routes
+app.use('/api/v1/cad', cadRoutes(webSocketManager));
 app.use('/api/v1/health', healthRoutes);
-app.use('/api/v1/cad', cadRoutes()); // No agent passed
 
-// Error handling
+// Not found and error handling middleware
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-// Start server
+// Start the server
+const port = process.env.PORT || 3000;
 server.listen(port, () => {
   logger.info(`🚀 Dimes CAD API Server running on port ${port}`);
   logger.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  logger.info(`🔗 C++ Backend: ${process.env.CPP_BACKEND_HOST}:${process.env.CPP_BACKEND_PORT}`);
+  logger.info(`🔗 C++ Backend: ${process.env.CPP_BACKEND_URL || '127.0.0.1:8080'}`);
 });
 
 // Graceful shutdown

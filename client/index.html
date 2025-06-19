@@ -1,355 +1,160 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CAD Engine Client</title>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dimes CAD</title>
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: Arial, sans-serif;
-            background-color: #1a1a1a;
-            color: #ffffff;
-        }
-        #app {
-            width: 100vw;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        #cad-viewport {
-            flex: 1;
-            position: relative;
-            background-color: #2a2a2a;
-            display: flex;
-        }
-        #tree-view {
-            width: 250px;
-            background-color: #2a2a2a;
-            border-right: 1px solid #555;
-            padding: 15px;
-            overflow-y: auto;
-            box-sizing: border-box;
-            color: #ccc;
-        }
-        #tree-view h3 {
-            margin-top: 0;
-            color: #fff;
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        #tree-view ul {
-            padding-left: 15px;
-            list-style-type: none;
-        }
-        #tree-view li {
-            padding: 3px 0;
-            cursor: pointer;
-        }
-        #tree-view li:hover {
-            color: #fff;
-        }
-        #tree-view li.selected {
-            background-color: #007bff;
-            color: #fff;
-            border-radius: 2px;
-        }
-        #status {
-            padding: 10px;
-            background-color: #333;
-            border-bottom: 1px solid #555;
-            font-size: 14px;
-        }
-        #control-panel {
-            width: 300px;
-            background-color: #2a2a2a;
-            border-left: 1px solid #555;
-            padding: 15px;
-            overflow-y: auto;
-            box-sizing: border-box;
-        }
-        #viewport-3d {
-            flex: 1;
-            position: relative;
-        }
-        .control-section {
-            margin-bottom: 20px;
-            padding: 15px;
-            background-color: #333;
-            border-radius: 5px;
-        }
-        .control-section h3 {
-            margin-top: 5;
-            margin-bottom: 10px;
-            color: #fff;
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        .control-row {
-            display: flex;
-            align-items: center;
-            margin-bottom: 8px;
-            gap: 5px;
-            max-width: 10px;
-        }
-        .control-row label {
-            min-width: 50px;
-            font-size: 12px;
-            color: #ccc;
-        }
-        .control-row input, .control-row select {
-            flex: 1;
-            padding: 4px 6px;
-            background-color: #444;
-            border: 1px solid #666;
-            border-radius: 3px;
-            color: #fff;
-            font-size: 12px;
-            max-width: 70px;
-        }
-        .control-row-plane {
-            display: flex;
-            align-items: center;
-            margin-bottom: 8px;
-            gap: 5px;
-            max-width: 10px;
-        }
-        .control-row-plane label {
-            min-width: 50px;
-            font-size: 12px;
-            color: #ccc;
-        }
-        .control-row-plane input, .control-row-plane select {
-            flex: 1;
-            padding: 4px 6px;
-            background-color: #444;
-            border: 1px solid #666;
-            border-radius: 3px;
-            color: #fff;
-            font-size: 12px;
-            max-width: 40px;
-        }
-        .btn {
-            width: 100%;
-            padding: 8px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 12px;
-            margin-top: 10px;
-        }
-        .btn:hover {
-            background-color: #0056b3;
-        }
-        .btn:disabled {
-            background-color: #555;
-            cursor: not-allowed;
-        }
-        .btn.danger {
-            background-color: #dc3545;
-        }
-        .btn.danger:hover {
-            background-color: #c82333;
-        }
-        .shape-list {
-            max-height: 150px;
-            overflow-y: auto;
-            background-color: #444;
-            border: 1px solid #666;
-            border-radius: 3px;
-            padding: 5px;
-            margin-top: 10px;
-        }
-        .shape-item {
-            padding: 5px;
-            margin: 2px 0;
-            background-color: #555;
-            border-radius: 2px;
-            font-size: 11px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .shape-item.selected {
-            background-color: #007bff;
-        }
-        .shape-item button {
-            padding: 2px 6px;
-            background-color: #dc3545;
-            color: white;
-            border: none;
-            border-radius: 2px;
-            cursor: pointer;
-            font-size: 10px;
-        }
-        .loading-placeholder {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-        }
-        
-        .status-text {
-            font-size: 11px;
-            padding: 4px;
-            margin-top: 4px;
-            border-radius: 3px;
-            min-height: 16px;
-        }
-        
-        .status-text.success {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        
-        .status-text.error {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        
-        .status-text.info {
-            background-color: #d1ecf1;
-            color: #0c5460;
-            border: 1px solid #bee5eb;
-        }
+      html, body {
+        height: 100%;
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        background-color: #f0f2f5;
+        overflow: hidden;
+      }
+      #app-container {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+      #main-container {
+        display: flex;
+        flex-grow: 1;
+        overflow: hidden;
+      }
+      .sidebar {
+        width: 250px;
+        flex-shrink: 0;
+        background-color: #fff;
+        border-right: 1px solid #d9d9d9;
+        padding: 10px;
+        overflow-y: auto;
+      }
+      .viewport {
+        flex-grow: 1;
+        position: relative;
+        background-color: #e0e0e0;
+      }
+      .chat-container {
+        width: 350px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        border-left: 1px solid #d9d9d9;
+        background-color: #f9f9f9;
+      }
+      .control-panel {
+        width: 280px;
+        flex-shrink: 0;
+        background-color: #fff;
+        border-left: 1px solid #d9d9d9;
+        padding: 10px;
+        overflow-y: auto;
+      }
+      .status-bar {
+        height: 24px;
+        line-height: 24px;
+        padding: 0 10px;
+        background-color: #007bff;
+        color: white;
+        font-size: 12px;
+      }
+      .loading-placeholder {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+        color: #666;
+      }
+      .chat-header {
+        padding: 10px;
+        font-weight: bold;
+        background-color: #f1f1f1;
+        border-bottom: 1px solid #ccc;
+        text-align: center;
+        color: #333;
+      }
+      .chat-messages {
+        flex-grow: 1;
+        padding: 10px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .chat-message {
+        display: flex;
+        max-width: 80%;
+      }
+      .user-message {
+        align-self: flex-end;
+      }
+      .agent-message {
+        align-self: flex-start;
+      }
+      .message-content {
+        padding: 8px 12px;
+        border-radius: 10px;
+        color: black;
+      }
+      .user-message .message-content {
+        background-color: #007bff;
+        color: white;
+      }
+      .agent-message .message-content {
+        background-color: #e9e9eb;
+      }
+      .chat-input-area {
+        display: flex;
+        padding: 10px;
+        border-top: 1px solid #ccc;
+      }
+      .chat-input {
+        flex-grow: 1;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        padding: 8px;
+        font-size: 14px;
+      }
+      .chat-send {
+        margin-left: 10px;
+        padding: 8px 12px;
+        border: none;
+        background-color: #007bff;
+        color: white;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+      .chat-send:hover {
+        background-color: #0056b3;
+      }
     </style>
 </head>
 <body>
-    <div id="app">
-        <div id="status">Initializing CAD Engine...</div>
-        <div id="cad-viewport">
-            <div id="tree-view">
+    <div id="app-container">
+        <div id="main-container">
+            <div class="sidebar">
                 <h3>Scene</h3>
                 <div id="scene-tree"></div>
             </div>
-            <div id="viewport-3d">
+            <div id="viewport-3d" class="viewport">
                 <div class="loading-placeholder">
-                    <h2>CAD Engine</h2>
-                    <p>Three.js viewport loading...</p>
+                    <h2>Dimes CAD</h2>
+                    <p>Viewport loading...</p>
                 </div>
             </div>
-            <div id="control-panel">
-                <!-- Sketch-Based Modeling Workflow -->
-                <div class="control-section">
-                    <h3>1. Create Sketch Plane</h3>
-                    <div class="control-row">
-                        <label>Plane:</label>
-                        <select id="plane-type">
-                            <option value="XY">XY Plane</option>
-                            <option value="XZ">XZ Plane</option>
-                            <option value="YZ">YZ Plane</option>
-                        </select>
-                    </div>
-                    <div class="control-row-plane">
-                        <label>Origin:</label>
-                        <input type="number" id="plane-origin-x" value="0" step="0.1" title="Origin X">
-                        <input type="number" id="plane-origin-y" value="0" step="0.1" title="Origin Y">
-                        <input type="number" id="plane-origin-z" value="0" step="0.1" title="Origin Z">
-                    </div>
-                    <button class="btn" id="create-plane">Create Plane</button>
-                    <div id="plane-status" class="status-text"></div>
-                </div>
-
-                <div class="control-section">
-                    <h3>2. Create Sketch</h3>
-                    <div class="control-row">
-                        <label>Plane:</label>
-                        <select id="sketch-plane-select">
-                            <option value="">Select a plane</option>
-                        </select>
-                    </div>
-                    <button class="btn" id="create-sketch" disabled>Create Sketch</button>
-                    <div id="sketch-status" class="status-text"></div>
-                </div>
-
-                <div class="control-section">
-                    <h3>3. Add Sketch Elements</h3>
-                    <div class="control-row">
-                        <label>Sketch:</label>
-                        <select id="sketch-select">
-                            <option value="">Select a sketch</option>
-                        </select>
-                    </div>
-                    <div class="control-row">
-                        <label>Element:</label>
-                        <select id="element-type">
-                            <option value="line">Line</option>
-                            <option value="circle">Circle</option>
-                        </select>
-                    </div>
-                    
-                    <!-- Line Parameters -->
-                    <div id="line-params" class="param-group">
-                        <div class="control-row">
-                            <label>Start:</label>
-                            <input type="number" id="line-x1" value="0" step="0.1" title="Start X">
-                            <input type="number" id="line-y1" value="0" step="0.1" title="Start Y">
-                        </div>
-                        <div class="control-row">
-                            <label>End:</label>
-                            <input type="number" id="line-x2" value="10" step="0.1" title="End X">
-                            <input type="number" id="line-y2" value="0" step="0.1" title="End Y">
-                        </div>
-                    </div>
-                    
-                    <!-- Circle Parameters -->
-                    <div id="circle-params" class="param-group" style="display: none;">
-                        <div class="control-row">
-                            <label>Center:</label>
-                            <input type="number" id="circle-x" value="0" step="0.1" title="Center X">
-                            <input type="number" id="circle-y" value="0" step="0.1" title="Center Y">
-                        </div>
-                        <div class="control-row">
-                            <label>Radius:</label>
-                            <input type="number" id="circle-radius" value="5" step="0.1">
-                        </div>
-                    </div>
-                    
-                    <button class="btn" id="add-element" disabled>Add Element</button>
-                    <div id="element-status" class="status-text"></div>
-                </div>
-
-                <div class="control-section">
-                    <h3>4. Extrude Feature</h3>
-                    <p style="font-size: 11px; color: #ccc; margin-top: -5px; margin-bottom: 10px;">Select a sketch or element in the 3D view to extrude.</p>
-                    <div class="control-row">
-                        <label>Distance:</label>
-                        <input type="number" id="extrude-distance" value="10" step="0.1">
-                    </div>
-                    <button class="btn" id="extrude-feature">Extrude</button>
-                    <div id="extrude-status" class="status-text"></div>
-                </div>
-                
-                <div class="control-section">
-                    <h3>Shapes</h3>
-                    <div id="shape-list" class="shape-list">
-                        <div style="text-align: center; color: #888; font-size: 11px; padding: 10px;">
-                            No shapes created yet
-                        </div>
-                    </div>
-                    <button class="btn danger" id="clear-all" style="margin-top: 5px;">Clear All</button>
-                    <button class="btn" id="create-test-sketches" style="margin-top: 5px; background-color: #ffc107; color: #000;">🧪 Create Test Sketches</button>
-                </div>
-                
-                <div class="control-section">
-                    <h3>View Controls</h3>
-                    <div style="font-size: 11px; color: #ccc; line-height: 1.4;">
-                        <div>Ctrl+1: Front view</div>
-                        <div>Ctrl+2: Top view</div>
-                        <div>Ctrl+3: Right view</div>
-                        <div>Ctrl+0: Isometric view</div>
-                        <div style="margin-top: 8px;">Mouse: Orbit, Pan, Zoom</div>
-                    </div>
-                </div>
+            <div id="chat-container" class="chat-container">
+                <!-- Chat UI will be injected here by ChatUI class -->
             </div>
+            <div id="control-panel" class="control-panel">
+                 <h3>Controls</h3>
+                 <!-- All other controls will be here -->
+            </div>
+        </div>
+        <div id="status-bar" class="status-bar">
+            <span id="status">Initializing...</span>
         </div>
     </div>
     <script type="module" src="/src/main.ts"></script>

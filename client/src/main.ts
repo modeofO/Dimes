@@ -2,6 +2,8 @@ import { CADRenderer } from './renderer/cad-renderer';
 import { CADClient } from './api/cad-client';
 import { MeshData } from '../../shared/types/geometry';
 import { UIManager } from './ui/ui-manager';
+import { AgentManager } from './agent/agent-manager';
+import { ChatUI } from './ui/chat-ui';
 
 console.log('CAD Engine starting...');
 
@@ -33,6 +35,8 @@ class CADApplication {
     private renderer!: CADRenderer;
     private client!: CADClient;
     private uiManager!: UIManager;
+    private agentManager!: AgentManager;
+    private chatUI!: ChatUI;
     private sessionId: string;
     private statusElement: HTMLElement | null;
     private createdShapes: CreatedShape[] = [];
@@ -57,6 +61,10 @@ class CADApplication {
             // Initialize UI Manager
             this.updateStatus('Initializing UI...', 'info');
             this.uiManager = new UIManager('scene-tree', this.handleSelection);
+            
+            // Initialize Agent and Chat UI
+            this.updateStatus('Initializing Agent...', 'info');
+            this.initializeAgent();
             
             // Initialize CAD client (OCCT server connection)
             this.updateStatus('Connecting to CAD server...', 'info');
@@ -94,6 +102,24 @@ class CADApplication {
         this.renderer.clearAllGeometry();
         
         console.log('✅ Three.js renderer initialized');
+    }
+
+    private initializeAgent(): void {
+        const agentServerUrl = `ws://${window.location.hostname}:3000/ws`;
+        this.agentManager = new AgentManager(agentServerUrl);
+
+        this.chatUI = new ChatUI('chat-container', (message) => {
+            this.agentManager.sendMessage('agent_message', message);
+        });
+
+        this.agentManager.onMessage((message) => {
+            if (message.type === 'agent_message' && message.data && message.data.content) {
+                this.chatUI.addMessage('agent', message.data.content);
+            }
+            // TODO: Handle other message types from the agent if necessary
+        });
+
+        console.log('✅ Agent Manager and Chat UI initialized');
     }
 
     private async initializeClient(): Promise<void> {

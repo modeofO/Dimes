@@ -11,6 +11,7 @@ export class WebSocketManager {
     this.cppBackend = cppBackendClient;
     this.clients = new Map(); // sessionId -> WebSocket
     this.heartbeatInterval = parseInt(process.env.WS_HEARTBEAT_INTERVAL) || 30000;
+    this.onMessageCallback = null; // Callback for incoming messages
     
     this.setupWebSocketServer();
     this.startHeartbeat();
@@ -78,6 +79,14 @@ export class WebSocketManager {
 
       logger.debug(`WebSocket message received from ${ws.sessionId}:`, { type, payload });
 
+      // If a callback is registered, call it
+      if (this.onMessageCallback) {
+        this.onMessageCallback(ws.sessionId, message);
+        if (type === 'agent_message') {
+          return;
+        }
+      }
+
       switch (type) {
         case 'ping':
           this.sendToClient(ws.sessionId, { type: 'pong', timestamp: Date.now() });
@@ -123,6 +132,16 @@ export class WebSocketManager {
 
         case 'request_status':
           this.sendBackendStatus(ws.sessionId);
+          break;
+
+        case 'register_session':
+          const oldId = ws.sessionId;
+          const newId = payload.sessionId;
+          if (oldId !== newId && !this.clients.has(newId)) {
+            this.clients.set(newId, this.clients.get(oldId));
+            this.clients.delete(oldId);
+            logger.info(`Re-registered client ${oldId} as ${newId}`);
+          }
           break;
 
         default:
@@ -322,5 +341,13 @@ export class WebSocketManager {
     });
     this.clients.clear();
     this.wss.close();
+  }
+
+  /**
+   * Registers a callback function to be invoked when a message is received.
+   * @param {Function} callback - The function to call with (sessionId, message).
+   */
+  onMessage(callback) {
+    this.onMessageCallback = callback;
   }
 } 

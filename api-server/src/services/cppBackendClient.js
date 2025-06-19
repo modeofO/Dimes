@@ -197,7 +197,7 @@ export class CppBackendClient {
         session_id: sessionId,
         sketch_id: elementData.sketch_id,
         element_type: elementData.element_type,
-        ...elementData.parameters
+        parameters: elementData.parameters
       };
       
       console.log('📋 Request body object:', requestBody);
