@@ -13,7 +13,7 @@ import {
     PlaneVisualizationData,
     SketchVisualizationData,
     SketchElementVisualizationData
-} from '../../../shared/types/geometry';
+} from '../../../../../shared/types/geometry';
 
 export interface CADResponse {
     success: boolean;

@@ -7,7 +7,7 @@ import {
     SketchVisualizationData, 
     SketchElementVisualizationData,
     MeshData
-} from '../../../shared/types/geometry';
+} from '../../../../../shared/types/geometry';
 
 export class CADRenderer {
     private scene!: THREE.Scene;

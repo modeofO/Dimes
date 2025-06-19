@@ -12,7 +12,7 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
-    "@daydreamsai/core": "^0.0.81",
+    "@daydreamsai/core": "^0.3.8",
     "@modelcontextprotocol/sdk": "^1.12.1",
     "compression": "^1.7.4",
     "cors": "^2.8.5",

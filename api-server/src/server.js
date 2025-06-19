@@ -24,7 +24,10 @@ dotenv.config();
 const app = express();
 app.use(helmet());
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: [
+    process.env.CORS_ORIGIN || 'http://localhost:3001',
+    'http://localhost:3001',  // Support new Next.js client
+  ],
   credentials: true,
 }));
 app.use(compression());

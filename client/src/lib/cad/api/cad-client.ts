@@ -20,7 +20,7 @@ import {
     PlaneVisualizationData, 
     SketchVisualizationData, 
     SketchElementVisualizationData 
-} from '../../../shared/types/geometry';
+} from '../../../../../shared/types/geometry';
 
 export class CADClient {
     private baseUrl: string;
