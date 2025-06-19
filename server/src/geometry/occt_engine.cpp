@@ -4,9 +4,6 @@
 #include "geometry/extrude_feature.h"
 
 // OCCT includes
-#include <BRepPrimAPI_MakeBox.hxx>
-#include <BRepPrimAPI_MakeCylinder.hxx>
-#include <BRepPrimAPI_MakeSphere.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Common.hxx>
@@ -42,82 +39,6 @@ OCCTEngine::OCCTEngine() {
 
 OCCTEngine::~OCCTEngine() {
     clearAll();
-}
-
-std::string OCCTEngine::createBox(const BoxParameters& params) {
-    std::cout << "📦 OCCT createBox called: " << params.width << "x" << params.height << "x" << params.depth << std::endl;
-    std::cout.flush();
-    
-    try {
-        gp_Pnt corner(params.position.x, params.position.y, params.position.z);
-        BRepPrimAPI_MakeBox boxMaker(corner, params.width, params.height, params.depth);
-        
-        TopoDS_Shape box = boxMaker.Shape();
-        if (!validateShape(box)) {
-            std::cout << "❌ Box shape validation failed!" << std::endl;
-            std::cout.flush();
-            return "";
-        }
-        
-        std::string shape_id = generateShapeId();
-        shapes_[shape_id] = box;
-        
-        std::cout << "✅ Box created successfully with ID: " << shape_id << std::endl;
-        std::cout.flush();
-        
-        return shape_id;
-    } catch (const Standard_Failure& e) {
-        std::cerr << "OCCT Error creating box: " << e.GetMessageString() << std::endl;
-        return "";
-    }
-}
-
-std::string OCCTEngine::createCylinder(double radius, double height, const Vector3d& position) {
-    std::cout << "🛢️ OCCT createCylinder called: radius=" << radius << ", height=" << height << std::endl;
-    std::cout.flush();
-    
-    try {
-        gp_Ax2 axis(gp_Pnt(position.x, position.y, position.z), gp_Dir(0, 0, 1));
-        BRepPrimAPI_MakeCylinder cylinderMaker(axis, radius, height);
-        
-        TopoDS_Shape cylinder = cylinderMaker.Shape();
-        if (!validateShape(cylinder)) {
-            std::cout << "❌ Cylinder shape validation failed!" << std::endl;
-            std::cout.flush();
-            return "";
-        }
-        
-        std::string shape_id = generateShapeId();
-        shapes_[shape_id] = cylinder;
-        
-        std::cout << "✅ Cylinder created successfully with ID: " << shape_id << std::endl;
-        std::cout.flush();
-        
-        return shape_id;
-    } catch (const Standard_Failure& e) {
-        std::cerr << "OCCT Error creating cylinder: " << e.GetMessageString() << std::endl;
-        return "";
-    }
-}
-
-std::string OCCTEngine::createSphere(double radius, const Vector3d& position) {
-    try {
-        gp_Pnt center(position.x, position.y, position.z);
-        BRepPrimAPI_MakeSphere sphereMaker(center, radius);
-        
-        TopoDS_Shape sphere = sphereMaker.Shape();
-        if (!validateShape(sphere)) {
-            return "";
-        }
-        
-        std::string shape_id = generateShapeId();
-        shapes_[shape_id] = sphere;
-        
-        return shape_id;
-    } catch (const Standard_Failure& e) {
-        std::cerr << "OCCT Error creating sphere: " << e.GetMessageString() << std::endl;
-        return "";
-    }
 }
 
 bool OCCTEngine::unionShapes(const std::string& shape1_id, const std::string& shape2_id, const std::string& result_id) {

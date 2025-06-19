@@ -21,8 +21,6 @@ export interface BoundingBox {
     max: [number, number, number];
 }
 
-export type PrimitiveType = 'box' | 'cylinder' | 'sphere' | 'cone';
-
 // Sketch-based modeling types
 export type PlaneType = 'XY' | 'XZ' | 'YZ';
 export type SketchElementType = 'line' | 'circle' | 'arc';
@@ -69,24 +67,6 @@ export interface SketchElementVisualizationData {
         center_y?: number;
         radius?: number;
     };
-}
-
-export interface BoxParameters {
-    width: number;
-    height: number;
-    depth: number;
-    position: Vector3d;
-}
-
-export interface CylinderParameters {
-    radius: number;
-    height: number;
-    position: Vector3d;
-}
-
-export interface SphereParameters {
-    radius: number;
-    position: Vector3d;
 }
 
 export interface SketchPlane {

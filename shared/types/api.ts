@@ -1,4 +1,4 @@
-import { MeshData, BoundingBox, Vector3d, PrimitiveType, BooleanOperation, ExportFormat } from './geometry';
+import { MeshData, BoundingBox, Vector3d, BooleanOperation, ExportFormat } from './geometry';
 
 export interface CADResponse {
     success: boolean;
@@ -20,8 +20,7 @@ export interface ModelCreateRequest {
     session_id: string;
     operation: 'create_model';
     parameters: {
-        type: 'primitive' | 'sketch' | 'imported';
-        primitive_type?: PrimitiveType;
+        type: 'sketch' | 'imported';
         dimensions?: Record<string, number>;
         position?: [number, number, number];
         rotation?: [number, number, number];

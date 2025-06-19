@@ -23,9 +23,16 @@ const goalContext = context({
     Steps Taken:
     ${memory.steps.join('\n') || 'None yet.'}
   `,
-  instructions: `You are an expert CAD designer. Your task is to achieve the user's goal by using the available tools from the CAD MCP server. Plan your steps and execute them one by one. Think about the geometry and positioning required for each part.
+  instructions: `You are an expert CAD designer specializing in sketch-based parametric modeling. Your task is to achieve the user's goal by using the available sketch-based modeling tools from the CAD MCP server. Plan your steps and execute them one by one. Think about the geometry and positioning required for each part.
   
-  When using the create_primitive tool, remember the default dimensions if not specified. For example, a box might be 10x10x10. You need to be explicit with dimensions to build complex objects.
+  Your workflow should always follow these steps:
+  1. Create a sketch plane (XY, XZ, or YZ)
+  2. Create a sketch on that plane
+  3. Add 2D elements (lines, circles) to the sketch
+  4. Extrude the sketch to create 3D geometry
+  5. Use boolean operations to combine multiple parts if needed
+  
+  Remember that all 3D geometry must be created through this sketch-based workflow. No primitive shapes are available.
   `,
 });
 
@@ -57,7 +64,7 @@ async function main() {
 
   console.log('Agent started. Executing goal...');
 
-  const goalDescription = 'Build a simple table. It should have a rectangular top and four cylindrical legs positioned correctly at the corners.';
+  const goalDescription = 'Build a simple rectangular block. Create a sketch on the XY plane with a rectangle, then extrude it to create a 3D block.';
   
   await agent.run({
     context: goalContext,

@@ -119,10 +119,6 @@ OCCTEngine instance per session
 │   ├── addLineToSketch(sketch_id, x1, y1, x2, y2) → bool
 │   ├── addCircleToSketch(sketch_id, x, y, radius) → bool
 │   └── extrudeSketch(sketch_id, distance, direction) → feature_id
-├── PRIMITIVE MODELING (Legacy):
-│   ├── createBox(dimensions, position) → shape_id
-│   ├── createCylinder(radius, height, position) → shape_id
-│   └── createSphere(radius, position) → shape_id
 ├── BOOLEAN OPERATIONS:
 │   ├── unionShapes(shape1, shape2, result) → bool
 │   ├── cutShapes(shape1, shape2, result) → bool
@@ -138,7 +134,7 @@ OCCTEngine instance per session
 - Wraps OpenCASCADE Technology (OCCT) operations
 - Stores sketch planes, sketches, and 3D shapes with generated IDs
 - Provides tessellation for 3D visualization
-- **Focus: Professional sketch-based CAD modeling**
+- **Focus: Professional sketch-based CAD modeling only**
 
 ### **New Sketch System Classes**
 ```

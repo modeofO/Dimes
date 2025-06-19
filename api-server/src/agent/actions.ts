@@ -37,11 +37,10 @@ function sendVisualizationData(agent: AnyAgent, agentSessionId: string, data: an
 
 const createModelAction = action({
   name: "createModel",
-  description: "Create a new 3D model (primitive, sketch-based, or imported).",
+  description: "Create a new 3D model (sketch-based or imported).",
   schema: z.object({
-    type: z.enum(['primitive', 'sketch', 'imported']).describe("The type of model to create."),
-    primitive_type: z.enum(['box', 'cylinder', 'sphere', 'cone']).optional().describe("The type of primitive to create."),
-    dimensions: z.object({}).passthrough().optional().describe("An object representing the dimensions (e.g., { x: 10, y: 5, z: 2 } or { radius: 5, height: 10 })."),
+    type: z.enum(['sketch', 'imported']).describe("The type of model to create."),
+    dimensions: z.object({}).passthrough().optional().describe("An object representing the dimensions."),
     position: z.array(z.number()).length(3).optional().describe("An array of 3 numbers for the [x, y, z] position."),
     rotation: z.array(z.number()).length(3).optional().describe("An array of 3 numbers for the [x, y, z] rotation in degrees.")
   }),

@@ -30,8 +30,7 @@ export default function() {
 
   // Model creation validation
   const validateModelCreation = [
-    body('parameters.type').isIn(['primitive', 'sketch', 'imported']).withMessage('Invalid model type'),
-    body('parameters.primitive_type').optional().isIn(['box', 'cylinder', 'sphere', 'cone']).withMessage('Invalid primitive type'),
+    body('parameters.type').isIn(['sketch', 'imported']).withMessage('Invalid model type'),
     body('parameters.dimensions').optional().isObject().withMessage('Dimensions must be an object'),
     body('parameters.position').optional().isArray({ min: 3, max: 3 }).withMessage('Position must be an array of 3 numbers'),
     body('parameters.rotation').optional().isArray({ min: 3, max: 3 }).withMessage('Rotation must be an array of 3 numbers'),

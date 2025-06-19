@@ -20,13 +20,6 @@ class ExtrudeFeature;
 // Using types from Geometry namespace
 using Geometry::Vector3d;
 
-struct BoxParameters {
-    double width = 10.0;
-    double height = 10.0;
-    double depth = 10.0;
-    Vector3d position = {0, 0, 0};
-};
-
 struct MeshData {
     std::vector<double> vertices;
     std::vector<int> faces;
@@ -57,11 +50,6 @@ private:
 public:
     OCCTEngine();
     ~OCCTEngine();
-    
-    // Core operations
-    std::string createBox(const BoxParameters& params);
-    std::string createCylinder(double radius, double height, const Vector3d& position = {0,0,0});
-    std::string createSphere(double radius, const Vector3d& position = {0,0,0});
     
     // Boolean operations
     bool unionShapes(const std::string& shape1_id, const std::string& shape2_id, const std::string& result_id);

@@ -89,7 +89,6 @@ export class CppBackendClient {
         session_id: sessionId,
         operation: 'create_model',
         type: parameters.type,
-        primitive_type: parameters.primitive_type,
         dimensions: parameters.dimensions,
         position: parameters.position,
         rotation: parameters.rotation,

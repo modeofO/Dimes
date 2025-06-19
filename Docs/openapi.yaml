@@ -46,63 +46,6 @@ components:
         - x
         - y
         - z
-    BoxParameters:
-      type: object
-      properties:
-        width:
-          type: number
-          format: double
-          description: Width of the box.
-        height:
-          type: number
-          format: double
-          description: Height of the box.
-        depth:
-          type: number
-          format: double
-          description: Depth of the box.
-        position:
-          $ref: '#/components/schemas/Vector3d'
-    CylinderParameters:
-      type: object
-      properties:
-        radius:
-          type: number
-          format: double
-          description: Radius of the cylinder.
-        height:
-          type: number
-          format: double
-          description: Height of the cylinder.
-        position:
-          $ref: '#/components/schemas/Vector3d'
-    SphereParameters:
-      type: object
-      properties:
-        radius:
-          type: number
-          format: double
-          description: Radius of the sphere.
-        position:
-          $ref: '#/components/schemas/Vector3d'
-    Primitive:
-      type: object
-      properties:
-        type:
-          type: string
-          enum: [box, cylinder, sphere]
-          description: The type of primitive to create.
-        parameters:
-          oneOf:
-            - $ref: '#/components/schemas/BoxParameters'
-            - $ref: '#/components/schemas/CylinderParameters'
-            - $ref: '#/components/schemas/SphereParameters'
-      discriminator:
-        propertyName: type
-        mapping:
-          box: '#/components/schemas/BoxParameters'
-          cylinder: '#/components/schemas/CylinderParameters'
-          sphere: '#/components/schemas/SphereParameters'
     MeshData:
       type: object
       properties:
@@ -227,7 +170,7 @@ paths:
       tags:
         - CAD Models
       summary: Create a new 3D model
-      description: Creates a new primitive 3D model (e.g., box, cylinder, sphere) via the C++ backend.
+      description: Creates a new 3D model using sketch-based modeling workflow via the C++ backend.
       operationId: createModel
       requestBody:
         description: Parameters for creating the new model.
@@ -238,7 +181,22 @@ paths:
               type: object
               properties:
                 parameters:
-                  $ref: '#/components/schemas/Primitive'
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                      enum: [sketch, imported]
+                      description: The type of model to create
+                    dimensions:
+                      type: object
+                      description: Model dimensions (if applicable)
+                    position:
+                      type: array
+                      items:
+                        type: number
+                      minItems: 3
+                      maxItems: 3
+                      description: Position array [x, y, z]
       responses:
         '200':
           description: The model was created successfully.

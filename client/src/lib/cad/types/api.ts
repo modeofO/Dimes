@@ -1,7 +1,6 @@
 import { 
     MeshData, 
     BoundingBox, 
-    PrimitiveType, 
     BooleanOperation, 
     ExportFormat,
     PlaneType,
@@ -35,8 +34,7 @@ export interface ModelCreateRequest {
     session_id: string;
     operation: 'create_model';
     parameters: {
-        type: 'primitive' | 'sketch' | 'imported';
-        primitive_type?: PrimitiveType;
+        type: 'sketch' | 'imported';
         dimensions?: Record<string, number>;
         position?: [number, number, number];
         rotation?: [number, number, number];

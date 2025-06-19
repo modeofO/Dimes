@@ -328,7 +328,7 @@ curl -X POST http://localhost:8080/api/v1/models \
     "operation": "create_model",
     "parameters": {
       "type": "primitive",
-      "primitive_type": "box",
+      "type": "sketch",
       "dimensions": {"width": 10, "height": 10, "depth": 10}
     }
   }'

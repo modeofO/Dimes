@@ -14,7 +14,6 @@ import {
 import { 
     MeshData, 
     ExportFormat, 
-    PrimitiveType, 
     PlaneType, 
     SketchElementType,
     PlaneVisualizationData, 
@@ -41,8 +40,7 @@ export class CADClient {
     
     // Model operations
     public async createModel(parameters: {
-        type: 'primitive' | 'sketch' | 'imported';
-        primitive_type?: PrimitiveType;
+        type: 'sketch' | 'imported';
         dimensions?: Record<string, number>;
         position?: [number, number, number];
         rotation?: [number, number, number];

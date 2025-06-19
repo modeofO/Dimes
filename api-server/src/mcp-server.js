@@ -16,43 +16,7 @@ logger.info('MCP Server starting...');
 
 // Define MCP tools that mirror the CAD actions
 
-/**
- * Tool to create a primitive shape.
- */
-server.tool(
-  'create_primitive',
-  {
-    description: 'Creates a primitive 3D shape like a box, cylinder, or sphere.',
-    schema: z.object({
-        primitive_type: z.enum(['box', 'cylinder', 'sphere', 'cone']).describe('The type of primitive shape.'),
-        dimensions: z.record(z.number()).describe('Dimensions of the shape (e.g., {width: 10, height: 10, depth: 10}).'),
-        position: z.array(z.number()).length(3).optional().describe('The [x, y, z] position.'),
-    }),
-  },
-  async (params) => {
-    try {
-      logger.info('MCP: Executing create_primitive', params);
-      const result = await cadClient.createModel(sessionId, { type: 'primitive', ...params });
-      const modelId = result.data?.model_id || result.model_id;
-      
-      if (!modelId) {
-        throw new Error('Model creation did not return an ID.');
-      }
-      
-      const tessellation = await cadClient.tessellateModel(sessionId, modelId, 0.1);
-
-      return {
-        content: [{
-          type: 'json',
-          json: { ...result, mesh_data: tessellation.mesh_data },
-        }],
-      };
-    } catch (error) {
-      logger.error('MCP: create_primitive failed', { error: error.message });
-      return { error: error.message };
-    }
-  }
-);
+// Primitive creation has been removed - only sketch-based modeling is supported
 
 /**
  * Tool to create a sketch plane.

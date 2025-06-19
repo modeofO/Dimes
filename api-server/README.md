@@ -323,7 +323,7 @@ npm run format
 The server includes an MCP server for AI integration with the following tools:
 
 ### Basic Tools
-- `create_primitive` - Create primitive shapes (box, cylinder, sphere, cone)
+- `create_sketch_model` - Create complete sketch-based models (plane → sketch → elements → extrude)
 - `perform_boolean` - Boolean operations (union, cut, intersect)
 
 ### Sketch-Based Tools

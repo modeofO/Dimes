@@ -287,71 +287,14 @@ void CADController::handleCreateModel(const std::string& session_id, const std::
         // Read directly from flat structure (avoiding nested JSON parsing issues)
         std::string type = request.get("type", "primitive").asString();
         
-        // Read from flat structure
-        std::string primitive_type = request.get("primitive_type", "box").asString();
-        
         // Debug: Print the entire JSON structure
         std::cout << "🔧 Full request JSON: " << jsonToString(request) << std::endl;
         std::cout << "🔧 Parsed type: '" << type << "'" << std::endl;
-        std::cout << "🔧 Parsed primitive_type: '" << primitive_type << "'" << std::endl;
         std::cout.flush();
         
         std::string shape_id;
         
-        if (type == "primitive") {
-            // Get position if provided (from flat structure)
-            Vector3d position(0, 0, 0);
-            if (request.isMember("position") && request["position"].size() >= 3) {
-                position.x = request["position"][0].asDouble();
-                position.y = request["position"][1].asDouble();
-                position.z = request["position"][2].asDouble();
-            }
-            
-            std::cout << "🔧 Creating primitive: " << primitive_type << std::endl;
-            std::cout.flush();
-            
-            if (primitive_type == "box") {
-                BoxParameters box_params;
-                Json::Value dimensions = request.get("dimensions", Json::Value());
-                box_params.width = dimensions.get("width", 10.0).asDouble();
-                box_params.height = dimensions.get("height", 10.0).asDouble();
-                box_params.depth = dimensions.get("depth", 10.0).asDouble();
-                box_params.position = position;
-                
-                std::cout << "📦 Creating BOX: " << box_params.width << "x" << box_params.height << "x" << box_params.depth 
-                          << " at (" << position.x << "," << position.y << "," << position.z << ")" << std::endl;
-                std::cout.flush();
-                
-                shape_id = engine->createBox(box_params);
-                
-            } else if (primitive_type == "cylinder") {
-                Json::Value dimensions = request.get("dimensions", Json::Value());
-                double radius = dimensions.get("radius", 5.0).asDouble();
-                double height = dimensions.get("height", 10.0).asDouble();
-                
-                std::cout << "🛢️ Creating CYLINDER: radius=" << radius << ", height=" << height 
-                          << " at (" << position.x << "," << position.y << "," << position.z << ")" << std::endl;
-                std::cout.flush();
-                
-                shape_id = engine->createCylinder(radius, height, position);
-                
-            } else if (primitive_type == "sphere") {
-                Json::Value dimensions = request.get("dimensions", Json::Value());
-                double radius = dimensions.get("radius", 5.0).asDouble();
-                
-                std::cout << "🔮 Creating SPHERE: radius=" << radius 
-                          << " at (" << position.x << "," << position.y << "," << position.z << ")" << std::endl;
-                std::cout.flush();
-                
-                shape_id = engine->createSphere(radius, position);
-            } else {
-                std::cout << "❌ Unknown primitive type: " << primitive_type << std::endl;
-                std::cout.flush();
-            }
-            
-            std::cout << "✅ Created shape with ID: " << shape_id << std::endl;
-            std::cout.flush();
-        }
+        // Primitive creation has been removed - only sketch-based modeling is supported
         
         if (shape_id.empty()) {
             response = createErrorResponse("Failed to create model");
