@@ -8,12 +8,29 @@ interface CppBackendResponse {
   data?: any;
 }
 
-function sendVisualizationData(agent: AnyAgent, sessionId: string, data: any) {
+function sendVisualizationData(agent: AnyAgent, agentSessionId: string, data: any) {
+  const webSocketManager = agent.container.resolve<WebSocketManager>("webSocketManager");
+  
+  // Extract the actual WebSocket session ID from the agent context ID
+  // Agent context ID format: "web-chat:ws-session-xxx" or "web-chat:session_xxx"
+  const actualSessionId = agentSessionId.replace('web-chat:', '');
+  
   if (data && data.visualization_data) {
-    const webSocketManager = agent.container.resolve<WebSocketManager>("webSocketManager");
-    webSocketManager.sendToClient(sessionId, {
+    console.log(`🎨 Sending visualization data from agent session ${agentSessionId} to frontend session ${actualSessionId}`);
+    
+    webSocketManager.sendToClient(actualSessionId, {
       type: 'visualization_data',
       payload: data.visualization_data,
+    });
+  }
+  
+  // Also send mesh data for geometry updates
+  if (data && data.mesh_data) {
+    console.log(`🎯 Sending mesh data from agent session ${agentSessionId} to frontend session ${actualSessionId}`);
+    
+    webSocketManager.sendToClient(actualSessionId, {
+      type: 'geometry_update',
+      data: data.mesh_data,
     });
   }
 }

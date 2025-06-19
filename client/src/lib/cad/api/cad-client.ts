@@ -26,7 +26,7 @@ export class CADClient {
     private baseUrl: string;
     private sessionId: string;
     private ws: WebSocket | null = null;
-    private geometryUpdateCallback?: (meshData: MeshData) => void;
+    public geometryUpdateCallback?: (meshData: MeshData) => void;
     private planeVisualizationCallback?: (data: PlaneVisualizationData) => void;
     private sketchVisualizationCallback?: (data: SketchVisualizationData) => void;
     private elementVisualizationCallback?: (data: SketchElementVisualizationData) => void;
@@ -301,6 +301,19 @@ export class CADClient {
         }
     }
     
+    public handleVisualizationData(data: any): void {
+        console.log('🎨 Received visualization data from agent:', data);
+        
+        // Handle different types of visualization data
+        if (data.plane_id && this.planeVisualizationCallback) {
+            this.planeVisualizationCallback(data);
+        } else if (data.sketch_id && !data.element_id && this.sketchVisualizationCallback) {
+            this.sketchVisualizationCallback(data);
+        } else if (data.element_id && this.elementVisualizationCallback) {
+            this.elementVisualizationCallback(data);
+        }
+    }
+    
     private handleWebSocketMessage(message: any): void {
         switch (message.type) {
             case 'connection_established':
@@ -322,6 +335,15 @@ export class CADClient {
                 break;
             case 'pong':
                 // Heartbeat response - no action needed
+                break;
+            case 'visualization_data':
+                // Handle visualization data from agent operations
+                if (message.payload) {
+                    this.handleVisualizationData(message.payload);
+                }
+                break;
+            case 'agent_message':
+                // Agent chat messages are handled by AgentManager
                 break;
             default:
                 console.log('Unknown message type:', message.type);

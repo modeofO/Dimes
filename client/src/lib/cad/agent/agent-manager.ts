@@ -12,8 +12,8 @@ export class AgentManager {
     private reconnectAttempts: number = 0;
     private maxReconnectAttempts: number = 10;
 
-    constructor(private serverUrl: string) {
-        this.sessionId = `ws-session-${uuidv4()}`;
+    constructor(private serverUrl: string, sessionId?: string) {
+        this.sessionId = sessionId || `ws-session-${uuidv4()}`;
         this.connect();
     }
 

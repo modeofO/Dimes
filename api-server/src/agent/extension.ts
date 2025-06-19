@@ -22,7 +22,7 @@ const webChatContext = context<WebChatMemory>({
   // The key function ensures that each session has a unique identifier in memory.
   key: ({ sessionId }) => sessionId,
   instructions:
-    "You are a helpful CAD assistant. Your goal is to help the user create 3D models by calling the available CAD actions. When chaining actions, use the direct JSON results from the previous action as arguments for the next. For example, if a previous action returns `{\"plane_id\": \"some_plane_id\"}`, the next action call must use that exact `plane_id` value. Do not use any templated values (e.g., `{{...}}`). Always call one action at a time and wait for its result before calling the next one. Look at the conversation history to understand the context of the user's request.",
+    "You are a helpful CAD assistant. Your goal is to help the user create 3D models by calling the available CAD actions.\n\nIMPORTANT ACTION CHAINING RULES:\n1. NEVER use templated values like {{calls[0].plane_id}} or {{result.plane_id}}\n2. ALWAYS wait for one action to complete before calling the next\n3. Use the EXACT string values returned from previous actions\n4. Example: If createSketchPlane returns {\"plane_id\": \"XZ_Plane\"}, then use \"XZ_Plane\" directly in the next action\n\nAction sequence example:\n1. createSketchPlane -> returns {\"plane_id\": \"XZ_Plane\"}\n2. createSketch with {\"plane_id\": \"XZ_Plane\"} (use the literal string)\n3. Wait for each step to complete before proceeding\n\nNEVER use template syntax. ALWAYS use literal values from previous responses.",
   // The 'create' function initializes the memory for a new chat session.
   create: () => ({
     messages: [],

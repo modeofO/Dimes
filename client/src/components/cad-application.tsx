@@ -99,24 +99,76 @@ export function CADApplication() {
                 
                 // Set up geometry update callback
                 client.onGeometryUpdate((meshData: MeshData) => {
-                    console.log('Received geometry update:', meshData);
-                    renderer.updateGeometry('current-model', meshData);
+                    console.log('📦 Received geometry update from CAD operations:', meshData);
+                    
+                    // Generate a unique ID for the model
+                    const modelId = `model-${Date.now()}`;
+                    renderer.updateGeometry(modelId, meshData);
+                    
+                    // Add to shapes state for 3D objects
+                    const shape: CreatedShape = {
+                        id: modelId,
+                        type: 'CAD Model',
+                        dimensions: { vertices: meshData.metadata.vertex_count, faces: meshData.metadata.face_count },
+                        visible: true
+                    };
+                    setCreatedShapes(prev => [...prev, shape]);
                 });
                 
                 // Set up visualization callbacks
                 client.onPlaneVisualization((data) => {
                     console.log('Received plane visualization:', data);
                     renderer.addPlaneVisualization(data);
+                    
+                    // Update frontend state for agent-created planes
+                    if (data.plane_id && data.plane_type) {
+                        const plane: CreatedPlane = {
+                            plane_id: data.plane_id,
+                            plane_type: data.plane_type,
+                            origin: data.origin || [0, 0, 0]
+                        };
+                        setCreatedPlanes(prev => {
+                            const exists = prev.some(p => p.plane_id === plane.plane_id);
+                            return exists ? prev : [...prev, plane];
+                        });
+                    }
                 });
                 
                 client.onSketchVisualization((data) => {
                     console.log('Received sketch visualization:', data);
                     renderer.addSketchVisualization(data);
+                    
+                    // Update frontend state for agent-created sketches
+                    if (data.sketch_id && data.plane_id) {
+                        const sketch: CreatedSketch = {
+                            sketch_id: data.sketch_id,
+                            plane_id: data.plane_id,
+                            elements: []
+                        };
+                        setCreatedSketches(prev => {
+                            const exists = prev.some(s => s.sketch_id === sketch.sketch_id);
+                            return exists ? prev : [...prev, sketch];
+                        });
+                    }
                 });
                 
                 client.onElementVisualization((data) => {
                     console.log('Received element visualization:', data);
                     renderer.addSketchElementVisualization(data);
+                    
+                    // Update frontend state for agent-created elements
+                    if (data.element_id && data.sketch_id && data.element_type) {
+                        setCreatedSketches(prev => prev.map(sketch => 
+                            sketch.sketch_id === data.sketch_id
+                                ? {
+                                    ...sketch,
+                                    elements: sketch.elements.some(e => e.id === data.element_id)
+                                        ? sketch.elements
+                                        : [...sketch.elements, { id: data.element_id, type: data.element_type }]
+                                }
+                                : sketch
+                        ));
+                    }
                 });
                 
                 clientRef.current = client;
@@ -124,11 +176,30 @@ export function CADApplication() {
                 // Initialize Agent
                 updateStatus('Initializing Agent...', 'info');
                 const agentServerUrl = `ws://${window.location.hostname}:3000/ws`;
-                const agent = new AgentManager(agentServerUrl);
+                const agent = new AgentManager(agentServerUrl, sessionId);
                 
                 agent.onMessage((message) => {
+                    console.log('🤖 Agent message received:', message);
+                    
                     if (message.type === 'agent_message' && message.data && message.data.content) {
                         setChatMessages(prev => [...prev, { sender: 'agent', text: message.data.content }]);
+                    }
+                    
+                    // Forward CAD-related messages to CAD client for processing
+                    if (message.type === 'geometry_update' && message.data) {
+                        console.log('🎯 Forwarding geometry update to CAD client:', message.data);
+                        updateStatus('🤖 Agent created 3D geometry', 'success');
+                        if (clientRef.current?.geometryUpdateCallback) {
+                            clientRef.current.geometryUpdateCallback(message.data);
+                        }
+                    }
+                    
+                    if (message.type === 'visualization_data' && message.payload) {
+                        console.log('🎨 Forwarding visualization data to CAD client:', message.payload);
+                        updateStatus('🤖 Agent created visualization', 'info');
+                        if (clientRef.current) {
+                            clientRef.current.handleVisualizationData(message.payload);
+                        }
                     }
                 });
                 
