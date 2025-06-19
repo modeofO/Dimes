@@ -14,6 +14,7 @@
   "dependencies": {
     "@daydreamsai/core": "^0.3.8",
     "@modelcontextprotocol/sdk": "^1.12.1",
+    "@openrouter/ai-sdk-provider": "^0.7.2",
     "compression": "^1.7.4",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",

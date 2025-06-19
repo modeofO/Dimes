@@ -8,6 +8,7 @@
 
 # Compilation with vscode on Windows
 .vscode
+.env/*
 
 # Build directories
 server/build/
