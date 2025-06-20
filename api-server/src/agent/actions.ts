@@ -95,15 +95,45 @@ const createSketchAction = action({
 
 const addSketchElementAction = action({
     name: "addSketchElement",
-    description: "Add a 2D element (e.g., line, circle) to a sketch.",
+    description: "Add a 2D element to a sketch. IMPORTANT: Use 'rectangle' for rectangular shapes instead of creating 4 separate lines.",
     schema: z.object({
         sketch_id: z.string().describe("The ID of the sketch to add the element to."),
-        element_type: z.enum(['line', 'circle']).describe("The type of element to add."),
-        parameters: z.object({}).passthrough().describe("An object with the geometric parameters. IMPORTANT: For a 'circle', the object MUST be `{ \"x\": number, \"y\": number, \"radius\": number }`. For a 'line', it MUST be `{ \"start\": [number, number], \"end\": [number, number] }`.")
+        element_type: z.enum(['line', 'circle', 'rectangle']).describe("The type of element to add. Use 'rectangle' for squares/rectangles."),
+        parameters: z.object({}).passthrough().describe("Geometric parameters. For circles: { \"x\": number, \"y\": number, \"radius\": number }. For lines: { \"start\": [number, number], \"end\": [number, number] }. For rectangles: { \"corner\": [number, number], \"width\": number, \"height\": number }.")
     }),
     async handler(elementData, ctx, agent) {
         const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
         const sessionId = ctx.id;
+        const result = await cppBackend.addSketchElement(sessionId, elementData) as CppBackendResponse;
+        if (result.success && result.data) {
+          sendVisualizationData(agent, sessionId, result.data);
+          return result.data;
+        }
+        return result;
+    }
+});
+
+const createRectangleAction = action({
+    name: "createRectangle",
+    description: "Create a rectangle in a sketch. Use this instead of 4 separate lines for rectangular shapes.",
+    schema: z.object({
+        sketch_id: z.string().describe("The ID of the sketch to add the rectangle to."),
+        corner: z.array(z.number()).length(2).describe("Bottom-left corner [x, y] of the rectangle."),
+        width: z.number().gt(0).describe("Width of the rectangle."),
+        height: z.number().gt(0).describe("Height of the rectangle.")
+    }),
+    async handler(params, ctx, agent) {
+        const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
+        const sessionId = ctx.id;
+        const elementData = {
+            sketch_id: params.sketch_id,
+            element_type: 'rectangle' as const,
+            parameters: {
+                corner: params.corner,
+                width: params.width,
+                height: params.height
+            }
+        };
         const result = await cppBackend.addSketchElement(sessionId, elementData) as CppBackendResponse;
         if (result.success && result.data) {
           sendVisualizationData(agent, sessionId, result.data);
@@ -179,6 +209,7 @@ export const cadActions = [
   createSketchPlaneAction,
   createSketchAction,
   addSketchElementAction,
+  createRectangleAction,
   extrudeFeatureAction,
   performBooleanOperationAction,
   tessellateModelAction,

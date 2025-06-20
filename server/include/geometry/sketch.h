@@ -12,16 +12,17 @@
 #include <string>
 
 struct SketchElement {
-    enum Type { LINE, CIRCLE, ARC } type;
+    enum Type { LINE, CIRCLE, ARC, RECTANGLE } type;
     std::string id;
     
     // For LINE: start_point, end_point
     // For CIRCLE: center_point, radius (stored in parameters[0])
     // For ARC: center_point, start_point, end_point, radius (stored in parameters[0])
+    // For RECTANGLE: start_point (corner), parameters[0] = width, parameters[1] = height
     gp_Pnt2d start_point;
     gp_Pnt2d end_point;
     gp_Pnt2d center_point;  // For circles and arcs
-    std::vector<double> parameters;  // radius, angles, etc.
+    std::vector<double> parameters;  // radius, angles, width, height, etc.
     
     SketchElement(Type t, const std::string& element_id) : type(t), id(element_id) {}
 };
@@ -43,6 +44,7 @@ public:
     // Sketch element creation
     std::string addLine(const gp_Pnt2d& start, const gp_Pnt2d& end);
     std::string addCircle(const gp_Pnt2d& center, double radius);
+    std::string addRectangle(const gp_Pnt2d& corner, double width, double height);
     std::string addArc(const gp_Pnt2d& center, const gp_Pnt2d& start, const gp_Pnt2d& end, double radius);
     
     // Sketch operations

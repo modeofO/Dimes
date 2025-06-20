@@ -1,6 +1,6 @@
-import { createDreams, LogLevel, type AnyAgent } from "@daydreamsai/core";
+import { createDreams, context, LogLevel, type AnyAgent } from "@daydreamsai/core";
 import { openrouter } from "@openrouter/ai-sdk-provider";
-import { webChatExtension } from "./extension.js";
+import { webChatExtension, webChatContext } from "./extension.js";
 import { cadActions } from "./actions.js";
 import { cppBackendService } from "./service.js";
 import type { WebSocketManager } from "../services/websocketManager.js";
@@ -26,6 +26,7 @@ export async function initializeAgent(webSocketManager: WebSocketManager) {
     logLevel: LogLevel.DEBUG,
     model: openrouter("google/gemini-2.0-flash-001"),
     extensions: [webChatExtension],
+    contexts: [webChatContext],
     actions: cadActions,
     services: [cppBackendService],
   });
@@ -55,6 +56,11 @@ export async function handleClientMessage(sessionId, content) {
   
   try {
     const chatContext = agentInstance.registry.contexts.get("chat");
+    if (!chatContext) {
+      logger.error("Chat context not found in agent registry.");
+      return;
+    }
+    
     await agentInstance.send({
       context: chatContext,
       args: { sessionId: sessionId },

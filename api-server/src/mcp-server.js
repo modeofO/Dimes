@@ -83,16 +83,19 @@ server.tool(
 server.tool(
   'add_sketch_element',
   {
-    description: 'Adds a 2D element (line or circle) to a sketch.',
+    description: 'Adds a 2D element to a sketch. IMPORTANT: Use "rectangle" element_type for rectangular shapes instead of creating 4 separate lines. This creates proper closed profiles for extrusion.',
     schema: z.object({
       sketch_id: z.string().describe('The ID of the sketch to add the element to.'),
-      element_type: z.enum(['line', 'circle']).describe('The type of element to add.'),
+      element_type: z.enum(['line', 'circle', 'rectangle']).describe('The type of element to add. Use "rectangle" for squares/rectangles, "circle" for circles, "line" for individual line segments.'),
       parameters: z.object({
         start_point: z.array(z.number()).length(2).optional().describe('Start point [x, y] for line.'),
         end_point: z.array(z.number()).length(2).optional().describe('End point [x, y] for line.'),
         center: z.array(z.number()).length(2).optional().describe('Center point [x, y] for circle.'),
         radius: z.number().optional().describe('Radius for circle.'),
-      }).describe('Parameters specific to the element type.'),
+        corner: z.array(z.number()).length(2).optional().describe('Bottom-left corner [x, y] for rectangle.'),
+        width: z.number().optional().describe('Width for rectangle.'),
+        height: z.number().optional().describe('Height for rectangle.'),
+      }).describe('Parameters specific to the element type. For rectangles: use corner, width, height. For circles: use center, radius. For lines: use start_point, end_point.'),
     }),
   },
   async (params) => {
@@ -108,6 +111,46 @@ server.tool(
       };
     } catch (error) {
       logger.error('MCP: add_sketch_element failed', { error: error.message });
+      return { error: error.message };
+    }
+  }
+);
+
+/**
+ * Dedicated tool to create a rectangle in a sketch.
+ */
+server.tool(
+  'create_rectangle',
+  {
+    description: 'Creates a rectangle in a sketch. Use this instead of 4 separate lines for rectangular shapes. Creates a proper closed profile for extrusion.',
+    schema: z.object({
+      sketch_id: z.string().describe('The ID of the sketch to add the rectangle to.'),
+      corner: z.array(z.number()).length(2).describe('Bottom-left corner [x, y] of the rectangle.'),
+      width: z.number().min(0.001).describe('Width of the rectangle.'),
+      height: z.number().min(0.001).describe('Height of the rectangle.'),
+    }),
+  },
+  async (params) => {
+    try {
+      logger.info('MCP: Executing create_rectangle', params);
+      const result = await cadClient.addSketchElement(sessionId, {
+        sketch_id: params.sketch_id,
+        element_type: 'rectangle',
+        parameters: {
+          corner: params.corner,
+          width: params.width,
+          height: params.height,
+        },
+      });
+      
+      return {
+        content: [{
+          type: 'json',
+          json: result,
+        }],
+      };
+    } catch (error) {
+      logger.error('MCP: create_rectangle failed', { error: error.message });
       return { error: error.message };
     }
   }
@@ -195,19 +238,22 @@ server.tool(
 server.tool(
   'create_sketch_model',
   {
-    description: 'Creates a complete 3D model using sketch-based workflow: plane → sketch → elements → extrude.',
+    description: 'Creates a complete 3D model using sketch-based workflow: plane → sketch → elements → extrude. TIP: Use "rectangle" element_type for rectangular shapes instead of 4 separate lines.',
     schema: z.object({
       plane_type: z.enum(['XY', 'XZ', 'YZ']).describe('The type of plane to create.'),
       plane_origin: z.array(z.number()).length(3).optional().describe('The [x, y, z] origin point of the plane.'),
       elements: z.array(z.object({
-        element_type: z.enum(['line', 'circle']).describe('The type of element.'),
+        element_type: z.enum(['line', 'circle', 'rectangle']).describe('The type of element. Use "rectangle" for squares/rectangles, not individual lines.'),
         parameters: z.object({
           start_point: z.array(z.number()).length(2).optional().describe('Start point [x, y] for line.'),
           end_point: z.array(z.number()).length(2).optional().describe('End point [x, y] for line.'),
           center: z.array(z.number()).length(2).optional().describe('Center point [x, y] for circle.'),
           radius: z.number().optional().describe('Radius for circle.'),
+          corner: z.array(z.number()).length(2).optional().describe('Bottom-left corner [x, y] for rectangle.'),
+          width: z.number().optional().describe('Width for rectangle.'),
+          height: z.number().optional().describe('Height for rectangle.'),
         }).describe('Parameters specific to the element type.'),
-      })).describe('Array of 2D elements to add to the sketch.'),
+      })).describe('Array of 2D elements to add to the sketch. Use rectangle elements for rectangular shapes.'),
       extrude_distance: z.number().min(0.001).describe('The extrusion distance.'),
       extrude_type: z.enum(['blind', 'symmetric']).optional().describe('The type of extrusion.'),
     }),

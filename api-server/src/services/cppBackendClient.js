@@ -192,21 +192,50 @@ export class CppBackendClient {
     try {
       console.log('📋 Element data received:', elementData);
 
+      // Flatten parameters to avoid nested JSON parsing issues in C++
       const requestBody = {
         session_id: sessionId,
         sketch_id: elementData.sketch_id,
         element_type: elementData.element_type,
-        parameters: elementData.parameters
       };
+
+      // Flatten parameters based on element type
+      if (elementData.element_type === 'line') {
+        if (elementData.parameters.start && elementData.parameters.end) {
+          // Agent format: {"start": [x,y], "end": [x,y]}
+          requestBody.x1 = elementData.parameters.start[0];
+          requestBody.y1 = elementData.parameters.start[1];
+          requestBody.x2 = elementData.parameters.end[0];
+          requestBody.y2 = elementData.parameters.end[1];
+        } else {
+          // Direct format
+          requestBody.x1 = elementData.parameters.x1 || 0;
+          requestBody.y1 = elementData.parameters.y1 || 0;
+          requestBody.x2 = elementData.parameters.x2 || 0;
+          requestBody.y2 = elementData.parameters.y2 || 0;
+        }
+      } else if (elementData.element_type === 'circle') {
+        requestBody.center_x = elementData.parameters.center_x || 0;
+        requestBody.center_y = elementData.parameters.center_y || 0;
+        requestBody.radius = elementData.parameters.radius || 5;
+      } else if (elementData.element_type === 'rectangle') {
+        if (elementData.parameters.corner) {
+          requestBody.x = elementData.parameters.corner[0];
+          requestBody.y = elementData.parameters.corner[1];
+        } else {
+          requestBody.x = elementData.parameters.x || 0;
+          requestBody.y = elementData.parameters.y || 0;
+        }
+        requestBody.width = elementData.parameters.width || 10;
+        requestBody.height = elementData.parameters.height || 10;
+      }
       
-      console.log('📋 Request body object:', requestBody);
+      console.log('📋 Flattened request body object:', requestBody);
       
       const jsonString = JSON.stringify(requestBody);
       
       console.log('🔧 Node.js sending sketch element request to C++:');
       console.log('📋 JSON string:', jsonString);
-
-      logger.debug('Adding sketch element:', requestBody);
 
       const response = await this.makeRequest('/api/v1/sketch-elements', {
         method: 'POST',

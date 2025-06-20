@@ -18,7 +18,10 @@
 #include <ctime>
 #include <fstream>
 #include <cstdio>
+#include <algorithm>
 #include "json/json.h"
+
+using namespace Geometry;
 
 // Simple HTTP server implementation (placeholder)
 // In production, use a proper HTTP library like httplib or crow
@@ -272,7 +275,8 @@ void CADController::handleCreateModel(const std::string& session_id, const std::
         Json::Value request;
         Json::Reader reader;
         if (!reader.parse(request_body, request)) {
-            std::cout << "❌ JSON parsing failed. Raw body: " << request_body << std::endl;
+            std::cout << "❌ JSON parsing failed!" << std::endl;
+            std::cout << "❌ Request body was: '" << request_body << "'" << std::endl;
             std::cout.flush();
             response = createErrorResponse("Invalid JSON in request body");
             return;
@@ -433,7 +437,8 @@ void CADController::handleBooleanOperation(const std::string& session_id, const 
         Json::Value request;
         Json::Reader reader;
         if (!reader.parse(request_body, request)) {
-            std::cout << "Boolean operation - JSON parsing failed: Invalid JSON format" << std::endl;
+            std::cout << "Boolean operation - JSON parsing failed!" << std::endl;
+            std::cout << "Boolean operation - Request body was: '" << request_body << "'" << std::endl;
             std::cout.flush();
             response = createErrorResponse("Invalid JSON in request body");
             return;
@@ -846,6 +851,15 @@ void CADController::handleAddSketchElement(const std::string& session_id, const 
     try {
         std::cout << "✏️ Adding sketch element for session: " << session_id << std::endl;
         std::cout << "📋 Received request body: '" << request_body << "'" << std::endl;
+        std::cout << "📋 Request body length: " << request_body.length() << std::endl;
+        
+        // Debug: Check for any hidden characters
+        std::cout << "📋 First 10 chars as hex: ";
+        size_t debug_len = request_body.length() < 10 ? request_body.length() : 10;
+        for (size_t i = 0; i < debug_len; ++i) {
+            std::cout << std::hex << static_cast<unsigned char>(request_body[i]) << " ";
+        }
+        std::cout << std::dec << std::endl;
         std::cout.flush();
         
         Json::Value request;
@@ -879,19 +893,40 @@ void CADController::handleAddSketchElement(const std::string& session_id, const 
         std::string element_id;
         
         if (element_type == "line") {
-            double x1 = request["x1"].asDouble();
-            double y1 = request["y1"].asDouble();
-            double x2 = request["x2"].asDouble();
-            double y2 = request["y2"].asDouble();
+            // Now using flattened format from Node.js: {"x1": 0, "y1": 0, "x2": 10, "y2": 0}
+            double x1 = request.get("x1", 0.0).asDouble();
+            double y1 = request.get("y1", 0.0).asDouble();
+            double x2 = request.get("x2", 0.0).asDouble();
+            double y2 = request.get("y2", 0.0).asDouble();
+            
+            std::cout << "📏 Adding line to sketch " << sketch_id << ": (" << x1 << "," << y1 << ") to (" << x2 << "," << y2 << ")" << std::endl;
+            std::cout.flush();
             
             element_id = engine->addLineToSketch(sketch_id, x1, y1, x2, y2);
             
         } else if (element_type == "circle") {
-            double center_x = request["center_x"].asDouble();
-            double center_y = request["center_y"].asDouble();
-            double radius = request["radius"].asDouble();
+            // Flattened format: {"center_x": 0, "center_y": 0, "radius": 5}
+            double center_x = request.get("center_x", 0.0).asDouble();
+            double center_y = request.get("center_y", 0.0).asDouble();
+            double radius = request.get("radius", 5.0).asDouble();
+            
+            std::cout << "⭕ Adding circle to sketch " << sketch_id << ": center(" << center_x << "," << center_y << ") radius=" << radius << std::endl;
+            std::cout.flush();
             
             element_id = engine->addCircleToSketch(sketch_id, center_x, center_y, radius);
+            
+        } else if (element_type == "rectangle") {
+            // Flattened format: {"x": 0, "y": 0, "width": 10, "height": 10}
+            double x = request.get("x", 0.0).asDouble();
+            double y = request.get("y", 0.0).asDouble();
+            double width = request.get("width", 10.0).asDouble();
+            double height = request.get("height", 10.0).asDouble();
+            
+            std::cout << "▭ Adding rectangle to sketch " << sketch_id << ": (" << x << "," << y << ") size " << width << "x" << height << std::endl;
+            std::cout.flush();
+            
+            element_id = engine->addRectangleToSketch(sketch_id, x, y, width, height);
+            
         } else {
             response = createErrorResponse("Unsupported element_type: " + element_type);
             return;

@@ -23,7 +23,7 @@ export interface BoundingBox {
 
 // Sketch-based modeling types
 export type PlaneType = 'XY' | 'XZ' | 'YZ';
-export type SketchElementType = 'line' | 'circle' | 'arc';
+export type SketchElementType = 'line' | 'circle' | 'arc' | 'rectangle';
 export type ExtrudeType = 'blind' | 'symmetric' | 'through_all' | 'to_surface';
 
 // New visualization data structures for non-mesh geometry
@@ -66,6 +66,12 @@ export interface SketchElementVisualizationData {
         center_x?: number;
         center_y?: number;
         radius?: number;
+        
+        // For rectangles
+        x?: number;
+        y?: number;
+        width?: number;
+        height?: number;
     };
 }
 
@@ -89,6 +95,12 @@ export interface SketchElement {
     center_x?: number;
     center_y?: number;
     radius?: number;
+    
+    // For rectangles
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
 }
 
 export interface Sketch {

@@ -55,6 +55,22 @@ std::string Sketch::addCircle(const gp_Pnt2d& center, double radius) {
     return circle_id;
 }
 
+std::string Sketch::addRectangle(const gp_Pnt2d& corner, double width, double height) {
+    std::stringstream ss;
+    ss << "Rectangle_" << elements_.size() + 1;
+    std::string rectangle_id = ss.str();
+    
+    SketchElement rectangle(SketchElement::RECTANGLE, rectangle_id);
+    rectangle.start_point = corner;  // Bottom-left corner
+    rectangle.parameters.push_back(width);   // parameters[0] = width
+    rectangle.parameters.push_back(height);  // parameters[1] = height
+    
+    elements_.push_back(rectangle);
+    
+    std::cout << "Added rectangle to sketch " << sketch_id_ << ": " << rectangle_id << std::endl;
+    return rectangle_id;
+}
+
 std::string Sketch::addArc(const gp_Pnt2d& center, const gp_Pnt2d& start, const gp_Pnt2d& end, double radius) {
     std::stringstream ss;
     ss << "Arc_" << elements_.size() + 1;
@@ -124,6 +140,26 @@ TopoDS_Edge Sketch::createElement2D(const SketchElement& element) const {
                 edge = arcBuilder.Edge();
                 break;
             }
+            
+            case SketchElement::RECTANGLE: {
+                // For rectangles in createElement2D, we need to return just one edge
+                // The actual rectangle wire creation is handled by createWire() method
+                double width = element.parameters[0];
+                double height = element.parameters[1];
+                
+                gp_Pnt2d corner = element.start_point;
+                gp_Pnt2d p1 = corner; // bottom-left
+                gp_Pnt2d p2(corner.X() + width, corner.Y()); // bottom-right
+                
+                // Convert 2D points to 3D
+                gp_Pnt p1_3d = sketch_plane_->to3D(p1);
+                gp_Pnt p2_3d = sketch_plane_->to3D(p2);
+                
+                // Return just the bottom edge - the wire building logic handles the complete rectangle
+                BRepBuilderAPI_MakeEdge edgeBuilder(p1_3d, p2_3d);
+                edge = edgeBuilder.Edge();
+                break;
+            }
         }
         
     } catch (const Standard_Failure& e) {
@@ -138,9 +174,41 @@ TopoDS_Wire Sketch::createWire() const {
     
     try {
         for (const auto& element : elements_) {
-            TopoDS_Edge edge = createElement2D(element);
-            if (!edge.IsNull()) {
-                wireBuilder.Add(edge);
+            // Special handling for rectangles - create complete closed wire
+            if (element.type == SketchElement::RECTANGLE) {
+                double width = element.parameters[0];
+                double height = element.parameters[1];
+                
+                // Create rectangle as a closed wire with 4 lines
+                gp_Pnt2d corner = element.start_point;
+                gp_Pnt2d p1 = corner; // bottom-left
+                gp_Pnt2d p2(corner.X() + width, corner.Y()); // bottom-right
+                gp_Pnt2d p3(corner.X() + width, corner.Y() + height); // top-right
+                gp_Pnt2d p4(corner.X(), corner.Y() + height); // top-left
+                
+                // Convert 2D points to 3D
+                gp_Pnt p1_3d = sketch_plane_->to3D(p1);
+                gp_Pnt p2_3d = sketch_plane_->to3D(p2);
+                gp_Pnt p3_3d = sketch_plane_->to3D(p3);
+                gp_Pnt p4_3d = sketch_plane_->to3D(p4);
+                
+                // Create 4 edges for the rectangle
+                BRepBuilderAPI_MakeEdge edge1(p1_3d, p2_3d); // bottom
+                BRepBuilderAPI_MakeEdge edge2(p2_3d, p3_3d); // right
+                BRepBuilderAPI_MakeEdge edge3(p3_3d, p4_3d); // top
+                BRepBuilderAPI_MakeEdge edge4(p4_3d, p1_3d); // left
+                
+                // Add all 4 edges to build the complete rectangle wire
+                wireBuilder.Add(edge1.Edge());
+                wireBuilder.Add(edge2.Edge());
+                wireBuilder.Add(edge3.Edge());
+                wireBuilder.Add(edge4.Edge());
+            } else {
+                // For other element types, use the standard edge creation
+                TopoDS_Edge edge = createElement2D(element);
+                if (!edge.IsNull()) {
+                    wireBuilder.Add(edge);
+                }
             }
         }
         
@@ -195,6 +263,55 @@ TopoDS_Face Sketch::createFaceFromElement(const std::string& element_id) const {
         return TopoDS_Face();
     }
 
+    // Special handling for rectangles - create complete closed wire
+    if (target_element->type == SketchElement::RECTANGLE) {
+        double width = target_element->parameters[0];
+        double height = target_element->parameters[1];
+        
+        // Create rectangle as a closed wire with 4 lines
+        gp_Pnt2d corner = target_element->start_point;
+        gp_Pnt2d p1 = corner; // bottom-left
+        gp_Pnt2d p2(corner.X() + width, corner.Y()); // bottom-right
+        gp_Pnt2d p3(corner.X() + width, corner.Y() + height); // top-right
+        gp_Pnt2d p4(corner.X(), corner.Y() + height); // top-left
+        
+        // Convert 2D points to 3D
+        gp_Pnt p1_3d = sketch_plane_->to3D(p1);
+        gp_Pnt p2_3d = sketch_plane_->to3D(p2);
+        gp_Pnt p3_3d = sketch_plane_->to3D(p3);
+        gp_Pnt p4_3d = sketch_plane_->to3D(p4);
+        
+        // Create 4 edges for the rectangle
+        BRepBuilderAPI_MakeEdge edge1(p1_3d, p2_3d); // bottom
+        BRepBuilderAPI_MakeEdge edge2(p2_3d, p3_3d); // right
+        BRepBuilderAPI_MakeEdge edge3(p3_3d, p4_3d); // top
+        BRepBuilderAPI_MakeEdge edge4(p4_3d, p1_3d); // left
+        
+        // Create closed wire from edges
+        BRepBuilderAPI_MakeWire wireBuilder;
+        wireBuilder.Add(edge1.Edge());
+        wireBuilder.Add(edge2.Edge());
+        wireBuilder.Add(edge3.Edge());
+        wireBuilder.Add(edge4.Edge());
+        
+        if (!wireBuilder.IsDone()) {
+            std::cerr << "Failed to create closed wire for rectangle: " << element_id << std::endl;
+            return TopoDS_Face();
+        }
+        
+        // Create face from the closed wire
+        BRepBuilderAPI_MakeFace faceBuilder(wireBuilder.Wire());
+        if (faceBuilder.IsDone()) {
+            TopoDS_Face face = faceBuilder.Face();
+            face.Orientation(TopAbs_FORWARD);
+            return face;
+        }
+        
+        std::cerr << "Failed to create face from rectangle wire: " << element_id << std::endl;
+        return TopoDS_Face();
+    }
+
+    // For other element types (lines, circles, arcs)
     TopoDS_Edge edge = createElement2D(*target_element);
     if (edge.IsNull()) {
         std::cerr << "Failed to create edge for element: " << element_id << std::endl;

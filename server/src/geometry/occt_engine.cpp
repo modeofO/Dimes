@@ -400,6 +400,31 @@ std::string OCCTEngine::addCircleToSketch(const std::string& sketch_id, double c
     }
 }
 
+std::string OCCTEngine::addRectangleToSketch(const std::string& sketch_id, double x, double y, double width, double height) {
+    std::cout << "▭ Adding rectangle to sketch " << sketch_id << ": (" << x << "," << y << ") size " << width << "x" << height << std::endl;
+    std::cout.flush();
+    
+    if (!sketchExists(sketch_id)) {
+        std::cerr << "❌ Sketch not found: " << sketch_id << std::endl;
+        return "";
+    }
+    
+    try {
+        auto sketch = sketches_[sketch_id];
+        gp_Pnt2d corner(x, y);
+        
+        std::string rectangle_id = sketch->addRectangle(corner, width, height);
+        std::cout << "✅ Added rectangle " << rectangle_id << " to sketch " << sketch_id << std::endl;
+        std::cout.flush();
+        
+        return rectangle_id;
+        
+    } catch (const Standard_Failure& e) {
+        std::cerr << "OCCT Error adding rectangle to sketch: " << e.GetMessageString() << std::endl;
+        return "";
+    }
+}
+
 std::string OCCTEngine::extrudeSketch(const std::string& sketch_id, double distance, const std::string& direction) {
     std::cout << "🚀 Extruding sketch " << sketch_id << " by distance " << distance << std::endl;
     std::cout.flush();
@@ -678,6 +703,7 @@ Json::Value OCCTEngine::getSketchElementVisualizationData(const std::string& ske
             case SketchElement::LINE: element_type = "line"; break;
             case SketchElement::CIRCLE: element_type = "circle"; break;
             case SketchElement::ARC: element_type = "arc"; break;
+            case SketchElement::RECTANGLE: element_type = "rectangle"; break;
             default: element_type = "unknown"; break;
         }
         viz_data["element_type"] = element_type;
@@ -729,6 +755,47 @@ Json::Value OCCTEngine::getSketchElementVisualizationData(const std::string& ske
             parameters_2d["center_x"] = target_element->center_point.X();
             parameters_2d["center_y"] = target_element->center_point.Y();
             parameters_2d["radius"] = radius;
+            
+        } else if (target_element->type == SketchElement::RECTANGLE) {
+            // For rectangles, generate the 4 corner points
+            double width = target_element->parameters[0];
+            double height = target_element->parameters[1];
+            gp_Pnt2d corner = target_element->start_point;
+            
+            // Calculate 4 corners
+            gp_Pnt2d p1 = corner; // bottom-left
+            gp_Pnt2d p2(corner.X() + width, corner.Y()); // bottom-right
+            gp_Pnt2d p3(corner.X() + width, corner.Y() + height); // top-right
+            gp_Pnt2d p4(corner.X(), corner.Y() + height); // top-left
+            
+            // Convert to 3D and add points for rectangle outline (closed loop)
+            gp_Pnt p1_3d = plane->to3D(p1);
+            gp_Pnt p2_3d = plane->to3D(p2);
+            gp_Pnt p3_3d = plane->to3D(p3);
+            gp_Pnt p4_3d = plane->to3D(p4);
+            
+            // Add points in order: p1 -> p2 -> p3 -> p4 -> p1 (closed)
+            points_3d_array.append(p1_3d.X());
+            points_3d_array.append(p1_3d.Y());
+            points_3d_array.append(p1_3d.Z());
+            points_3d_array.append(p2_3d.X());
+            points_3d_array.append(p2_3d.Y());
+            points_3d_array.append(p2_3d.Z());
+            points_3d_array.append(p3_3d.X());
+            points_3d_array.append(p3_3d.Y());
+            points_3d_array.append(p3_3d.Z());
+            points_3d_array.append(p4_3d.X());
+            points_3d_array.append(p4_3d.Y());
+            points_3d_array.append(p4_3d.Z());
+            points_3d_array.append(p1_3d.X()); // Close the loop
+            points_3d_array.append(p1_3d.Y());
+            points_3d_array.append(p1_3d.Z());
+            
+            // Store 2D parameters
+            parameters_2d["x"] = corner.X();
+            parameters_2d["y"] = corner.Y();
+            parameters_2d["width"] = width;
+            parameters_2d["height"] = height;
         }
         
         viz_data["points_3d"] = points_3d_array;

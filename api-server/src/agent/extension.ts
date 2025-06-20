@@ -13,8 +13,9 @@ type WebChatMemory = {
 
 // This context will manage the state for each individual chat session.
 // The agent will use this to remember conversation history for a specific client.
-const webChatContext = context<WebChatMemory>({
+export const webChatContext = context<WebChatMemory>({
   type: "web-chat",
+  maxSteps: 100,
   // Each chat session is identified by a unique sessionId.
   schema: z.object({
     sessionId: z.string().describe("The unique session identifier for the client connection."),
