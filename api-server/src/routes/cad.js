@@ -4,7 +4,7 @@ import { CppBackendClient } from '../services/cppBackendClient.js';
 import { logger } from '../utils/logger.js';
 import { ApiError } from '../utils/errors.js';
 
-export default function() {
+export default function(webSocketManager) {
   const router = express.Router();
   const cppBackend = new CppBackendClient();
 
@@ -135,6 +135,16 @@ export default function() {
 
       console.log('🔍 Raw C++ backend createSketchPlane result:', JSON.stringify(result, null, 2));
 
+      // Send WebSocket notification for real-time updates
+      if (webSocketManager && result.success && result.data) {
+        console.log('🔊 Sending WebSocket notification for sketch plane creation');
+        webSocketManager.sendToClient(sessionId, {
+          type: 'visualization_data',
+          payload: result.data.visualization_data || result.data,
+          timestamp: Date.now(),
+        });
+      }
+
       res.json({
         success: true,
         session_id: sessionId,
@@ -161,6 +171,16 @@ export default function() {
       const result = await cppBackend.createSketch(sessionId, sketchData);
 
       console.log('🔍 Raw C++ backend createSketch result:', JSON.stringify(result, null, 2));
+
+      // Send WebSocket notification for real-time updates
+      if (webSocketManager && result.success && result.data) {
+        console.log('🔊 Sending WebSocket notification for sketch creation');
+        webSocketManager.sendToClient(sessionId, {
+          type: 'visualization_data',
+          payload: result.data.visualization_data || result.data,
+          timestamp: Date.now(),
+        });
+      }
 
       res.json({
         success: true,
@@ -191,6 +211,16 @@ export default function() {
 
       console.log('🔍 Raw C++ backend addSketchElement result:', JSON.stringify(result, null, 2));
 
+      // Send WebSocket notification for real-time updates
+      if (webSocketManager && result.success && result.data) {
+        console.log('🔊 Sending WebSocket notification for sketch element addition');
+        webSocketManager.sendToClient(sessionId, {
+          type: 'visualization_data',
+          payload: result.data.visualization_data || result.data,
+          timestamp: Date.now(),
+        });
+      }
+
       res.json({
         success: true,
         session_id: sessionId,
@@ -216,6 +246,29 @@ export default function() {
 
       const result = await cppBackend.extrudeFeature(sessionId, extrudeData);
 
+      // Send WebSocket notifications for real-time updates
+      if (webSocketManager && result.success && result.data) {
+        // Send geometry update if mesh data is available
+        if (result.data.mesh_data) {
+          console.log('🔊 Sending WebSocket geometry update for extrusion');
+          webSocketManager.sendToClient(sessionId, {
+            type: 'geometry_update',
+            data: result.data.mesh_data,
+            timestamp: Date.now(),
+          });
+        }
+        
+        // Send visualization data if available
+        if (result.data.visualization_data) {
+          console.log('🔊 Sending WebSocket visualization data for extrusion');
+          webSocketManager.sendToClient(sessionId, {
+            type: 'visualization_data',
+            payload: result.data.visualization_data,
+            timestamp: Date.now(),
+          });
+        }
+      }
+
       res.json({
         success: true,
         session_id: sessionId,
@@ -240,6 +293,19 @@ export default function() {
       logger.info(`Performing boolean operation for session ${sessionId}`, { operation });
 
       const result = await cppBackend.performBooleanOperation(sessionId, operation);
+
+      // Send WebSocket notification for real-time updates
+      if (webSocketManager && result.success && result.data) {
+        // Send geometry update if mesh data is available
+        if (result.data.mesh_data) {
+          console.log('🔊 Sending WebSocket geometry update for boolean operation');
+          webSocketManager.sendToClient(sessionId, {
+            type: 'geometry_update',
+            data: result.data.mesh_data,
+            timestamp: Date.now(),
+          });
+        }
+      }
 
       res.json({
         success: true,

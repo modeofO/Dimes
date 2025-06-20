@@ -24,7 +24,6 @@ import {
 export class CADClient {
     private baseUrl: string;
     private sessionId: string;
-    private ws: WebSocket | null = null;
     public geometryUpdateCallback?: (meshData: MeshData) => void;
     private planeVisualizationCallback?: (data: PlaneVisualizationData) => void;
     private sketchVisualizationCallback?: (data: SketchVisualizationData) => void;
@@ -230,15 +229,11 @@ export class CADClient {
         return `${this.baseUrl}/api/v1/cad/sessions/${this.sessionId}/export/${format}`;
     }
     
-    // Real-time updates
+    // Real-time updates (handled by AgentManager to avoid duplicate WebSocket connections)
     public onGeometryUpdate(callback: (meshData: MeshData) => void): void {
         this.geometryUpdateCallback = callback;
-        // Make WebSocket connection optional - don't block if it fails
-        try {
-            this.setupWebSocket();
-        } catch (error) {
-            console.log('WebSocket not available, using REST API only:', error);
-        }
+        // Note: WebSocket connection is handled by AgentManager to avoid duplicate connections
+        // The AgentManager will forward geometry_update messages to this callback
     }
     
     // Visualization callbacks
@@ -254,51 +249,6 @@ export class CADClient {
         this.elementVisualizationCallback = callback;
     }
     
-    private setupWebSocket(): void {
-        if (this.ws) {
-            return; // Already connected
-        }
-        
-        const wsUrl = this.baseUrl.replace(/^http/, 'ws') + `/ws?sessionId=${this.sessionId}`;
-        
-        try {
-            this.ws = new WebSocket(wsUrl);
-            
-            this.ws.onopen = () => {
-                console.log('WebSocket connected');
-                // Subscribe to geometry updates
-                this.ws!.send(JSON.stringify({
-                    type: 'subscribe_geometry_updates'
-                }));
-            };
-            
-            this.ws.onmessage = (event) => {
-                try {
-                    const message = JSON.parse(event.data);
-                    this.handleWebSocketMessage(message);
-                } catch (error) {
-                    console.error('Failed to parse WebSocket message:', error);
-                }
-            };
-            
-            this.ws.onclose = () => {
-                console.log('WebSocket disconnected');
-                this.ws = null;
-                
-                // Don't attempt to reconnect - just log it
-                console.log('WebSocket disconnected, continuing with REST API only');
-            };
-            
-            this.ws.onerror = (error) => {
-                console.log('WebSocket not available, using REST API only');
-                this.ws = null;
-            };
-        } catch (error) {
-            console.log('WebSocket connection failed, continuing with REST API only');
-            this.ws = null;
-        }
-    }
-    
     public handleVisualizationData(data: any): void {
         console.log('🎨 Received visualization data from agent:', data);
         
@@ -309,42 +259,6 @@ export class CADClient {
             this.sketchVisualizationCallback(data);
         } else if (data.element_id && this.elementVisualizationCallback) {
             this.elementVisualizationCallback(data);
-        }
-    }
-    
-    private handleWebSocketMessage(message: any): void {
-        switch (message.type) {
-            case 'connection_established':
-                console.log('WebSocket connection established for session:', message.sessionId);
-                break;
-            case 'geometry_update':
-                if (message.data && this.geometryUpdateCallback) {
-                    this.geometryUpdateCallback(message.data);
-                }
-                break;
-            case 'parameter_update':
-                console.log('Parameter updated:', message.data);
-                break;
-            case 'backend_status':
-                console.log('Backend status:', message.status);
-                break;
-            case 'error':
-                console.error('Server error:', message.data || message.error);
-                break;
-            case 'pong':
-                // Heartbeat response - no action needed
-                break;
-            case 'visualization_data':
-                // Handle visualization data from agent operations
-                if (message.payload) {
-                    this.handleVisualizationData(message.payload);
-                }
-                break;
-            case 'agent_message':
-                // Agent chat messages are handled by AgentManager
-                break;
-            default:
-                console.log('Unknown message type:', message.type);
         }
     }
     
@@ -389,10 +303,10 @@ export class CADClient {
     }
     
     public dispose(): void {
-        if (this.ws) {
-            this.ws.close();
-            this.ws = null;
-        }
+        // Clean up callbacks
         this.geometryUpdateCallback = undefined;
+        this.planeVisualizationCallback = undefined;
+        this.sketchVisualizationCallback = undefined;
+        this.elementVisualizationCallback = undefined;
     }
 } 

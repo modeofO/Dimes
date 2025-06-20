@@ -81,6 +81,12 @@ export function CADApplication() {
         }
     }, []);
 
+    const clearRenderer = useCallback(() => {
+        if (rendererRef.current) {
+            rendererRef.current.clearAllGeometry();
+        }
+    }, []);
+
     // Initialize the CAD application
     useEffect(() => {
         const initialize = async () => {
@@ -307,7 +313,7 @@ export function CADApplication() {
                     onUpdatePlanes={setCreatedPlanes}
                     onUpdateSketches={setCreatedSketches}
                     onUpdateStatus={updateStatus}
-                    renderer={rendererRef.current}
+                    onClearRenderer={clearRenderer}
                 />
             </div>
 

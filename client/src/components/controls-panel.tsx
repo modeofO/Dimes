@@ -2,7 +2,6 @@
 
 import React, { useState, useCallback } from 'react';
 import { CADClient } from '@/lib/cad/api/cad-client';
-import { CADRenderer } from '@/lib/cad/renderer/cad-renderer';
 
 interface CreatedShape {
     id: string;
@@ -30,7 +29,6 @@ interface CreatedSketch {
 
 interface ControlsPanelProps {
     client: CADClient | null;
-    renderer: CADRenderer | null;
     createdShapes: CreatedShape[];
     createdPlanes: CreatedPlane[];
     createdSketches: CreatedSketch[];
@@ -39,11 +37,11 @@ interface ControlsPanelProps {
     onUpdatePlanes: React.Dispatch<React.SetStateAction<CreatedPlane[]>>;
     onUpdateSketches: React.Dispatch<React.SetStateAction<CreatedSketch[]>>;
     onUpdateStatus: (message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
+    onClearRenderer?: () => void;
 }
 
 export function ControlsPanel({
     client,
-    renderer,
     createdShapes,
     createdPlanes,
     createdSketches,
@@ -51,7 +49,8 @@ export function ControlsPanel({
     onUpdateShapes,
     onUpdatePlanes,
     onUpdateSketches,
-    onUpdateStatus
+    onUpdateStatus,
+    onClearRenderer
 }: ControlsPanelProps) {
     // Form states
     const [planeType, setPlaneType] = useState('XY');
@@ -75,20 +74,14 @@ export function ControlsPanel({
             );
             
             if (response.success && response.data) {
-                const plane: CreatedPlane = {
-                    plane_id: response.data.plane_id,
-                    plane_type: response.data.plane_type,
-                    origin: [response.data.origin_x || 0, response.data.origin_y || 0, response.data.origin_z || 0]
-                };
-                
-                onUpdatePlanes(prev => [...prev, plane]);
-                onUpdateStatus(`✅ Created plane: ${plane.plane_id}`, 'success');
+                // State will be updated via WebSocket notification to avoid duplicates
+                onUpdateStatus(`✅ Created plane: ${response.data.plane_id}`, 'success');
             }
         } catch (error) {
             console.error('Failed to create sketch plane:', error);
             onUpdateStatus(`❌ Error creating plane: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
         }
-    }, [client, planeType, planeOrigin, onUpdatePlanes, onUpdateStatus]);
+    }, [client, planeType, planeOrigin, onUpdateStatus]);
 
     const createSketch = useCallback(async () => {
         if (!client || !selectedPlane) return;
@@ -99,20 +92,14 @@ export function ControlsPanel({
             const response = await client.createSketch(selectedPlane);
             
             if (response.success && response.data) {
-                const sketch: CreatedSketch = {
-                    sketch_id: response.data.sketch_id,
-                    plane_id: response.data.plane_id,
-                    elements: []
-                };
-                
-                onUpdateSketches(prev => [...prev, sketch]);
-                onUpdateStatus(`✅ Created sketch: ${sketch.sketch_id}`, 'success');
+                // State will be updated via WebSocket notification to avoid duplicates
+                onUpdateStatus(`✅ Created sketch: ${response.data.sketch_id}`, 'success');
             }
         } catch (error) {
             console.error('Failed to create sketch:', error);
             onUpdateStatus(`❌ Error creating sketch: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
         }
-    }, [client, selectedPlane, onUpdateSketches, onUpdateStatus]);
+    }, [client, selectedPlane, onUpdateStatus]);
 
     const addSketchElement = useCallback(async () => {
         if (!client || !selectedSketch) return;
@@ -141,20 +128,14 @@ export function ControlsPanel({
             }
             
             if (response.success && response.data) {
-                // Update sketch elements
-                onUpdateSketches(prev => prev.map(sketch => 
-                    sketch.sketch_id === selectedSketch
-                        ? { ...sketch, elements: [...sketch.elements, { id: response.data.element_id, type: elementType }] }
-                        : sketch
-                ));
-                
+                // State will be updated via WebSocket notification to avoid duplicates
                 onUpdateStatus(`✅ Added ${elementType} to sketch`, 'success');
             }
         } catch (error) {
             console.error('Failed to add sketch element:', error);
             onUpdateStatus(`❌ Error adding element: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
         }
-    }, [client, selectedSketch, elementType, lineParams, circleParams, onUpdateSketches, onUpdateStatus]);
+    }, [client, selectedSketch, elementType, lineParams, circleParams, onUpdateStatus]);
 
     const extrudeFeature = useCallback(async () => {
         if (!client || !selectedObject) return;
@@ -189,36 +170,24 @@ export function ControlsPanel({
             const response = await client.extrudeFeature(sketchId, extrudeDistance, elementId);
             
             if (response.success && response.data) {
-                const shape: CreatedShape = {
-                    id: response.data.feature_id,
-                    type: `Extruded ${selectedType} (${selectedId})`,
-                    dimensions: { distance: extrudeDistance },
-                    visible: true
-                };
-                
-                onUpdateShapes(prev => [...prev, shape]);
-                
-                if (response.data.mesh_data && renderer) {
-                    renderer.updateGeometry(shape.id, response.data.mesh_data);
-                }
-                
+                // State and renderer will be updated via WebSocket notification to avoid duplicates
                 onUpdateStatus(`✅ Extruded object: ${response.data.feature_id}`, 'success');
             }
         } catch (error) {
             console.error('Failed to extrude feature:', error);
             onUpdateStatus(`❌ Error extruding: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
         }
-    }, [client, selectedObject, extrudeDistance, createdSketches, onUpdateShapes, onUpdateStatus, renderer]);
+    }, [client, selectedObject, extrudeDistance, createdSketches, onUpdateStatus]);
 
     const clearAllShapes = useCallback(() => {
-        if (renderer) {
-            renderer.clearAllGeometry();
+        if (onClearRenderer) {
+            onClearRenderer();
         }
         onUpdateShapes([]);
         onUpdatePlanes([]);
         onUpdateSketches([]);
         onUpdateStatus('Cleared all shapes and visualizations', 'info');
-    }, [renderer, onUpdateShapes, onUpdatePlanes, onUpdateSketches, onUpdateStatus]);
+    }, [onClearRenderer, onUpdateShapes, onUpdatePlanes, onUpdateSketches, onUpdateStatus]);
 
     return (
         <div className="h-full overflow-y-auto">
