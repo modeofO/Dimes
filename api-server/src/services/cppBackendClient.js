@@ -252,6 +252,42 @@ export class CppBackendClient {
   }
 
   /**
+   * Add fillet to sketch in the C++ backend
+   */
+  async addFillet(sessionId, filletData) {
+    try {
+      console.log('🔵 Fillet data received:', filletData);
+
+      const requestBody = {
+        session_id: sessionId,
+        sketch_id: filletData.sketch_id,
+        element1_id: filletData.element1_id,
+        element2_id: filletData.element2_id,
+        radius: filletData.radius,
+      };
+      
+      console.log('🔵 Flattened fillet request body:', requestBody);
+      
+      const jsonString = JSON.stringify(requestBody);
+      
+      console.log('🔧 Node.js sending fillet request to C++:');
+      console.log('📋 JSON string:', jsonString);
+
+      const response = await this.makeRequest('/api/v1/fillets', {
+        method: 'POST',
+        headers: {
+          'X-Session-ID': sessionId,
+        },
+        body: jsonString,
+      });
+      return response;
+    } catch (error) {
+      logger.error('Failed to add fillet in C++ backend:', error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Extrude sketch or element in the C++ backend
    */
   async extrudeFeature(sessionId, extrudeData) {

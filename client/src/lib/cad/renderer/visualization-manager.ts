@@ -102,6 +102,48 @@ export class VisualizationManager {
             
             const circle = new THREE.LineLoop(circleGeometry, circleMaterial);
             group.add(circle);
+            
+        } else if (data.element_type === 'fillet') {
+            const filletGeometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(data.points_3d);
+            filletGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const filletMaterial = new THREE.LineBasicMaterial({
+                color: 0x0080ff, // Blue color for fillets
+                linewidth: 3
+            });
+            
+            const fillet = new THREE.Line(filletGeometry, filletMaterial);
+            group.add(fillet);
+            
+        } else if (data.element_type === 'rectangle') {
+            const rectGeometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(data.points_3d);
+            rectGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const rectMaterial = new THREE.LineBasicMaterial({
+                color: 0xffff00, // Yellow color for rectangles
+                linewidth: 2
+            });
+            
+            const rectangle = new THREE.LineLoop(rectGeometry, rectMaterial);
+            group.add(rectangle);
+        } else {
+            console.warn(`Unknown element type for visualization: ${data.element_type}`);
+            // Fallback: render as a simple line if points_3d has at least 6 values (2 points)
+            if (data.points_3d && data.points_3d.length >= 6) {
+                const fallbackGeometry = new THREE.BufferGeometry();
+                const positions = new Float32Array(data.points_3d);
+                fallbackGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                
+                const fallbackMaterial = new THREE.LineBasicMaterial({
+                    color: 0x888888, // Gray color for unknown types
+                    linewidth: 1
+                });
+                
+                const fallback = new THREE.Line(fallbackGeometry, fallbackMaterial);
+                group.add(fallback);
+            }
         }
         
         this.scene.add(group);

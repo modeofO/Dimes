@@ -12,17 +12,19 @@
 #include <string>
 
 struct SketchElement {
-    enum Type { LINE, CIRCLE, ARC, RECTANGLE } type;
+    enum Type { LINE, CIRCLE, ARC, RECTANGLE, FILLET } type;
     std::string id;
     
     // For LINE: start_point, end_point
     // For CIRCLE: center_point, radius (stored in parameters[0])
     // For ARC: center_point, start_point, end_point, radius (stored in parameters[0])
     // For RECTANGLE: start_point (corner), parameters[0] = width, parameters[1] = height
+    // For FILLET: center_point, parameters[0] = radius, referenced_elements contains IDs of filleted elements
     gp_Pnt2d start_point;
     gp_Pnt2d end_point;
-    gp_Pnt2d center_point;  // For circles and arcs
+    gp_Pnt2d center_point;  // For circles, arcs and fillets
     std::vector<double> parameters;  // radius, angles, width, height, etc.
+    std::vector<std::string> referenced_elements;  // For fillets - stores IDs of elements being filleted
     
     SketchElement(Type t, const std::string& element_id) : type(t), id(element_id) {}
 };
@@ -46,6 +48,7 @@ public:
     std::string addCircle(const gp_Pnt2d& center, double radius);
     std::string addRectangle(const gp_Pnt2d& corner, double width, double height);
     std::string addArc(const gp_Pnt2d& center, const gp_Pnt2d& start, const gp_Pnt2d& end, double radius);
+    std::string addFillet(const std::string& element1_id, const std::string& element2_id, double radius);
     
     // Sketch operations
     TopoDS_Wire createWire() const;          // Create 3D wire from sketch elements
@@ -67,4 +70,8 @@ public:
     // Validation
     bool isValid() const;
     std::vector<std::string> getValidationErrors() const;
+    
+    // Element utility functions
+    bool getElementIntersection(const std::string& element1_id, const std::string& element2_id, gp_Pnt2d& intersection) const;
+    bool isElementsConnected(const std::string& element1_id, const std::string& element2_id) const;
 }; 

@@ -66,6 +66,7 @@ public:
     std::string addLineToSketch(const std::string& sketch_id, double x1, double y1, double x2, double y2);
     std::string addCircleToSketch(const std::string& sketch_id, double center_x, double center_y, double radius);
     std::string addRectangleToSketch(const std::string& sketch_id, double x, double y, double width, double height);
+    std::string addFilletToSketch(const std::string& sketch_id, const std::string& element1_id, const std::string& element2_id, double radius);
     std::string extrudeSketch(const std::string& sketch_id, double distance, const std::string& direction = "normal");
     std::string extrudeSketchElement(const std::string& sketch_id, const std::string& element_id, double distance, const std::string& direction = "normal");
     

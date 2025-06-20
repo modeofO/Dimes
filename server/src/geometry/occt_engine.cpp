@@ -425,6 +425,30 @@ std::string OCCTEngine::addRectangleToSketch(const std::string& sketch_id, doubl
     }
 }
 
+std::string OCCTEngine::addFilletToSketch(const std::string& sketch_id, const std::string& element1_id, const std::string& element2_id, double radius) {
+    std::cout << "🔵 Adding fillet to sketch " << sketch_id << ": elements " << element1_id << " & " << element2_id << " radius=" << radius << std::endl;
+    std::cout.flush();
+    
+    if (!sketchExists(sketch_id)) {
+        std::cerr << "❌ Sketch not found: " << sketch_id << std::endl;
+        return "";
+    }
+    
+    try {
+        auto sketch = sketches_[sketch_id];
+        
+        std::string fillet_id = sketch->addFillet(element1_id, element2_id, radius);
+        std::cout << "✅ Added fillet " << fillet_id << " to sketch " << sketch_id << std::endl;
+        std::cout.flush();
+        
+        return fillet_id;
+        
+    } catch (const Standard_Failure& e) {
+        std::cerr << "OCCT Error adding fillet to sketch: " << e.GetMessageString() << std::endl;
+        return "";
+    }
+}
+
 std::string OCCTEngine::extrudeSketch(const std::string& sketch_id, double distance, const std::string& direction) {
     std::cout << "🚀 Extruding sketch " << sketch_id << " by distance " << distance << std::endl;
     std::cout.flush();
@@ -704,6 +728,7 @@ Json::Value OCCTEngine::getSketchElementVisualizationData(const std::string& ske
             case SketchElement::CIRCLE: element_type = "circle"; break;
             case SketchElement::ARC: element_type = "arc"; break;
             case SketchElement::RECTANGLE: element_type = "rectangle"; break;
+            case SketchElement::FILLET: element_type = "fillet"; break;
             default: element_type = "unknown"; break;
         }
         viz_data["element_type"] = element_type;
@@ -796,6 +821,46 @@ Json::Value OCCTEngine::getSketchElementVisualizationData(const std::string& ske
             parameters_2d["y"] = corner.Y();
             parameters_2d["width"] = width;
             parameters_2d["height"] = height;
+        } else if (target_element->type == SketchElement::FILLET) {
+            // For fillets, generate arc points from start to end
+            double radius = target_element->parameters[0];
+            gp_Pnt center_3d = plane->to3D(target_element->center_point);
+            gp_Pnt start_3d = plane->to3D(target_element->start_point);
+            gp_Pnt end_3d = plane->to3D(target_element->end_point);
+            
+            // Generate fillet arc points (8 segments for smooth visualization)
+            const int segments = 8;
+            for (int i = 0; i <= segments; ++i) {
+                double t = static_cast<double>(i) / segments;
+                // Simple linear interpolation for arc approximation
+                // In production, proper arc parameter calculation would be needed
+                double angle = t * M_PI / 2; // Quarter circle approximation
+                gp_Pnt2d arc_pt(
+                    target_element->center_point.X() + radius * cos(angle),
+                    target_element->center_point.Y() + radius * sin(angle)
+                );
+                gp_Pnt arc_3d = plane->to3D(arc_pt);
+                
+                points_3d_array.append(arc_3d.X());
+                points_3d_array.append(arc_3d.Y());
+                points_3d_array.append(arc_3d.Z());
+            }
+            
+            // Store 2D parameters
+            parameters_2d["center_x"] = target_element->center_point.X();
+            parameters_2d["center_y"] = target_element->center_point.Y();
+            parameters_2d["start_x"] = target_element->start_point.X();
+            parameters_2d["start_y"] = target_element->start_point.Y();
+            parameters_2d["end_x"] = target_element->end_point.X();
+            parameters_2d["end_y"] = target_element->end_point.Y();
+            parameters_2d["radius"] = radius;
+            
+            // Include referenced elements
+            Json::Value referenced_elements = Json::Value::createArray();
+            for (const auto& ref_id : target_element->referenced_elements) {
+                referenced_elements.append(ref_id);
+            }
+            parameters_2d["referenced_elements"] = referenced_elements;
         }
         
         viz_data["points_3d"] = points_3d_array;

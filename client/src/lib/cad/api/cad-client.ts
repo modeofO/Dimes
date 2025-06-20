@@ -8,6 +8,8 @@ import {
     CreateSketchResponse,
     AddSketchElementRequest,
     AddSketchElementResponse,
+    AddFilletRequest,
+    AddFilletResponse,
     ExtrudeFeatureRequest,
     ExtrudeFeatureResponse
 } from '../types/api';
@@ -165,6 +167,29 @@ export class CADClient {
         // If visualization data is included, trigger visualization callback
         if (response.data?.visualization_data && this.elementVisualizationCallback) {
             console.log('🎯 Updating element visualization with data:', response.data.visualization_data);
+            this.elementVisualizationCallback(response.data.visualization_data);
+        }
+        
+        return response;
+    }
+    
+    public async addFilletToSketch(sketchId: string, element1Id: string, element2Id: string, radius: number): Promise<AddFilletResponse> {
+        const request: AddFilletRequest = {
+            sketch_id: sketchId,
+            element1_id: element1Id,
+            element2_id: element2Id,
+            radius: radius
+        };
+        
+        console.log('🔵 Adding fillet to sketch:', request);
+        
+        const response = await this.makeRequest<AddFilletResponse>('/api/v1/cad/fillets', 'POST', request);
+        
+        console.log('📨 Received addFilletToSketch response:', response);
+        
+        // If visualization data is included, trigger visualization callback
+        if (response.data?.visualization_data && this.elementVisualizationCallback) {
+            console.log('🎯 Updating fillet visualization with data:', response.data.visualization_data);
             this.elementVisualizationCallback(response.data.visualization_data);
         }
         

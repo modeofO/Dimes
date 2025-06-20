@@ -123,6 +123,24 @@ export interface ExtrudeFeatureResponse extends CADResponse {
     };
 }
 
+export interface AddFilletRequest {
+    sketch_id: string;
+    element1_id: string;
+    element2_id: string;
+    radius: number;
+}
+
+export interface AddFilletResponse extends CADResponse {
+    data: {
+        sketch_id: string;
+        fillet_id: string;
+        element1_id: string;
+        element2_id: string;
+        radius: number;
+        visualization_data?: SketchElementVisualizationData;
+    };
+}
+
 export interface DaydreamsInstructionRequest {
     instruction: string;
     sessionId: string;

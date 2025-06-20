@@ -45,6 +45,7 @@ private:
     void handleCreateSketchPlane(const std::string& session_id, const std::string& request_body, std::string& response);
     void handleCreateSketch(const std::string& session_id, const std::string& request_body, std::string& response);
     void handleAddSketchElement(const std::string& session_id, const std::string& request_body, std::string& response);
+    void handleAddFillet(const std::string& session_id, const std::string& request_body, std::string& response);
     void handleExtrudeFeature(const std::string& session_id, const std::string& request_body, std::string& response);
     
     // Daydreams compatibility endpoint

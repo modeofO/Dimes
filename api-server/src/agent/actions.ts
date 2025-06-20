@@ -95,7 +95,7 @@ const createSketchAction = action({
 
 const addSketchElementAction = action({
     name: "addSketchElement",
-    description: "Add a 2D element to a sketch. IMPORTANT: Use 'rectangle' for rectangular shapes instead of creating 4 separate lines.",
+    description: "Add a 2D element to a sketch.",
     schema: z.object({
         sketch_id: z.string().describe("The ID of the sketch to add the element to."),
         element_type: z.enum(['line', 'circle', 'rectangle']).describe("The type of element to add. Use 'rectangle' for squares/rectangles."),
@@ -135,6 +135,27 @@ const createRectangleAction = action({
             }
         };
         const result = await cppBackend.addSketchElement(sessionId, elementData) as CppBackendResponse;
+        if (result.success && result.data) {
+          sendVisualizationData(agent, sessionId, result.data);
+          return result.data;
+        }
+        return result;
+    }
+});
+
+const addFilletAction = action({
+    name: "addFillet",
+    description: "Add a fillet (rounded corner) between two sketch elements. Creates a smooth arc transition between two lines or other geometric elements.",
+    schema: z.object({
+        sketch_id: z.string().describe("The ID of the sketch containing the elements to fillet."),
+        element1_id: z.string().describe("The ID of the first element to connect with the fillet."),
+        element2_id: z.string().describe("The ID of the second element to connect with the fillet."),
+        radius: z.number().gt(0).describe("The radius of the fillet arc.")
+    }),
+    async handler(filletData, ctx, agent) {
+        const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
+        const sessionId = ctx.id;
+        const result = await cppBackend.addFillet(sessionId, filletData) as CppBackendResponse;
         if (result.success && result.data) {
           sendVisualizationData(agent, sessionId, result.data);
           return result.data;
@@ -210,6 +231,7 @@ export const cadActions = [
   createSketchAction,
   addSketchElementAction,
   createRectangleAction,
+  addFilletAction,
   extrudeFeatureAction,
   performBooleanOperationAction,
   tessellateModelAction,

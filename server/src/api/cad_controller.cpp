@@ -173,6 +173,18 @@ void CADController::setupRoutes() {
         }
     });
 
+    server_->Post("/api/v1/fillets", [this](const httplib::Request& req, httplib::Response& res) {
+        try {
+            std::string session_id = getSessionId(req);
+            std::string response_body;
+            handleAddFillet(session_id, req.body, response_body);
+            res.set_content(response_body, "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(createErrorResponse(e.what()), "application/json");
+        }
+    });
+
     server_->Post("/api/v1/extrude", [this](const httplib::Request& req, httplib::Response& res) {
         try {
             std::string session_id = getSessionId(req);
@@ -958,6 +970,84 @@ void CADController::handleAddSketchElement(const std::string& session_id, const 
         
     } catch (const std::exception& e) {
         response = createErrorResponse(std::string("Add sketch element exception: ") + e.what());
+    }
+}
+
+void CADController::handleAddFillet(const std::string& session_id, const std::string& request_body, std::string& response) {
+    try {
+        std::cout << "🔵 Adding fillet for session: " << session_id << std::endl;
+        std::cout << "📋 Received request body: '" << request_body << "'" << std::endl;
+        std::cout.flush();
+        
+        Json::Value request;
+        Json::Reader reader;
+        if (!reader.parse(request_body, request)) {
+            std::cout << "❌ JSON parsing failed for fillet!" << std::endl;
+            std::cout << "❌ Request body was: '" << request_body << "'" << std::endl;
+            std::cout.flush();
+            response = createErrorResponse("Invalid JSON in request body");
+            return;
+        }
+        
+        std::cout << "✅ Fillet JSON parsed successfully" << std::endl;
+        std::cout.flush();
+        
+        auto engine = SessionManager::getInstance().getOrCreateSession(session_id);
+        if (!engine) {
+            response = createErrorResponse("Failed to get session");
+            return;
+        }
+        
+        // Extract required parameters
+        std::string sketch_id = request.get("sketch_id", "").asString();
+        std::string element1_id = request.get("element1_id", "").asString();
+        std::string element2_id = request.get("element2_id", "").asString();
+        double radius = request.get("radius", 1.0).asDouble();
+        
+        if (sketch_id.empty() || element1_id.empty() || element2_id.empty()) {
+            response = createErrorResponse("sketch_id, element1_id, and element2_id are required");
+            return;
+        }
+        
+        if (radius <= 0.0) {
+            response = createErrorResponse("radius must be positive");
+            return;
+        }
+        
+        std::cout << "🔵 Adding fillet to sketch " << sketch_id << ": elements " << element1_id 
+                  << " & " << element2_id << " radius=" << radius << std::endl;
+        std::cout.flush();
+        
+        std::string fillet_id = engine->addFilletToSketch(sketch_id, element1_id, element2_id, radius);
+        
+        if (fillet_id.empty()) {
+            response = createErrorResponse("Failed to add fillet");
+            return;
+        }
+        
+        // Get fillet visualization data
+        Json::Value fillet_viz_data = engine->getSketchElementVisualizationData(sketch_id, fillet_id);
+        
+        Json::Value json_response;
+        json_response["success"] = true;
+        json_response["session_id"] = session_id;
+        json_response["timestamp"] = static_cast<int64_t>(std::time(nullptr));
+        
+        Json::Value data;
+        data["sketch_id"] = sketch_id;
+        data["fillet_id"] = fillet_id;
+        data["element1_id"] = element1_id;
+        data["element2_id"] = element2_id;
+        data["radius"] = radius;
+        
+        // Add visualization data
+        data["visualization_data"] = fillet_viz_data;
+        
+        json_response["data"] = data;
+        response = jsonToString(json_response);
+        
+    } catch (const std::exception& e) {
+        response = createErrorResponse(std::string("Add fillet exception: ") + e.what());
     }
 }
 
