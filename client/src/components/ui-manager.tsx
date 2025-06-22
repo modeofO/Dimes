@@ -69,7 +69,7 @@ export function UIManager({
                             <div
                                 key={`shape-${shape.id}`}
                                 className={`px-2 py-1 text-sm cursor-pointer rounded hover:bg-gray-100 ${
-                                    isSelected(shape.id, 'feature') ? 'bg-blue-100 text-blue-800' : ''
+                                    isSelected(shape.id, 'feature') ? 'bg-blue-100 text-blue-800' : 'text-gray-900'
                                 }`}
                                 onClick={() => handleItemClick(shape.id, 'feature')}
                             >
@@ -82,7 +82,7 @@ export function UIManager({
                             <div key={`plane-${plane.plane_id}`} className="space-y-1">
                                 <div
                                     className={`px-2 py-1 text-sm cursor-pointer rounded hover:bg-gray-100 ${
-                                        isSelected(plane.plane_id, 'plane') ? 'bg-blue-100 text-blue-800' : ''
+                                        isSelected(plane.plane_id, 'plane') ? 'bg-blue-100 text-blue-800' : 'text-gray-900'
                                     }`}
                                     onClick={() => handleItemClick(plane.plane_id, 'plane')}
                                 >
@@ -96,7 +96,7 @@ export function UIManager({
                                         <div key={`sketch-${sketch.sketch_id}`} className="ml-4 space-y-1">
                                             <div
                                                 className={`px-2 py-1 text-sm cursor-pointer rounded hover:bg-gray-100 ${
-                                                    isSelected(sketch.sketch_id, 'sketch') ? 'bg-blue-100 text-blue-800' : ''
+                                                    isSelected(sketch.sketch_id, 'sketch') ? 'bg-blue-100 text-blue-800' : 'text-gray-900'
                                                 }`}
                                                 onClick={() => handleItemClick(sketch.sketch_id, 'sketch')}
                                             >
@@ -108,7 +108,7 @@ export function UIManager({
                                                 <div
                                                     key={`element-${element.id}`}
                                                     className={`ml-4 px-2 py-1 text-sm cursor-pointer rounded hover:bg-gray-100 ${
-                                                        isSelected(element.id, 'element') ? 'bg-blue-100 text-blue-800' : ''
+                                                        isSelected(element.id, 'element') ? 'bg-blue-100 text-blue-800' : 'text-gray-900'
                                                     }`}
                                                     onClick={() => handleItemClick(element.id, 'element')}
                                                 >

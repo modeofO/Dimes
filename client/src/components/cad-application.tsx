@@ -300,9 +300,9 @@ export function CADApplication() {
     }, [updateStatus]);
 
     return (
-        <div className="flex h-screen bg-gray-100">
-            {/* Left Panel - Controls */}
-            <div className="w-80 bg-white border-r border-gray-300 overflow-y-auto">
+        <div className="flex h-screen w-screen bg-gray-100">
+            {/* Left Sidebar */}
+            <div className="w-[350px] bg-white border-r border-gray-300 shadow-lg flex flex-col">
                 <ControlsPanel 
                     client={clientRef.current}
                     createdShapes={createdShapes}
@@ -317,25 +317,18 @@ export function CADApplication() {
                 />
             </div>
 
-            {/* Main Content Area */}
+            {/* Main Content */}
             <div className="flex-1 flex flex-col">
-                {/* 3D Viewport */}
-                <div className="flex-1 relative">
-                    <div 
-                        ref={viewportRef}
-                        className="w-full h-full"
-                        style={{ background: '#f0f0f0' }}
-                    />
+                <div ref={viewportRef} className="flex-1 relative bg-white">
+                    {/* The 3D viewport will be mounted here */}
                 </div>
-
-                {/* Status Bar */}
                 <StatusBar status={status} />
             </div>
 
-            {/* Right Panel - Scene Tree and Chat */}
-            <div className="w-80 bg-white border-l border-gray-300 flex flex-col">
+            {/* Right Sidebar */}
+            <div className="w-[350px] bg-white border-l border-gray-300 shadow-lg flex flex-col h-0">
                 {/* Scene Tree */}
-                <div className="flex-1 border-b border-gray-300">
+                <div className="flex-1">
                     <UIManager 
                         createdPlanes={createdPlanes}
                         createdSketches={createdSketches}
@@ -344,13 +337,13 @@ export function CADApplication() {
                         onSelection={handleSelection}
                     />
                 </div>
+                
+                {/* Spacer */}
+                <div className="h-2 bg-gray-100 border-t border-b border-gray-300"></div>
 
-                {/* Chat Panel */}
-                <div className="h-80">
-                    <ChatPanel 
-                        messages={chatMessages}
-                        onSendMessage={handleChatMessage}
-                    />
+                {/* Agent Chat */}
+                <div className="flex-1">
+                    <ChatPanel messages={chatMessages} onSendMessage={handleChatMessage} />
                 </div>
             </div>
         </div>
