@@ -1,0 +1,8 @@
+# environment.yml
+name: cad-env
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pythonocc-core=7.9.0
+  - pip

@@ -1,0 +1,28 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+  cad-server:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+    command: conda run -n cad-env python main.py
+
+  dev:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+      - conda_cache:/opt/conda/pkgs
+    working_dir: /app
+    tty: true
+    stdin_open: true
+    command: bash
+    environment:
+      - CONDA_DEFAULT_ENV=cad-env
+
+volumes:
+  conda_cache:

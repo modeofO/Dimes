@@ -1,0 +1,28 @@
+# Dockerfile
+FROM continuumio/miniconda3:latest
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create conda environment
+COPY environment.yml .
+RUN conda env create -f environment.yml
+
+# Make RUN commands use the new environment
+SHELL ["conda", "run", "-n", "cad-env", "/bin/bash", "-c"]
+
+# Install additional pip packages in the conda environment
+COPY requirements.txt .
+RUN conda run -n cad-env pip install -r requirements.txt
+
+# Expose port for your web server
+EXPOSE 8080
+
+# Activate environment and run
+CMD ["conda", "run", "-n", "cad-env", "python", "main.py"]
