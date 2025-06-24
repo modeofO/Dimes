@@ -100,7 +100,7 @@ export function UIManager({
                                                 }`}
                                                 onClick={() => handleItemClick(sketch.sketch_id, 'sketch')}
                                             >
-                                                ✏️ Sketch ({sketch.sketch_id}) - {sketch.elements.length} elements
+                                                {sketch.sketch_id} - {sketch.elements.length} elements
                                             </div>
 
                                             {/* Elements in this sketch */}

@@ -70,6 +70,80 @@ class MeshData:
         self.face_count = len(self.faces) // 3
 
 
+class Sketch:
+    """
+    Sketch class for sketch-based modeling
+    """
+    
+    def __init__(self, sketch_id: str, plane_id: str, sketch_plane: 'SketchPlane'):
+        self.sketch_id = sketch_id
+        self.plane_id = plane_id
+        self.sketch_plane = sketch_plane
+        self.elements = []  # List of sketch elements
+        self.is_closed = False
+        
+        print(f"✅ Created sketch: {sketch_id} on plane: {plane_id}")
+    
+    def get_sketch_id(self) -> str:
+        """Get sketch ID"""
+        return self.sketch_id
+    
+    def get_plane_id(self) -> str:
+        """Get associated plane ID"""
+        return self.plane_id
+    
+    def get_element_count(self) -> int:
+        """Get number of elements in sketch"""
+        return len(self.elements)
+    
+    def add_element(self, element: Any) -> bool:
+        """Add element to sketch"""
+        try:
+            self.elements.append(element)
+            print(f"✅ Added element to sketch {self.sketch_id}: {len(self.elements)} elements")
+            return True
+        except Exception as e:
+            print(f"❌ Error adding element to sketch: {e}")
+            return False
+    
+    def get_visualization_data(self) -> Dict[str, Any]:
+        """Get visualization data for the sketch - matches SketchVisualizationData interface"""
+        # Get coordinate system from the associated plane
+        origin = self.sketch_plane.get_origin()
+        normal = self.sketch_plane.get_normal()
+        
+        # Get local axes from plane's coordinate system
+        if self.sketch_plane.coordinate_system:
+            x_direction = self.sketch_plane.coordinate_system.XDirection()
+            y_direction = self.sketch_plane.coordinate_system.YDirection()
+            u_axis = [x_direction.X(), x_direction.Y(), x_direction.Z()]
+            v_axis = [y_direction.X(), y_direction.Y(), y_direction.Z()]
+        else:
+            # Fallback axes based on plane type
+            plane_type = self.sketch_plane.get_plane_type()
+            if plane_type == "XY":
+                u_axis = [1.0, 0.0, 0.0]  # X axis
+                v_axis = [0.0, 1.0, 0.0]  # Y axis
+            elif plane_type == "XZ":
+                u_axis = [1.0, 0.0, 0.0]  # X axis
+                v_axis = [0.0, 0.0, 1.0]  # Z axis
+            elif plane_type == "YZ":
+                u_axis = [0.0, 1.0, 0.0]  # Y axis
+                v_axis = [0.0, 0.0, 1.0]  # Z axis
+            else:
+                u_axis = [1.0, 0.0, 0.0]
+                v_axis = [0.0, 1.0, 0.0]
+        
+        return {
+            "sketch_id": self.sketch_id,
+            "plane_id": self.plane_id,
+            "origin": [origin.x, origin.y, origin.z],          # Array format
+            "u_axis": u_axis,                                   # Local X axis
+            "v_axis": v_axis,                                   # Local Y axis
+            "normal": [normal.x, normal.y, normal.z]           # Array format
+        }
+
+
 class SketchPlane:
     """
     Sketch plane class for sketch-based modeling
@@ -188,7 +262,7 @@ class OCCTEngine:
         
         # Sketch-based modeling support
         self.sketch_planes: Dict[str, SketchPlane] = {}
-        self.sketches: Dict[str, Any] = {}
+        self.sketches: Dict[str, Sketch] = {}
         self.extrude_features: Dict[str, Any] = {}
         
         print("OCCT Engine initialized (Python)")
@@ -424,8 +498,8 @@ class OCCTEngine:
         print(f"🎯 Creating sketch plane: {plane_type} at ({origin.x},{origin.y},{origin.z})")
         
         try:
-            # Generate unique plane ID
-            plane_id = f"plane_{int(time.time() * 1000000) % 1000000}"
+            # Generate unique plane ID using sequential numbering
+            plane_id = self._generate_unique_plane_id()
             
             # Create sketch plane
             sketch_plane = SketchPlane(plane_id, plane_type, origin)
@@ -469,6 +543,92 @@ class OCCTEngine:
     def get_available_plane_ids(self) -> List[str]:
         """Get list of available plane IDs - equivalent to C++ getAvailablePlaneIds"""
         return list(self.sketch_planes.keys())
+    
+    def create_sketch(self, plane_id: str) -> str:
+        """
+        Create sketch on plane - equivalent to C++ createSketch
+        
+        Args:
+            plane_id: ID of the plane to create sketch on
+            
+        Returns:
+            Sketch ID if successful, empty string if failed
+        """
+        print(f"📐 Creating sketch on plane: {plane_id}")
+        
+        try:
+            # Check if plane exists
+            if not self.plane_exists(plane_id):
+                print(f"❌ Sketch plane not found: {plane_id}")
+                return ""
+            
+            # Generate unique sketch ID using sequential numbering
+            sketch_id = self._generate_unique_sketch_id()
+            
+            # Get the sketch plane
+            sketch_plane = self.sketch_planes[plane_id]
+            
+            # Create sketch
+            sketch = Sketch(sketch_id, plane_id, sketch_plane)
+            
+            # Store the sketch
+            self.sketches[sketch_id] = sketch
+            
+            print(f"✅ Created sketch: {sketch_id} on plane: {plane_id}")
+            return sketch_id
+            
+        except Exception as e:
+            print(f"❌ Error creating sketch: {e}")
+            return ""
+    
+    def sketch_exists(self, sketch_id: str) -> bool:
+        """Check if sketch exists - equivalent to C++ sketchExists"""
+        return sketch_id in self.sketches
+    
+    def get_sketch_visualization_data(self, sketch_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get sketch visualization data - equivalent to C++ getSketchVisualizationData
+        
+        Args:
+            sketch_id: Sketch identifier
+            
+        Returns:
+            Visualization data dictionary or None if sketch doesn't exist
+        """
+        if not self.sketch_exists(sketch_id):
+            print(f"❌ Sketch not found: {sketch_id}")
+            return None
+        
+        try:
+            sketch = self.sketches[sketch_id]
+            return sketch.get_visualization_data()
+            
+        except Exception as e:
+            print(f"❌ Error getting sketch visualization data: {e}")
+            return None
+    
+    def get_available_sketch_ids(self) -> List[str]:
+        """Get list of available sketch IDs - equivalent to C++ getAvailableSketchIds"""
+        return list(self.sketches.keys())
+    
+    def get_sketch_info(self, sketch_id: str) -> Optional[Dict[str, Any]]:
+        """Get sketch information - equivalent to C++ getSketchInfo"""
+        if not self.sketch_exists(sketch_id):
+            return None
+        
+        try:
+            sketch = self.sketches[sketch_id]
+            
+            return {
+                "sketch_id": sketch.get_sketch_id(),
+                "plane_id": sketch.get_plane_id(),
+                "element_count": sketch.get_element_count(),
+                "is_closed": sketch.is_closed
+            }
+            
+        except Exception as e:
+            print(f"❌ Error getting sketch info: {e}")
+            return None
     
     # ==================== UTILITY METHODS ====================
     
@@ -519,4 +679,42 @@ class OCCTEngine:
     
     def _generate_shape_id(self) -> str:
         """Generate unique shape ID - equivalent to C++ generateShapeId"""
-        return f"shape_{''.join(random.choices(string.digits, k=4))}" 
+        return f"shape_{''.join(random.choices(string.digits, k=4))}"
+    
+    def _generate_unique_plane_id(self) -> str:
+        """Generate unique plane ID using sequential numbering"""
+        # Extract existing plane numbers
+        existing_numbers = set()
+        for plane_id in self.sketch_planes.keys():
+            if plane_id.startswith("plane_"):
+                try:
+                    number = int(plane_id.split("_")[1])
+                    existing_numbers.add(number)
+                except (IndexError, ValueError):
+                    continue
+        
+        # Find the first available number starting from 1
+        counter = 1
+        while counter in existing_numbers:
+            counter += 1
+        
+        return f"plane_{counter}"
+    
+    def _generate_unique_sketch_id(self) -> str:
+        """Generate unique sketch ID using sequential numbering"""
+        # Extract existing sketch numbers
+        existing_numbers = set()
+        for sketch_id in self.sketches.keys():
+            if sketch_id.startswith("sketch_"):
+                try:
+                    number = int(sketch_id.split("_")[1])
+                    existing_numbers.add(number)
+                except (IndexError, ValueError):
+                    continue
+        
+        # Find the first available number starting from 1
+        counter = 1
+        while counter in existing_numbers:
+            counter += 1
+        
+        return f"sketch_{counter}" 

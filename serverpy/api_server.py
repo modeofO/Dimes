@@ -539,20 +539,47 @@ class CADAPIServer:
         return response_data
     
     async def _handle_create_sketch(self, request: CreateSketchRequest) -> Dict[str, Any]:
-        """Handle sketch creation - equivalent to C++ handleCreateSketch"""
+        """Handle sketch creation - Real implementation using geometry engine"""
         print(f"📐 Creating sketch on plane: {request.plane_id} for session {request.session_id}")
+
+        session_manager = SessionManager.get_instance()
+        engine = session_manager.get_or_create_session(request.session_id)
         
-        # Placeholder implementation
-        sketch_id = f"sketch_{int(time.time())}"
+        if engine is None:
+            raise Exception("Failed to get session")
         
-        response_data = {
+        # Validate that the plane exists
+        if not engine.plane_exists(request.plane_id):
+            raise Exception(f"Sketch plane '{request.plane_id}' does not exist")
+        
+        # Create sketch using geometry engine
+        sketch_id = engine.create_sketch(request.plane_id)
+        
+        if not sketch_id:
+            raise Exception("Failed to create sketch in geometry engine")
+        
+        # Get visualization data for the created sketch
+        viz_data = engine.get_sketch_visualization_data(sketch_id)
+        
+        # Get sketch info
+        sketch_info = engine.get_sketch_info(sketch_id)
+        
+        response_data: Dict[str, Any] = {
             "sketch_id": sketch_id,
             "plane_id": request.plane_id,
             "session_id": request.session_id,
-            "message": "Sketch created (placeholder implementation)"
+            "message": f"Sketch {sketch_id} created successfully on plane {request.plane_id}"
         }
         
-        print(f"✅ Sketch created: {sketch_id}")
+        # Add visualization data if available
+        if viz_data:
+            response_data["visualization_data"] = viz_data
+        
+        # Add sketch info if available
+        if sketch_info:
+            response_data["sketch_info"] = sketch_info
+        
+        print(f"✅ Sketch created successfully: {sketch_id}")
         return response_data
     
     async def _handle_add_sketch_element(self, request: AddSketchElementRequest) -> Dict[str, Any]:
