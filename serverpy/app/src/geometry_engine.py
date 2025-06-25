@@ -1940,6 +1940,196 @@ class Sketch:
             print(f"❌ Error offsetting polygon: {e}")
             return None
 
+    def copy_element(self, element_id: str, num_copies: int, direction_x: float, direction_y: float, distance: float) -> List[str]:
+        """
+        Copy a geometry element multiple times with linear spacing
+        
+        Args:
+            element_id: ID of element to copy
+            num_copies: Number of copies to create (excluding original)
+            direction_x: X component of direction vector (normalized automatically)
+            direction_y: Y component of direction vector (normalized automatically)
+            distance: Distance between copies
+            
+        Returns:
+            List of new copied element IDs
+        """
+        try:
+            print(f"📄 Copying element {element_id} {num_copies} times with direction ({direction_x}, {direction_y}) and distance {distance}")
+            
+            # Find the element
+            element = self.get_element_by_id(element_id)
+            if not element:
+                print(f"❌ Element {element_id} not found")
+                return []
+            
+            if num_copies <= 0:
+                print(f"❌ Number of copies must be positive, got {num_copies}")
+                return []
+            
+            # Normalize direction vector
+            direction_length = math.sqrt(direction_x**2 + direction_y**2)
+            if direction_length < 1e-10:
+                print(f"❌ Direction vector too small: ({direction_x}, {direction_y})")
+                return []
+            
+            dir_x = direction_x / direction_length
+            dir_y = direction_y / direction_length
+            
+            copied_element_ids = []
+            
+            # Create copies
+            for copy_index in range(1, num_copies + 1):
+                # Calculate offset for this copy
+                offset_x = dir_x * distance * copy_index
+                offset_y = dir_y * distance * copy_index
+                
+                # Create copied element
+                copied_element = self._create_copied_element(element, offset_x, offset_y, copy_index)
+                
+                if copied_element:
+                    # Add copied element to sketch
+                    if self.add_element(copied_element):
+                        copied_element_ids.append(copied_element.id)
+                        print(f"✅ Created copy {copy_index}: {copied_element.id}")
+                    else:
+                        print(f"❌ Failed to add copied element {copy_index}")
+                else:
+                    print(f"❌ Failed to create copied element {copy_index}")
+            
+            print(f"✅ Copy operation completed: {len(copied_element_ids)} copies created")
+            return copied_element_ids
+            
+        except Exception as e:
+            print(f"❌ Error copying element: {e}")
+            return []
+    
+    def _create_copied_element(self, element: SketchElement, offset_x: float, offset_y: float, copy_index: int) -> Optional[SketchElement]:
+        """Create a copied element with offset applied"""
+        try:
+            element_type = element.element_type
+            
+            # Generate unique ID for copied element
+            copied_id = f"copy_{copy_index}_{element.id}_{int(time.time() * 1000) % 10000}"
+            
+            if element_type == SketchElementType.LINE:
+                # Copy line with offset applied to both endpoints
+                if not element.start_point or not element.end_point:
+                    return None
+                
+                copied_start = gp_Pnt2d(
+                    element.start_point.X() + offset_x,
+                    element.start_point.Y() + offset_y
+                )
+                copied_end = gp_Pnt2d(
+                    element.end_point.X() + offset_x,
+                    element.end_point.Y() + offset_y
+                )
+                
+                return SketchElement(
+                    id=copied_id,
+                    element_type=SketchElementType.LINE,
+                    start_point=copied_start,
+                    end_point=copied_end
+                )
+            
+            elif element_type == SketchElementType.CIRCLE:
+                # Copy circle with offset applied to center
+                if not element.center_point or not element.parameters:
+                    return None
+                
+                copied_center = gp_Pnt2d(
+                    element.center_point.X() + offset_x,
+                    element.center_point.Y() + offset_y
+                )
+                radius = element.parameters[0]
+                
+                return SketchElement(
+                    id=copied_id,
+                    element_type=SketchElementType.CIRCLE,
+                    center_point=copied_center,
+                    parameters=[radius]
+                )
+            
+            elif element_type == SketchElementType.RECTANGLE:
+                # Copy rectangle with offset applied to corner
+                if not element.start_point or not element.parameters or len(element.parameters) < 2:
+                    return None
+                
+                copied_corner = gp_Pnt2d(
+                    element.start_point.X() + offset_x,
+                    element.start_point.Y() + offset_y
+                )
+                width = element.parameters[0]
+                height = element.parameters[1]
+                
+                return SketchElement(
+                    id=copied_id,
+                    element_type=SketchElementType.RECTANGLE,
+                    start_point=copied_corner,
+                    parameters=[width, height]
+                )
+            
+            elif element_type == SketchElementType.ARC:
+                # Copy arc with offset applied to all points
+                if (not element.start_point or not element.end_point or 
+                    not element.center_point or not element.parameters or len(element.parameters) < 3):
+                    return None
+                
+                copied_start = gp_Pnt2d(
+                    element.start_point.X() + offset_x,
+                    element.start_point.Y() + offset_y
+                )
+                copied_end = gp_Pnt2d(
+                    element.end_point.X() + offset_x,
+                    element.end_point.Y() + offset_y
+                )
+                copied_center = gp_Pnt2d(
+                    element.center_point.X() + offset_x,
+                    element.center_point.Y() + offset_y
+                )
+                
+                # Copy arc parameters (radius and angles remain the same)
+                radius = element.parameters[0]
+                start_angle = element.parameters[1]
+                end_angle = element.parameters[2]
+                
+                return SketchElement(
+                    id=copied_id,
+                    element_type=SketchElementType.ARC,
+                    start_point=copied_start,
+                    end_point=copied_end,
+                    center_point=copied_center,
+                    parameters=[radius, start_angle, end_angle]
+                )
+            
+            elif element_type == SketchElementType.POLYGON:
+                # Copy polygon with offset applied to center
+                if not element.center_point or not element.parameters:
+                    return None
+                
+                copied_center = gp_Pnt2d(
+                    element.center_point.X() + offset_x,
+                    element.center_point.Y() + offset_y
+                )
+                radius = element.parameters[0]
+                sides = element.parameters[1]
+                
+                return SketchElement(
+                    id=copied_id,
+                    element_type=SketchElementType.POLYGON,
+                    center_point=copied_center,
+                    parameters=[radius, sides]
+                )
+            
+            else:
+                print(f"❌ Unsupported element type for copying: {element_type}")
+                return None
+                
+        except Exception as e:
+            print(f"❌ Error creating copied element: {e}")
+            return None
+
 
 class SketchPlane:
     """
@@ -2381,6 +2571,16 @@ class OCCTEngine:
     def sketch_exists(self, sketch_id: str) -> bool:
         """Check if sketch exists - equivalent to C++ sketchExists"""
         return sketch_id in self.sketches
+    
+    def element_exists(self, element_id: str) -> bool:
+        """Check if element exists in any sketch"""
+        try:
+            for sketch in self.sketches.values():
+                if sketch.get_element_by_id(element_id) is not None:
+                    return True
+            return False
+        except Exception:
+            return False
     
     def get_sketch_visualization_data(self, sketch_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -3378,3 +3578,41 @@ class OCCTEngine:
         except Exception as e:
             print(f"❌ Error offsetting element directionally in sketch: {e}")
             return ""
+    
+    def copy_element_in_sketch(self, sketch_id: str, element_id: str, num_copies: int, direction_x: float, direction_y: float, distance: float) -> List[str]:
+        """
+        Copy a geometry element multiple times with linear spacing - equivalent to C++ copyElement
+        
+        Args:
+            sketch_id: Sketch identifier
+            element_id: ID of element to copy
+            num_copies: Number of copies to create (excluding original)
+            direction_x: X component of direction vector
+            direction_y: Y component of direction vector
+            distance: Distance between copies
+            
+        Returns:
+            List of new copied element IDs
+        """
+        print(f"📄 Copying element {element_id} {num_copies} times in sketch {sketch_id}")
+        
+        if not self.sketch_exists(sketch_id):
+            print(f"❌ Sketch not found: {sketch_id}")
+            return []
+        
+        try:
+            sketch = self.sketches[sketch_id]
+            
+            # Perform copy operation
+            copied_element_ids = sketch.copy_element(element_id, num_copies, direction_x, direction_y, distance)
+            
+            if copied_element_ids:
+                print(f"✅ Successfully copied element {element_id} {len(copied_element_ids)} times in sketch {sketch_id}")
+            else:
+                print(f"❌ Failed to copy element {element_id} in sketch {sketch_id}")
+            
+            return copied_element_ids
+            
+        except Exception as e:
+            print(f"❌ Error copying element in sketch: {e}")
+            return []

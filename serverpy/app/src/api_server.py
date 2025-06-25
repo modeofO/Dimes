@@ -253,6 +253,17 @@ class OffsetElementDirectionalRequest(BaseModel):
     direction: str = Field(..., description="Direction to offset ('left' or 'right' relative to element direction)")
 
 
+class CopyElementRequest(BaseModel):
+    """Request model for copy operations"""
+    session_id: str = Field(..., description="Session ID")
+    sketch_id: str = Field(..., description="Sketch ID")
+    element_id: str = Field(..., description="ID of element to copy")
+    num_copies: int = Field(..., description="Number of copies to create (excluding original)")
+    direction_x: float = Field(..., description="X component of direction vector")
+    direction_y: float = Field(..., description="Y component of direction vector")
+    distance: float = Field(..., description="Distance between copies")
+
+
 class APIResponse(BaseModel):
     """Standard API response format"""
     success: bool
@@ -656,6 +667,26 @@ class CADAPIServer:
                 
             except Exception as e:
                 print(f"❌ Error in offset_element_directional: {e}")
+                return APIResponse(
+                    success=False,
+                    timestamp=int(time.time()),
+                    error=str(e)
+                )
+        
+        @self.app.post("/api/v1/copy-element")
+        async def copy_element(request: CopyElementRequest):
+            """Copy element endpoint - handles copying geometry elements"""
+            try:
+                response_data = await self._handle_copy_element(request)
+                
+                return APIResponse(
+                    success=True,
+                    timestamp=int(time.time()),
+                    data=response_data
+                )
+                
+            except Exception as e:
+                print(f"❌ Error in copy_element: {e}")
                 return APIResponse(
                     success=False,
                     timestamp=int(time.time()),
@@ -1587,6 +1618,49 @@ class CADAPIServer:
             response_data["visualization_data"] = viz_data
         
         print(f"✅ Element offset directionally successfully")
+        return response_data
+    
+    async def _handle_copy_element(self, request: CopyElementRequest) -> Dict[str, Any]:
+        """Handle copy element - Real implementation using geometry engine"""
+        print(f"📋 Copying element: {request.element_id} {request.num_copies} times")
+        
+        session_manager = SessionManager.get_instance()
+        engine = session_manager.get_or_create_session(request.session_id)
+        
+        if engine is None:
+            raise Exception("Failed to get session")
+        
+        # Validate that the sketch exists
+        if not engine.sketch_exists(request.sketch_id):
+            raise Exception(f"Sketch '{request.sketch_id}' does not exist")
+        
+        # Validate that the element exists
+        if not engine.element_exists(request.element_id):
+            raise Exception(f"Element '{request.element_id}' does not exist")
+        
+        # Perform copy operation
+        copied_element_ids = engine.copy_element_in_sketch(
+            request.sketch_id,
+            request.element_id,
+            request.num_copies,
+            request.direction_x,
+            request.direction_y,
+            request.distance
+        )
+        
+        if not copied_element_ids:
+            raise Exception("Failed to copy element in geometry engine")
+        
+        response_data = {
+            "original_element_id": request.element_id,
+            "copied_element_ids": copied_element_ids,
+            "sketch_id": request.sketch_id,
+            "session_id": request.session_id,
+            "operation": "copy_element",
+            "message": f"{len(copied_element_ids)} elements copied successfully"
+        }
+        
+        print(f"✅ Elements copied successfully")
         return response_data
     
     # ==================== UTILITY METHODS ====================
