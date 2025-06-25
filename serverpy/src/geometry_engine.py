@@ -440,6 +440,192 @@ class Sketch:
             "normal": [normal.x, normal.y, normal.z]           # Array format
         }
 
+    def add_fillet(self, line1_id: str, line2_id: str, radius: float) -> str:
+        """Add fillet between two lines - modifies existing lines and creates arc"""
+        try:
+            print(f"🔵 Adding fillet between lines {line1_id} and {line2_id} with radius {radius}")
+            
+            # Find the two line elements
+            line1 = self.get_element_by_id(line1_id)
+            line2 = self.get_element_by_id(line2_id)
+            
+            if not line1 or line1.element_type != SketchElementType.LINE:
+                print(f"❌ Line {line1_id} not found or not a line")
+                return ""
+            
+            if not line2 or line2.element_type != SketchElementType.LINE:
+                print(f"❌ Line {line2_id} not found or not a line")
+                return ""
+            
+            # Calculate fillet geometry
+            fillet_result = self._calculate_fillet_geometry(line1, line2, radius)
+            
+            if not fillet_result:
+                print(f"❌ Failed to calculate fillet geometry")
+                return ""
+            
+            # Unpack fillet calculation results
+            new_line1_end, new_line2_start, arc_start, arc_end, arc_center = fillet_result
+            
+            # Generate unique fillet ID
+            fillet_id = f"fillet_{len(self.elements) + 1}_{int(time.time() * 1000) % 10000}"
+            
+            # Create fillet arc element
+            start_angle = math.atan2(arc_start.Y() - arc_center.Y(), arc_start.X() - arc_center.X())
+            end_angle = math.atan2(arc_end.Y() - arc_center.Y(), arc_end.X() - arc_center.X())
+            
+            fillet_element = SketchElement(
+                id=fillet_id,
+                element_type=SketchElementType.ARC,
+                start_point=arc_start,
+                end_point=arc_end,
+                center_point=arc_center,
+                parameters=[radius, start_angle, end_angle],  # Store radius and angles
+                referenced_elements=[line1_id, line2_id]  # Track which lines this fillet connects
+            )
+            
+            # Modify the existing lines to connect to fillet
+            line1.end_point = new_line1_end
+            line2.start_point = new_line2_start
+            
+            # Add fillet to sketch
+            if self.add_element(fillet_element):
+                print(f"✅ Added fillet {fillet_id} between lines {line1_id} and {line2_id}")
+                return fillet_id
+            else:
+                print(f"❌ Failed to add fillet element to sketch")
+                return ""
+                
+        except Exception as e:
+            print(f"❌ Error adding fillet to sketch: {e}")
+            return ""
+    
+    def _calculate_fillet_geometry(self, line1: SketchElement, line2: SketchElement, radius: float) -> Optional[Tuple[gp_Pnt2d, gp_Pnt2d, gp_Pnt2d, gp_Pnt2d, gp_Pnt2d]]:
+        """Calculate fillet geometry between two lines"""
+        try:
+            # Get line endpoints
+            l1_start = line1.start_point
+            l1_end = line1.end_point
+            l2_start = line2.start_point
+            l2_end = line2.end_point
+            
+            if not all([l1_start, l1_end, l2_start, l2_end]):
+                return None
+            
+            # Convert to regular coordinates for calculation
+            l1_x1, l1_y1 = l1_start.X(), l1_start.Y()
+            l1_x2, l1_y2 = l1_end.X(), l1_end.Y()
+            l2_x1, l2_y1 = l2_start.X(), l2_start.Y()
+            l2_x2, l2_y2 = l2_end.X(), l2_end.Y()
+            
+            # Calculate line directions (unit vectors)
+            l1_dx = l1_x2 - l1_x1
+            l1_dy = l1_y2 - l1_y1
+            l1_len = math.sqrt(l1_dx**2 + l1_dy**2)
+            if l1_len < 1e-10:
+                return None
+            l1_dx /= l1_len
+            l1_dy /= l1_len
+            
+            l2_dx = l2_x2 - l2_x1
+            l2_dy = l2_y2 - l2_y1
+            l2_len = math.sqrt(l2_dx**2 + l2_dy**2)
+            if l2_len < 1e-10:
+                return None
+            l2_dx /= l2_len
+            l2_dy /= l2_len
+            
+            # Find intersection point of the two lines (extended if necessary)
+            intersection = self._find_line_intersection(
+                l1_x1, l1_y1, l1_x2, l1_y2,
+                l2_x1, l2_y1, l2_x2, l2_y2
+            )
+            
+            if not intersection:
+                print("❌ Lines are parallel - cannot create fillet")
+                return None
+            
+            int_x, int_y = intersection
+            
+            # Calculate angle between lines
+            dot_product = l1_dx * l2_dx + l1_dy * l2_dy
+            cross_product = l1_dx * l2_dy - l1_dy * l2_dx
+            angle = math.atan2(abs(cross_product), dot_product)
+            
+            if angle < 1e-6:  # Lines are parallel
+                return None
+            
+            # Calculate distance from intersection to tangent points
+            tan_dist = radius / math.tan(angle / 2)
+            
+            # Calculate tangent points
+            t1_x = int_x - tan_dist * l1_dx
+            t1_y = int_y - tan_dist * l1_dy
+            t2_x = int_x - tan_dist * l2_dx
+            t2_y = int_y - tan_dist * l2_dy
+            
+            # Calculate fillet center
+            # Distance from intersection to center
+            center_dist = radius / math.sin(angle / 2)
+            
+            # Bisector direction (normalized)
+            bisector_x = l1_dx + l2_dx
+            bisector_y = l1_dy + l2_dy
+            bisector_len = math.sqrt(bisector_x**2 + bisector_y**2)
+            if bisector_len < 1e-10:
+                # Lines are opposite - use perpendicular
+                bisector_x = -l1_dy
+                bisector_y = l1_dx
+            else:
+                bisector_x /= bisector_len
+                bisector_y /= bisector_len
+            
+            # Determine which side of the bisector the center should be on
+            # We want the center to be on the "inside" of the angle
+            if cross_product > 0:  # Counter-clockwise turn
+                center_x = int_x - center_dist * bisector_x
+                center_y = int_y - center_dist * bisector_y
+            else:  # Clockwise turn
+                center_x = int_x + center_dist * bisector_x
+                center_y = int_y + center_dist * bisector_y
+            
+            # Create result points
+            new_line1_end = gp_Pnt2d(t1_x, t1_y)
+            new_line2_start = gp_Pnt2d(t2_x, t2_y)
+            arc_start = gp_Pnt2d(t1_x, t1_y)
+            arc_end = gp_Pnt2d(t2_x, t2_y)
+            arc_center = gp_Pnt2d(center_x, center_y)
+            
+            return (new_line1_end, new_line2_start, arc_start, arc_end, arc_center)
+            
+        except Exception as e:
+            print(f"❌ Error calculating fillet geometry: {e}")
+            return None
+    
+    def _find_line_intersection(self, x1: float, y1: float, x2: float, y2: float, 
+                               x3: float, y3: float, x4: float, y4: float) -> Optional[Tuple[float, float]]:
+        """Find intersection point of two lines defined by two points each"""
+        try:
+            # Line 1: (x1,y1) to (x2,y2)
+            # Line 2: (x3,y3) to (x4,y4)
+            
+            denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+            
+            if abs(denom) < 1e-10:  # Lines are parallel
+                return None
+            
+            t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom
+            
+            # Calculate intersection point
+            int_x = x1 + t * (x2 - x1)
+            int_y = y1 + t * (y2 - y1)
+            
+            return (int_x, int_y)
+            
+        except Exception as e:
+            print(f"❌ Error finding line intersection: {e}")
+            return None
+
 
 class SketchPlane:
     """
@@ -1160,6 +1346,46 @@ class OCCTEngine:
             
         except Exception as e:
             print(f"❌ Error adding polygon to sketch: {e}")
+            return ""
+    
+    def add_fillet_to_sketch(self, sketch_id: str, line1_id: str, line2_id: str, radius: float) -> str:
+        """
+        Add fillet between two lines in sketch - equivalent to C++ addFilletToSketch
+        
+        Args:
+            sketch_id: Sketch identifier
+            line1_id: First line element ID
+            line2_id: Second line element ID
+            radius: Fillet radius
+            
+        Returns:
+            Fillet element ID if successful, empty string if failed
+        """
+        print(f"🔵 Adding fillet to sketch {sketch_id}: lines {line1_id} & {line2_id} radius={radius}")
+        
+        if not self.sketch_exists(sketch_id):
+            print(f"❌ Sketch not found: {sketch_id}")
+            return ""
+        
+        if radius <= 0:
+            print(f"❌ Fillet radius must be positive, got {radius}")
+            return ""
+        
+        try:
+            sketch = self.sketches[sketch_id]
+            
+            # Add fillet to sketch
+            fillet_id = sketch.add_fillet(line1_id, line2_id, radius)
+            
+            if fillet_id:
+                print(f"✅ Added fillet {fillet_id} to sketch {sketch_id}")
+            else:
+                print(f"❌ Failed to add fillet to sketch {sketch_id}")
+            
+            return fillet_id
+            
+        except Exception as e:
+            print(f"❌ Error adding fillet to sketch: {e}")
             return ""
     
     def get_sketch_element_visualization_data(self, sketch_id: str, element_id: str) -> Optional[Dict[str, Any]]:

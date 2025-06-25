@@ -161,6 +161,15 @@ class ExtrudeRequest(BaseModel):
     direction: str = Field(default="normal", description="Extrude direction")
 
 
+class FilletRequest(BaseModel):
+    """Request model for fillet operations"""
+    session_id: str = Field(..., description="Session ID")
+    sketch_id: str = Field(..., description="Sketch ID")
+    line1_id: str = Field(..., description="First line element ID")
+    line2_id: str = Field(..., description="Second line element ID")
+    radius: float = Field(..., description="Fillet radius")
+
+
 class APIResponse(BaseModel):
     """Standard API response format"""
     success: bool
@@ -364,6 +373,26 @@ class CADAPIServer:
                 
             except Exception as e:
                 print(f"❌ Error in extrude_feature: {e}")
+                return APIResponse(
+                    success=False,
+                    timestamp=int(time.time()),
+                    error=str(e)
+                )
+        
+        @self.app.post("/api/v1/fillets")
+        async def add_fillet(request: FilletRequest):
+            """Add fillet endpoint - handles fillet operations between two lines"""
+            try:
+                response_data = await self._handle_add_fillet(request)
+                
+                return APIResponse(
+                    success=True,
+                    timestamp=int(time.time()),
+                    data=response_data
+                )
+                
+            except Exception as e:
+                print(f"❌ Error in add_fillet: {e}")
                 return APIResponse(
                     success=False,
                     timestamp=int(time.time()),
@@ -865,6 +894,55 @@ class CADAPIServer:
         }
         
         print(f"✅ Extrude feature created: {feature_id}")
+        return response_data
+    
+    async def _handle_add_fillet(self, request: FilletRequest) -> Dict[str, Any]:
+        """Handle fillet addition - Real implementation using geometry engine"""
+        print(f"🔵 Adding fillet to sketch: {request.sketch_id} between lines {request.line1_id} & {request.line2_id}")
+        
+        session_manager = SessionManager.get_instance()
+        engine = session_manager.get_or_create_session(request.session_id)
+        
+        if engine is None:
+            raise Exception("Failed to get session")
+        
+        # Validate that the sketch exists
+        if not engine.sketch_exists(request.sketch_id):
+            raise Exception(f"Sketch '{request.sketch_id}' does not exist")
+        
+        # Validate fillet radius
+        if request.radius <= 0:
+            raise Exception(f"Fillet radius must be positive, got {request.radius}")
+        
+        # Create fillet using geometry engine
+        fillet_id = engine.add_fillet_to_sketch(
+            request.sketch_id,
+            request.line1_id,
+            request.line2_id,
+            request.radius
+        )
+        
+        if not fillet_id:
+            raise Exception("Failed to create fillet in geometry engine")
+        
+        # Get visualization data for the created fillet
+        viz_data = engine.get_sketch_element_visualization_data(request.sketch_id, fillet_id)
+        
+        response_data = {
+            "fillet_id": fillet_id,
+            "sketch_id": request.sketch_id,
+            "line1_id": request.line1_id,
+            "line2_id": request.line2_id,
+            "radius": request.radius,
+            "session_id": request.session_id,
+            "message": f"Fillet {fillet_id} created successfully between lines {request.line1_id} and {request.line2_id}"
+        }
+        
+        # Add visualization data if available
+        if viz_data:
+            response_data["visualization_data"] = viz_data
+        
+        print(f"✅ Fillet created successfully: {fillet_id}")
         return response_data
     
     # ==================== UTILITY METHODS ====================
