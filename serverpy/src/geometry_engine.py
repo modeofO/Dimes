@@ -1071,6 +1071,290 @@ class Sketch:
         except Exception as e:
             print(f"❌ Error selecting trim point: {e}")
             return None
+    
+    def extend_line_to_line(self, line_to_extend_id: str, target_line_id: str, extend_start: bool = False) -> bool:
+        """Extend a line to reach intersection with another line"""
+        try:
+            print(f"📏 Extending line {line_to_extend_id} to reach line {target_line_id}")
+            
+            # Find the two line elements
+            line_to_extend = self.get_element_by_id(line_to_extend_id)
+            target_line = self.get_element_by_id(target_line_id)
+            
+            if not line_to_extend or line_to_extend.element_type != SketchElementType.LINE:
+                print(f"❌ Line to extend {line_to_extend_id} not found or not a line")
+                return False
+            
+            if not target_line or target_line.element_type != SketchElementType.LINE:
+                print(f"❌ Target line {target_line_id} not found or not a line")
+                return False
+            
+            # Calculate intersection point (lines extended infinitely)
+            intersection = self._calculate_line_line_intersection(line_to_extend, target_line)
+            
+            if not intersection:
+                print(f"❌ Lines are parallel - cannot extend")
+                return False
+            
+            # Check if we need to extend (intersection should be beyond current line)
+            if not self._point_beyond_line(intersection, line_to_extend, extend_start):
+                print(f"❌ Intersection point is not beyond the line - no extension needed")
+                return False
+            
+            # Apply extension
+            if extend_start:
+                # Extend start of line to reach intersection
+                line_to_extend.start_point = intersection
+                print(f"✅ Extended start of line {line_to_extend_id}")
+            else:
+                # Extend end of line to reach intersection
+                line_to_extend.end_point = intersection
+                print(f"✅ Extended end of line {line_to_extend_id}")
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error extending line: {e}")
+            return False
+    
+    def extend_line_to_geometry(self, line_to_extend_id: str, target_geometry_id: str, extend_start: bool = False) -> bool:
+        """Extend a line to reach intersection with complex geometry"""
+        try:
+            print(f"📏 Extending line {line_to_extend_id} to reach geometry {target_geometry_id}")
+            
+            # Find the line and target geometry
+            line_to_extend = self.get_element_by_id(line_to_extend_id)
+            target_geometry = self.get_element_by_id(target_geometry_id)
+            
+            if not line_to_extend or line_to_extend.element_type != SketchElementType.LINE:
+                print(f"❌ Line to extend {line_to_extend_id} not found or not a line")
+                return False
+            
+            if not target_geometry:
+                print(f"❌ Target geometry {target_geometry_id} not found")
+                return False
+            
+            # Find intersection points with infinite line extension
+            intersection_points = []
+            
+            if target_geometry.element_type == SketchElementType.RECTANGLE:
+                intersection_points = self._find_infinite_line_rectangle_intersections(line_to_extend, target_geometry)
+            elif target_geometry.element_type == SketchElementType.POLYGON:
+                intersection_points = self._find_infinite_line_polygon_intersections(line_to_extend, target_geometry)
+            elif target_geometry.element_type == SketchElementType.CIRCLE:
+                intersection_points = self._find_infinite_line_circle_intersections(line_to_extend, target_geometry)
+            else:
+                print(f"❌ Unsupported target geometry type: {target_geometry.element_type}")
+                return False
+            
+            if not intersection_points:
+                print(f"❌ No intersections found - cannot extend")
+                return False
+            
+            # Select appropriate intersection point for extension
+            extend_point = self._select_extend_point(line_to_extend, intersection_points, extend_start)
+            
+            if not extend_point:
+                print(f"❌ Could not determine extend point")
+                return False
+            
+            # Apply extension
+            if extend_start:
+                line_to_extend.start_point = extend_point
+                print(f"✅ Extended start of line {line_to_extend_id}")
+            else:
+                line_to_extend.end_point = extend_point
+                print(f"✅ Extended end of line {line_to_extend_id}")
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error extending line to geometry: {e}")
+            return False
+    
+    def _point_beyond_line(self, point: gp_Pnt2d, line: SketchElement, check_start: bool) -> bool:
+        """Check if a point is beyond the start or end of a line (i.e., extension is needed)"""
+        try:
+            if not line.start_point or not line.end_point:
+                return False
+            
+            # Calculate line direction vector
+            dx = line.end_point.X() - line.start_point.X()
+            dy = line.end_point.Y() - line.start_point.Y()
+            
+            if check_start:
+                # Check if point is beyond start (in opposite direction of line)
+                # Vector from start to point
+                px = point.X() - line.start_point.X()
+                py = point.Y() - line.start_point.Y()
+                
+                # Dot product should be negative if point is beyond start
+                dot_product = px * dx + py * dy
+                return dot_product < 0
+            else:
+                # Check if point is beyond end (in same direction as line)
+                # Vector from end to point
+                px = point.X() - line.end_point.X()
+                py = point.Y() - line.end_point.Y()
+                
+                # Dot product should be positive if point is beyond end
+                dot_product = px * dx + py * dy
+                return dot_product > 0
+            
+        except Exception as e:
+            print(f"❌ Error checking if point is beyond line: {e}")
+            return False
+    
+    def _select_extend_point(self, line: SketchElement, intersection_points: List[gp_Pnt2d], extend_start: bool) -> Optional[gp_Pnt2d]:
+        """Select which intersection point to use for extending"""
+        try:
+            if not intersection_points:
+                return None
+            
+            # Filter points that are actually beyond the line (require extension)
+            valid_points = []
+            for point in intersection_points:
+                if self._point_beyond_line(point, line, extend_start):
+                    valid_points.append(point)
+            
+            if not valid_points:
+                return None
+            
+            if len(valid_points) == 1:
+                return valid_points[0]
+            
+            # For multiple valid points, choose the closest one
+            if extend_start:
+                reference_point = line.start_point
+            else:
+                reference_point = line.end_point
+            
+            closest_point = None
+            min_distance = float('inf')
+            
+            for point in valid_points:
+                distance = math.sqrt((point.X() - reference_point.X())**2 + (point.Y() - reference_point.Y())**2)
+                if distance < min_distance:
+                    min_distance = distance
+                    closest_point = point
+            
+            return closest_point
+            
+        except Exception as e:
+            print(f"❌ Error selecting extend point: {e}")
+            return None
+    
+    def _find_infinite_line_rectangle_intersections(self, line: SketchElement, rectangle: SketchElement) -> List[gp_Pnt2d]:
+        """Find intersection points between an infinite line and rectangle edges"""
+        try:
+            intersections = []
+            
+            if not rectangle.start_point or not rectangle.parameters or len(rectangle.parameters) < 2:
+                return intersections
+            
+            # Get rectangle parameters
+            corner = rectangle.start_point
+            width = rectangle.parameters[0]
+            height = rectangle.parameters[1]
+            
+            # Create rectangle edges as lines
+            edges = [
+                # Bottom edge
+                (corner.X(), corner.Y(), corner.X() + width, corner.Y()),
+                # Right edge  
+                (corner.X() + width, corner.Y(), corner.X() + width, corner.Y() + height),
+                # Top edge
+                (corner.X() + width, corner.Y() + height, corner.X(), corner.Y() + height),
+                # Left edge
+                (corner.X(), corner.Y() + height, corner.X(), corner.Y())
+            ]
+            
+            # Check intersection with each edge (infinite line vs edge segment)
+            for edge in edges:
+                intersection = self._find_line_intersection(
+                    line.start_point.X(), line.start_point.Y(),
+                    line.end_point.X(), line.end_point.Y(),
+                    edge[0], edge[1], edge[2], edge[3]
+                )
+                
+                if intersection:
+                    # Verify intersection is actually on the rectangle edge (not extended)
+                    if self._point_on_line_segment(intersection, edge):
+                        intersections.append(gp_Pnt2d(intersection[0], intersection[1]))
+            
+            return intersections
+            
+        except Exception as e:
+            print(f"❌ Error finding infinite line-rectangle intersections: {e}")
+            return []
+    
+    def _find_infinite_line_polygon_intersections(self, line: SketchElement, polygon: SketchElement) -> List[gp_Pnt2d]:
+        """Find intersection points between an infinite line and polygon edges"""
+        try:
+            # This is the same as the finite version since we check infinite line vs finite polygon edges
+            return self._find_line_polygon_intersections(line, polygon)
+            
+        except Exception as e:
+            print(f"❌ Error finding infinite line-polygon intersections: {e}")
+            return []
+    
+    def _find_infinite_line_circle_intersections(self, line: SketchElement, circle: SketchElement) -> List[gp_Pnt2d]:
+        """Find intersection points between an infinite line and circle"""
+        try:
+            intersections = []
+            
+            if not circle.center_point or not circle.parameters or len(circle.parameters) < 1:
+                return intersections
+            
+            # Get circle parameters
+            center = circle.center_point
+            radius = circle.parameters[0]
+            
+            # Line parameters
+            if not line.start_point or not line.end_point:
+                return intersections
+            
+            # Calculate infinite line-circle intersection using quadratic formula
+            # Line: P = start + t * (end - start) where t can be any real number
+            # Circle: (x - cx)² + (y - cy)² = r²
+            
+            start_x, start_y = line.start_point.X(), line.start_point.Y()
+            end_x, end_y = line.end_point.X(), line.end_point.Y()
+            center_x, center_y = center.X(), center.Y()
+            
+            # Direction vector
+            dx = end_x - start_x
+            dy = end_y - start_y
+            
+            # Vector from start to center
+            fx = start_x - center_x
+            fy = start_y - center_y
+            
+            # Quadratic equation: a*t² + b*t + c = 0
+            a = dx * dx + dy * dy
+            b = 2 * (fx * dx + fy * dy)
+            c = fx * fx + fy * fy - radius * radius
+            
+            discriminant = b * b - 4 * a * c
+            
+            if discriminant >= 0:
+                sqrt_discriminant = math.sqrt(discriminant)
+                
+                # Two potential intersection points (no restriction on t)
+                t1 = (-b - sqrt_discriminant) / (2 * a)
+                t2 = (-b + sqrt_discriminant) / (2 * a)
+                
+                # Add both intersection points (infinite line)
+                for t in [t1, t2]:
+                    int_x = start_x + t * dx
+                    int_y = start_y + t * dy
+                    intersections.append(gp_Pnt2d(int_x, int_y))
+            
+            return intersections
+            
+        except Exception as e:
+            print(f"❌ Error finding infinite line-circle intersections: {e}")
+            return []
 
 
 class SketchPlane:
@@ -1944,6 +2228,78 @@ class OCCTEngine:
             
         except Exception as e:
             print(f"❌ Error trimming line to geometry in sketch: {e}")
+            return False
+    
+    def extend_line_to_line_in_sketch(self, sketch_id: str, line_to_extend_id: str, target_line_id: str, extend_start: bool = False) -> bool:
+        """
+        Extend a line to reach intersection with another line - equivalent to C++ extendLineToLine
+        
+        Args:
+            sketch_id: Sketch identifier
+            line_to_extend_id: ID of line to be extended
+            target_line_id: ID of line to extend toward
+            extend_start: If True, extend start; if False, extend end
+            
+        Returns:
+            True if successful, False if failed
+        """
+        print(f"📏 Extending line {line_to_extend_id} to line {target_line_id} in sketch {sketch_id}")
+        
+        if not self.sketch_exists(sketch_id):
+            print(f"❌ Sketch not found: {sketch_id}")
+            return False
+        
+        try:
+            sketch = self.sketches[sketch_id]
+            
+            # Perform extend operation
+            success = sketch.extend_line_to_line(line_to_extend_id, target_line_id, extend_start)
+            
+            if success:
+                print(f"✅ Successfully extended line {line_to_extend_id} in sketch {sketch_id}")
+            else:
+                print(f"❌ Failed to extend line {line_to_extend_id} in sketch {sketch_id}")
+            
+            return success
+            
+        except Exception as e:
+            print(f"❌ Error extending line in sketch: {e}")
+            return False
+    
+    def extend_line_to_geometry_in_sketch(self, sketch_id: str, line_to_extend_id: str, target_geometry_id: str, extend_start: bool = False) -> bool:
+        """
+        Extend a line to reach intersection with complex geometry - equivalent to C++ extendLineToGeometry
+        
+        Args:
+            sketch_id: Sketch identifier
+            line_to_extend_id: ID of line to be extended
+            target_geometry_id: ID of geometry to extend toward (rectangle, polygon, circle)
+            extend_start: If True, extend start; if False, extend end
+            
+        Returns:
+            True if successful, False if failed
+        """
+        print(f"📏 Extending line {line_to_extend_id} to geometry {target_geometry_id} in sketch {sketch_id}")
+        
+        if not self.sketch_exists(sketch_id):
+            print(f"❌ Sketch not found: {sketch_id}")
+            return False
+        
+        try:
+            sketch = self.sketches[sketch_id]
+            
+            # Perform extend operation
+            success = sketch.extend_line_to_geometry(line_to_extend_id, target_geometry_id, extend_start)
+            
+            if success:
+                print(f"✅ Successfully extended line {line_to_extend_id} to geometry in sketch {sketch_id}")
+            else:
+                print(f"❌ Failed to extend line {line_to_extend_id} to geometry in sketch {sketch_id}")
+            
+            return success
+            
+        except Exception as e:
+            print(f"❌ Error extending line to geometry in sketch: {e}")
             return False
     
     def get_sketch_element_visualization_data(self, sketch_id: str, element_id: str) -> Optional[Dict[str, Any]]:

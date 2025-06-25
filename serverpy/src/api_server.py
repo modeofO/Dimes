@@ -197,6 +197,24 @@ class TrimLineToGeometryRequest(BaseModel):
     keep_start: bool = Field(default=True, description="If True, keep start portion; if False, keep end portion")
 
 
+class ExtendLineToLineRequest(BaseModel):
+    """Request model for simple line-to-line extend operations"""
+    session_id: str = Field(..., description="Session ID")
+    sketch_id: str = Field(..., description="Sketch ID")
+    line_to_extend_id: str = Field(..., description="ID of line to be extended")
+    target_line_id: str = Field(..., description="ID of line to extend toward")
+    extend_start: bool = Field(default=False, description="If True, extend start; if False, extend end")
+
+
+class ExtendLineToGeometryRequest(BaseModel):
+    """Request model for complex line-to-geometry extend operations"""
+    session_id: str = Field(..., description="Session ID")
+    sketch_id: str = Field(..., description="Sketch ID")
+    line_to_extend_id: str = Field(..., description="ID of line to be extended")
+    target_geometry_id: str = Field(..., description="ID of geometry to extend toward (rectangle, polygon, circle)")
+    extend_start: bool = Field(default=False, description="If True, extend start; if False, extend end")
+
+
 class APIResponse(BaseModel):
     """Standard API response format"""
     success: bool
@@ -480,6 +498,46 @@ class CADAPIServer:
                 
             except Exception as e:
                 print(f"❌ Error in trim_line_to_geometry: {e}")
+                return APIResponse(
+                    success=False,
+                    timestamp=int(time.time()),
+                    error=str(e)
+                )
+        
+        @self.app.post("/api/v1/extend-line-to-line")
+        async def extend_line_to_line(request: ExtendLineToLineRequest):
+            """Extend line to line endpoint - handles simple line-to-line extend operations"""
+            try:
+                response_data = await self._handle_extend_line_to_line(request)
+                
+                return APIResponse(
+                    success=True,
+                    timestamp=int(time.time()),
+                    data=response_data
+                )
+                
+            except Exception as e:
+                print(f"❌ Error in extend_line_to_line: {e}")
+                return APIResponse(
+                    success=False,
+                    timestamp=int(time.time()),
+                    error=str(e)
+                )
+        
+        @self.app.post("/api/v1/extend-line-to-geometry")
+        async def extend_line_to_geometry(request: ExtendLineToGeometryRequest):
+            """Extend line to geometry endpoint - handles complex line-to-geometry extend operations"""
+            try:
+                response_data = await self._handle_extend_line_to_geometry(request)
+                
+                return APIResponse(
+                    success=True,
+                    timestamp=int(time.time()),
+                    data=response_data
+                )
+                
+            except Exception as e:
+                print(f"❌ Error in extend_line_to_geometry: {e}")
                 return APIResponse(
                     success=False,
                     timestamp=int(time.time()),
@@ -1155,6 +1213,82 @@ class CADAPIServer:
         }
         
         print(f"✅ Line trimmed successfully")
+        return response_data
+    
+    async def _handle_extend_line_to_line(self, request: ExtendLineToLineRequest) -> Dict[str, Any]:
+        """Handle line-to-line extend operation - Real implementation using geometry engine"""
+        print(f"📏 Extending line: {request.line_to_extend_id} to line: {request.target_line_id}")
+        
+        session_manager = SessionManager.get_instance()
+        engine = session_manager.get_or_create_session(request.session_id)
+        
+        if engine is None:
+            raise Exception("Failed to get session")
+        
+        # Validate that the sketch exists
+        if not engine.sketch_exists(request.sketch_id):
+            raise Exception(f"Sketch '{request.sketch_id}' does not exist")
+        
+        # Perform line-to-line extend
+        success = engine.extend_line_to_line_in_sketch(
+            request.sketch_id,
+            request.line_to_extend_id,
+            request.target_line_id,
+            request.extend_start
+        )
+        
+        if not success:
+            raise Exception("Failed to extend line in geometry engine")
+        
+        response_data = {
+            "line_to_extend_id": request.line_to_extend_id,
+            "target_line_id": request.target_line_id,
+            "sketch_id": request.sketch_id,
+            "extend_start": request.extend_start,
+            "session_id": request.session_id,
+            "operation": "extend_line_to_line",
+            "message": f"Line {request.line_to_extend_id} extended successfully to line {request.target_line_id}"
+        }
+        
+        print(f"✅ Line extended successfully")
+        return response_data
+    
+    async def _handle_extend_line_to_geometry(self, request: ExtendLineToGeometryRequest) -> Dict[str, Any]:
+        """Handle line-to-geometry extend operation - Real implementation using geometry engine"""
+        print(f"📏 Extending line: {request.line_to_extend_id} to geometry: {request.target_geometry_id}")
+        
+        session_manager = SessionManager.get_instance()
+        engine = session_manager.get_or_create_session(request.session_id)
+        
+        if engine is None:
+            raise Exception("Failed to get session")
+        
+        # Validate that the sketch exists
+        if not engine.sketch_exists(request.sketch_id):
+            raise Exception(f"Sketch '{request.sketch_id}' does not exist")
+        
+        # Perform line-to-geometry extend
+        success = engine.extend_line_to_geometry_in_sketch(
+            request.sketch_id,
+            request.line_to_extend_id,
+            request.target_geometry_id,
+            request.extend_start
+        )
+        
+        if not success:
+            raise Exception("Failed to extend line in geometry engine")
+        
+        response_data = {
+            "line_to_extend_id": request.line_to_extend_id,
+            "target_geometry_id": request.target_geometry_id,
+            "sketch_id": request.sketch_id,
+            "extend_start": request.extend_start,
+            "session_id": request.session_id,
+            "operation": "extend_line_to_geometry",
+            "message": f"Line {request.line_to_extend_id} extended successfully to geometry {request.target_geometry_id}"
+        }
+        
+        print(f"✅ Line extended successfully")
         return response_data
     
     # ==================== UTILITY METHODS ====================
