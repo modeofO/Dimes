@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { CADClient } from '@/lib/cad/api/cad-client';
+import { DrawingTool } from '@/lib/cad/controls/cad-controls';
 
 interface CreatedShape {
     id: string;
@@ -38,6 +39,10 @@ interface ControlsPanelProps {
     onUpdateSketches: React.Dispatch<React.SetStateAction<CreatedSketch[]>>;
     onUpdateStatus: (message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
     onClearRenderer?: () => void;
+    onSetDrawingTool?: (tool: DrawingTool) => void;
+    onSetActiveSketch?: (sketchId: string) => void;
+    currentDrawingTool?: DrawingTool;
+    activeSketchId?: string | null;
 }
 
 export function ControlsPanel({
@@ -50,7 +55,11 @@ export function ControlsPanel({
     onUpdatePlanes,
     onUpdateSketches,
     onUpdateStatus,
-    onClearRenderer
+    onClearRenderer,
+    onSetDrawingTool,
+    onSetActiveSketch,
+    currentDrawingTool = 'select',
+    activeSketchId
 }: ControlsPanelProps) {
     // Form states
     const [planeType, setPlaneType] = useState('XY');
@@ -471,16 +480,22 @@ export function ControlsPanel({
                     </div>
                 </div>
 
-                {/* Sketch Elements Section */}
+                {/* Interactive Drawing Tools */}
                 <div className="space-y-3">
-                    <h3 className="font-medium text-gray-700">3. Add Sketch Elements</h3>
+                    <h3 className="font-medium text-gray-700">3. Interactive Drawing Tools</h3>
                     <div className="space-y-2">
                         <select
-                            value={selectedSketch}
-                            onChange={(e) => setSelectedSketch(e.target.value)}
+                            value={activeSketchId || ''}
+                            onChange={(e) => {
+                                const sketchId = e.target.value;
+                                setSelectedSketch(sketchId);
+                                if (onSetActiveSketch) {
+                                    onSetActiveSketch(sketchId);
+                                }
+                            }}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                         >
-                            <option value="">Select a sketch</option>
+                            <option value="">Select active sketch</option>
                             {createdSketches.map(sketch => (
                                 <option key={sketch.sketch_id} value={sketch.sketch_id}>
                                     {sketch.sketch_id} ({sketch.elements.length} elements)
@@ -488,209 +503,185 @@ export function ControlsPanel({
                             ))}
                         </select>
                         
-                        <select
-                            value={elementType}
-                            onChange={(e) => setElementType(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                        >
-                            <option value="line">Line</option>
-                            <option value="circle">Circle</option>
-                            <option value="rectangle">Rectangle</option>
-                            <option value="arc">Arc</option>
-                            <option value="polygon">Polygon</option>
-                        </select>
-                        
-                        {elementType === 'line' && (
-                            <div className="space-y-2">
-                                <div className="grid grid-cols-2 gap-2">
-                                    <input
-                                        type="number"
-                                        placeholder="X1"
-                                        value={lineParams.x1}
-                                        onChange={(e) => setLineParams(prev => ({ ...prev, x1: Number(e.target.value) }))}
-                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
-                                    />
-                                    <input
-                                        type="number"
-                                        placeholder="Y1"
-                                        value={lineParams.y1}
-                                        onChange={(e) => setLineParams(prev => ({ ...prev, y1: Number(e.target.value) }))}
-                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <input
-                                        type="number"
-                                        placeholder="X2"
-                                        value={lineParams.x2}
-                                        onChange={(e) => setLineParams(prev => ({ ...prev, x2: Number(e.target.value) }))}
-                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
-                                    />
-                                    <input
-                                        type="number"
-                                        placeholder="Y2"
-                                        value={lineParams.y2}
-                                        onChange={(e) => setLineParams(prev => ({ ...prev, y2: Number(e.target.value) }))}
-                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
-                                    />
-                                </div>
+                        {activeSketchId && (
+                            <div className="text-xs text-green-600 bg-green-50 p-2 rounded">
+                                ✓ Active: {activeSketchId} - Ready for interactive drawing
                             </div>
                         )}
                         
-                        {elementType === 'circle' && (
-                            <div className="space-y-2">
-                                <div className="grid grid-cols-2 gap-2">
-                                    <input
-                                        type="number"
-                                        placeholder="Center X"
-                                        value={circleParams.x}
-                                        onChange={(e) => setCircleParams(prev => ({ ...prev, x: Number(e.target.value) }))}
-                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
-                                    />
-                                    <input
-                                        type="number"
-                                        placeholder="Center Y"
-                                        value={circleParams.y}
-                                        onChange={(e) => setCircleParams(prev => ({ ...prev, y: Number(e.target.value) }))}
-                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
-                                    />
-                                </div>
-                                <input
-                                    type="number"
-                                    placeholder="Radius"
-                                    value={circleParams.radius}
-                                    onChange={(e) => setCircleParams(prev => ({ ...prev, radius: Number(e.target.value) }))}
-                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                                />
+                        <div className="text-xs text-gray-600 mb-2">
+                            Creation Tools:
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-1">
+                            <button
+                                onClick={() => onSetDrawingTool?.('select')}
+                                className={`px-2 py-1 text-xs rounded ${
+                                    currentDrawingTool === 'select' 
+                                    ? 'bg-gray-700 text-white' 
+                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                }`}
+                            >
+                                🖱️ Select
+                            </button>
+                            <button
+                                onClick={() => onSetDrawingTool?.('line')}
+                                className={`px-2 py-1 text-xs rounded ${
+                                    currentDrawingTool === 'line' 
+                                    ? 'bg-green-600 text-white' 
+                                    : 'bg-green-100 text-green-700 hover:bg-green-200'
+                                }`}
+                            >
+                                📏 Line
+                            </button>
+                            <button
+                                onClick={() => onSetDrawingTool?.('circle')}
+                                className={`px-2 py-1 text-xs rounded ${
+                                    currentDrawingTool === 'circle' 
+                                    ? 'bg-red-600 text-white' 
+                                    : 'bg-red-100 text-red-700 hover:bg-red-200'
+                                }`}
+                            >
+                                ⭕ Circle
+                            </button>
+                            <button
+                                onClick={() => onSetDrawingTool?.('rectangle')}
+                                className={`px-2 py-1 text-xs rounded ${
+                                    currentDrawingTool === 'rectangle' 
+                                    ? 'bg-yellow-600 text-white' 
+                                    : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+                                }`}
+                            >
+                                📐 Rectangle
+                            </button>
+                            <button
+                                onClick={() => onSetDrawingTool?.('arc')}
+                                className={`px-2 py-1 text-xs rounded ${
+                                    currentDrawingTool === 'arc' 
+                                    ? 'bg-orange-600 text-white' 
+                                    : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                                }`}
+                            >
+                                🌙 Arc
+                            </button>
+                            <button
+                                onClick={() => onSetDrawingTool?.('polygon')}
+                                className={`px-2 py-1 text-xs rounded ${
+                                    currentDrawingTool === 'polygon' 
+                                    ? 'bg-purple-600 text-white' 
+                                    : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                                }`}
+                            >
+                                ⬡ Polygon
+                            </button>
+                        </div>
+                        
+                        <div className="text-xs text-gray-600 mt-3 mb-2">
+                            Modification Tools:
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-1">
+                            <button
+                                onClick={() => onSetDrawingTool?.('fillet')}
+                                className={`px-2 py-1 text-xs rounded ${
+                                    currentDrawingTool === 'fillet' 
+                                    ? 'bg-blue-600 text-white' 
+                                    : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                }`}
+                            >
+                                🔵 Fillet
+                            </button>
+                            <button
+                                onClick={() => onSetDrawingTool?.('chamfer')}
+                                className={`px-2 py-1 text-xs rounded ${
+                                    currentDrawingTool === 'chamfer' 
+                                    ? 'bg-orange-600 text-white' 
+                                    : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                                }`}
+                            >
+                                🔶 Chamfer
+                            </button>
+                            <button
+                                onClick={() => onSetDrawingTool?.('trim')}
+                                className={`px-2 py-1 text-xs rounded ${
+                                    currentDrawingTool === 'trim' 
+                                    ? 'bg-red-600 text-white' 
+                                    : 'bg-red-100 text-red-700 hover:bg-red-200'
+                                }`}
+                            >
+                                ✂️ Trim
+                            </button>
+                            <button
+                                onClick={() => onSetDrawingTool?.('extend')}
+                                className={`px-2 py-1 text-xs rounded ${
+                                    currentDrawingTool === 'extend' 
+                                    ? 'bg-green-600 text-white' 
+                                    : 'bg-green-100 text-green-700 hover:bg-green-200'
+                                }`}
+                            >
+                                🔗 Extend
+                            </button>
+                            <button
+                                onClick={() => onSetDrawingTool?.('mirror')}
+                                className={`px-2 py-1 text-xs rounded ${
+                                    currentDrawingTool === 'mirror' 
+                                    ? 'bg-pink-600 text-white' 
+                                    : 'bg-pink-100 text-pink-700 hover:bg-pink-200'
+                                }`}
+                            >
+                                🪞 Mirror
+                            </button>
+                            <button
+                                onClick={() => onSetDrawingTool?.('offset')}
+                                className={`px-2 py-1 text-xs rounded ${
+                                    currentDrawingTool === 'offset' 
+                                    ? 'bg-purple-600 text-white' 
+                                    : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                                }`}
+                            >
+                                ↔️ Offset
+                            </button>
+                            <button
+                                onClick={() => onSetDrawingTool?.('copy')}
+                                className={`px-2 py-1 text-xs rounded ${
+                                    currentDrawingTool === 'copy' 
+                                    ? 'bg-cyan-600 text-white' 
+                                    : 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200'
+                                }`}
+                            >
+                                📄 Copy
+                            </button>
+                            <button
+                                onClick={() => onSetDrawingTool?.('move')}
+                                className={`px-2 py-1 text-xs rounded ${
+                                    currentDrawingTool === 'move' 
+                                    ? 'bg-indigo-600 text-white' 
+                                    : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                                }`}
+                            >
+                                🚚 Move
+                            </button>
+                        </div>
+                        
+                        {currentDrawingTool !== 'select' && (
+                            <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded mt-2">
+                                💡 {currentDrawingTool === 'line' ? 'Click and drag to draw a line' :
+                                currentDrawingTool === 'circle' ? 'Click center, drag to set radius' :
+                                currentDrawingTool === 'rectangle' ? 'Click and drag corners' :
+                                currentDrawingTool === 'arc' ? 'Click center, drag to set radius' :
+                                currentDrawingTool === 'polygon' ? 'Click center, drag to set size' :
+                                currentDrawingTool === 'fillet' ? 'Click two lines to fillet' :
+                                currentDrawingTool === 'chamfer' ? 'Click two lines to chamfer' :
+                                currentDrawingTool === 'trim' ? 'Click line to trim, then cutting line' :
+                                currentDrawingTool === 'extend' ? 'Click line to extend, then target' :
+                                currentDrawingTool === 'mirror' ? 'Click element, then mirror line' :
+                                currentDrawingTool === 'offset' ? 'Click element to offset' :
+                                currentDrawingTool === 'copy' ? 'Click element, drag to copy' :
+                                currentDrawingTool === 'move' ? 'Click element, drag to move' :
+                                'Select a tool and draw on the canvas'}
+                                <br />Press ESC to cancel drawing
                             </div>
                         )}
-                        
-                        {elementType === 'rectangle' && (
-                            <div className="space-y-2">
-                                <div className="grid grid-cols-2 gap-2">
-                                    <input
-                                        type="number"
-                                        placeholder="Corner X"
-                                        value={rectangleParams.x}
-                                        onChange={(e) => setRectangleParams(prev => ({ ...prev, x: Number(e.target.value) }))}
-                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
-                                    />
-                                    <input
-                                        type="number"
-                                        placeholder="Corner Y"
-                                        value={rectangleParams.y}
-                                        onChange={(e) => setRectangleParams(prev => ({ ...prev, y: Number(e.target.value) }))}
-                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <input
-                                        type="number"
-                                        placeholder="Width"
-                                        value={rectangleParams.width}
-                                        onChange={(e) => setRectangleParams(prev => ({ ...prev, width: Number(e.target.value) }))}
-                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
-                                    />
-                                    <input
-                                        type="number"
-                                        placeholder="Height"
-                                        value={rectangleParams.height}
-                                        onChange={(e) => setRectangleParams(prev => ({ ...prev, height: Number(e.target.value) }))}
-                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
-                                    />
-                                </div>
-                            </div>
-                        )}
-                        
-                        {elementType === 'arc' && (
-                            <div className="space-y-2">
-                                <div className="grid grid-cols-2 gap-2">
-                                    <input
-                                        type="number"
-                                        placeholder="Center X"
-                                        value={arcParams.center[0]}
-                                        onChange={(e) => setArcParams(prev => ({ ...prev, center: [Number(e.target.value), prev.center[1]] }))}
-                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
-                                    />
-                                    <input
-                                        type="number"
-                                        placeholder="Center Y"
-                                        value={arcParams.center[1]}
-                                        onChange={(e) => setArcParams(prev => ({ ...prev, center: [prev.center[0], Number(e.target.value)] }))}
-                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
-                                    />
-                                </div>
-                                <input
-                                    type="number"
-                                    placeholder="Radius"
-                                    value={arcParams.radius}
-                                    onChange={(e) => setArcParams(prev => ({ ...prev, radius: Number(e.target.value) }))}
-                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                                />
-                                <div className="grid grid-cols-2 gap-2">
-                                    <input
-                                        type="number"
-                                        placeholder="Start Angle (°)"
-                                        value={arcParams.startAngle}
-                                        onChange={(e) => setArcParams(prev => ({ ...prev, startAngle: Number(e.target.value) }))}
-                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
-                                    />
-                                    <input
-                                        type="number"
-                                        placeholder="End Angle (°)"
-                                        value={arcParams.endAngle}
-                                        onChange={(e) => setArcParams(prev => ({ ...prev, endAngle: Number(e.target.value) }))}
-                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
-                                    />
-                                </div>
-                            </div>
-                        )}
-                        
-                        {elementType === 'polygon' && (
-                            <div className="space-y-2">
-                                <div className="grid grid-cols-2 gap-2">
-                                    <input
-                                        type="number"
-                                        placeholder="Center X"
-                                        value={polygonParams.center[0]}
-                                        onChange={(e) => setPolygonParams(prev => ({ ...prev, center: [Number(e.target.value), prev.center[1]] }))}
-                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
-                                    />
-                                    <input
-                                        type="number"
-                                        placeholder="Center Y"
-                                        value={polygonParams.center[1]}
-                                        onChange={(e) => setPolygonParams(prev => ({ ...prev, center: [prev.center[0], Number(e.target.value)] }))}
-                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <input
-                                        type="number"
-                                        placeholder="Sides"
-                                        min="3"
-                                        value={polygonParams.sides}
-                                        onChange={(e) => setPolygonParams(prev => ({ ...prev, sides: Math.max(3, Number(e.target.value)) }))}
-                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
-                                    />
-                                    <input
-                                        type="number"
-                                        placeholder="Radius"
-                                        value={polygonParams.radius}
-                                        onChange={(e) => setPolygonParams(prev => ({ ...prev, radius: Number(e.target.value) }))}
-                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
-                                    />
-                                </div>
-                            </div>
-                        )}
-                        
-                        <button
-                            onClick={addSketchElement}
-                            disabled={!client || !selectedSketch}
-                            className="w-full px-3 py-2 bg-purple-500 text-white rounded-md text-sm hover:bg-purple-600 disabled:bg-gray-300"
-                        >
-                            Add {elementType}
-                        </button>
                     </div>
                 </div>
 

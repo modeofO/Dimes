@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { MeshManager } from '../mesh/mesh-manager';
-import { CADControls } from '../controls/cad-controls';
+import { CADControls, DrawingTool } from '../controls/cad-controls';
 import { VisualizationManager } from './visualization-manager';
 import { 
     PlaneVisualizationData, 
@@ -21,6 +21,16 @@ export class CADRenderer {
     private pointerDownPos = new THREE.Vector2();
     private selectionBox: THREE.BoxHelper | null = null;
     public onObjectSelected: ((id: string | null, type: string | null) => void) | null = null;
+    public onDrawingComplete: ((tool: DrawingTool, points: THREE.Vector2[]) => void) | null = null;
+    
+    // Current active sketch plane for drawing
+    private activeSketchPlane: {
+        sketch_id: string;
+        origin: THREE.Vector3;
+        normal: THREE.Vector3;
+        u_axis: THREE.Vector3;
+        v_axis: THREE.Vector3;
+    } | null = null;
     
     constructor(container: HTMLElement) {
         this.container = container;
@@ -77,7 +87,18 @@ export class CADRenderer {
     }
     
     private setupControls(): void {
-        this.controls = new CADControls(this.camera, this.renderer.domElement);
+        this.controls = new CADControls(this.camera, this.renderer.domElement, this.scene);
+        
+        // Set up drawing callbacks
+        this.controls.onDrawingComplete = (tool: DrawingTool, points: THREE.Vector2[]) => {
+            if (this.onDrawingComplete) {
+                this.onDrawingComplete(tool, points);
+            }
+        };
+        
+        this.controls.onToolChanged = (tool: DrawingTool) => {
+            console.log(`Tool changed to: ${tool}`);
+        };
     }
     
     private setupLighting(): void {
@@ -290,5 +311,34 @@ export class CADRenderer {
         this.camera.position.set(20, 20, 20);
         this.camera.lookAt(0, 0, 0);
         this.controls.update();
+    }
+    
+    // Interactive drawing methods
+    public setDrawingTool(tool: DrawingTool): void {
+        this.controls.setDrawingTool(tool);
+    }
+    
+    public setActiveSketchPlane(sketch_id: string, data: SketchVisualizationData): void {
+        this.activeSketchPlane = {
+            sketch_id,
+            origin: new THREE.Vector3(...data.origin),
+            normal: new THREE.Vector3(...data.normal),
+            u_axis: new THREE.Vector3(...data.u_axis),
+            v_axis: new THREE.Vector3(...data.v_axis)
+        };
+        
+        this.controls.setActiveSketchPlane(
+            sketch_id,
+            this.activeSketchPlane.origin,
+            this.activeSketchPlane.normal,
+            this.activeSketchPlane.u_axis,
+            this.activeSketchPlane.v_axis
+        );
+        
+        console.log(`Set active sketch plane for interactive drawing: ${sketch_id}`);
+    }
+    
+    public getActiveSketchPlane(): string | null {
+        return this.activeSketchPlane?.sketch_id || null;
     }
 } 

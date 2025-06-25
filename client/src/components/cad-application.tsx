@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import * as THREE from 'three';
 import { CADRenderer } from '@/lib/cad/renderer/cad-renderer';
 import { CADClient } from '@/lib/cad/api/cad-client';
 import { AgentManager } from '@/lib/cad/agent/agent-manager';
@@ -9,6 +10,7 @@ import { ChatPanel } from '@/components/chat-panel';
 import { ControlsPanel } from '@/components/controls-panel';
 import { StatusBar } from '@/components/status-bar';
 import { MeshData } from '../../../shared/types/geometry';
+import { DrawingTool } from '@/lib/cad/controls/cad-controls';
 import { v4 as uuidv4 } from 'uuid';
 
 interface CreatedShape {
@@ -52,6 +54,13 @@ export function CADApplication() {
     const [createdSketches, setCreatedSketches] = useState<CreatedSketch[]>([]);
     const [selectedObject, setSelectedObject] = useState<{ id: string; type: string; } | null>(null);
     const [chatMessages, setChatMessages] = useState<Array<{ sender: 'user' | 'agent'; text: string }>>([]);
+    const [currentDrawingTool, setCurrentDrawingTool] = useState<DrawingTool>('select');
+    const [activeSketchId, setActiveSketchId] = useState<string | null>(null);
+
+    // Debug: Track activeSketchId changes
+    useEffect(() => {
+        console.log('🔄 activeSketchId state changed to:', activeSketchId);
+    }, [activeSketchId]);
 
     const updateStatus = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error') => {
         setStatus({ message, type });
@@ -86,6 +95,103 @@ export function CADApplication() {
             rendererRef.current.clearAllGeometry();
         }
     }, []);
+
+    const handleSetDrawingTool = useCallback((tool: DrawingTool) => {
+        setCurrentDrawingTool(tool);
+        if (rendererRef.current) {
+            rendererRef.current.setDrawingTool(tool);
+        }
+        updateStatus(`Selected tool: ${tool}`, 'info');
+    }, [updateStatus]);
+
+    const handleSetActiveSketch = useCallback((sketchId: string) => {
+        console.log('🎯 handleSetActiveSketch called with:', sketchId);
+        setActiveSketchId(sketchId);
+        
+        // Find the sketch and set it as active in the renderer
+        const sketch = createdSketches.find(s => s.sketch_id === sketchId);
+        if (sketch && rendererRef.current) {
+            // We need the sketch visualization data to set the plane
+            // For now, we'll just mark it as active
+            updateStatus(`Set active sketch: ${sketchId}`, 'info');
+            console.log('📝 Found sketch in state:', sketch);
+        } else {
+            console.log('❌ Sketch not found in state or no renderer');
+        }
+    }, [createdSketches, updateStatus]);
+
+    const handleInteractiveDrawing = useCallback(async (tool: DrawingTool, points: THREE.Vector2[]) => {
+        // Get the current activeSketchId from state at call time (not closure time)
+        const currentActiveSketchId = activeSketchId;
+        
+        console.log('🎯 handleInteractiveDrawing called:', {
+            tool,
+            points,
+            currentActiveSketchId,
+            clientExists: !!clientRef.current,
+            pointsLength: points.length
+        });
+        
+        if (!clientRef.current || !currentActiveSketchId || points.length < 2) {
+            console.log('❌ handleInteractiveDrawing: Missing requirements', {
+                client: !!clientRef.current,
+                currentActiveSketchId,
+                pointsLength: points.length
+            });
+            return;
+        }
+        
+        try {
+            const [start, end] = points;
+            console.log('🔧 Drawing coordinates:', { start: { x: start.x, y: start.y }, end: { x: end.x, y: end.y } });
+            
+            let response;
+            
+            switch (tool) {
+                case 'line':
+                    console.log('📏 Creating line via API...');
+                    response = await clientRef.current.addLineToSketch(
+                        currentActiveSketchId, start.x, start.y, end.x, end.y
+                    );
+                    break;
+                case 'circle':
+                    const radius = start.distanceTo(end);
+                    console.log('⭕ Creating circle via API with radius:', radius);
+                    response = await clientRef.current.addCircleToSketch(
+                        currentActiveSketchId, start.x, start.y, radius
+                    );
+                    break;
+                case 'rectangle':
+                    const width = Math.abs(end.x - start.x);
+                    const height = Math.abs(end.y - start.y);
+                    console.log('📐 Creating rectangle via API:', { width, height });
+                    response = await clientRef.current.addRectangleToSketch(
+                        currentActiveSketchId, [Math.min(start.x, end.x), Math.min(start.y, end.y)], width, height
+                    );
+                    break;
+                default:
+                    updateStatus(`Interactive ${tool} not yet implemented`, 'warning');
+                    return;
+            }
+            
+            console.log('📨 API response:', response);
+            
+            if (response?.success) {
+                updateStatus(`✅ Created ${tool} interactively`, 'success');
+            }
+        } catch (error) {
+            console.error('Interactive drawing error:', error);
+            updateStatus(`❌ Error creating ${tool}: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+        }
+    }, [activeSketchId, updateStatus]);
+
+    // Update the renderer's drawing callback whenever the handler changes
+    useEffect(() => {
+        if (rendererRef.current) {
+            console.log('🔄 Updating renderer onDrawingComplete callback');
+            rendererRef.current.onDrawingComplete = handleInteractiveDrawing;
+        }
+    }, [handleInteractiveDrawing]);
 
     // Initialize the CAD application
     useEffect(() => {
@@ -144,6 +250,13 @@ export function CADApplication() {
                     console.log('Received sketch visualization:', data);
                     renderer.addSketchVisualization(data);
                     
+                    // Set this sketch as the active sketch plane for interactive drawing
+                    renderer.setActiveSketchPlane(data.sketch_id, data);
+                    
+                    // Auto-select the newly created sketch as active
+                    console.log('🎯 Setting activeSketchId to:', data.sketch_id);
+                    setActiveSketchId(data.sketch_id);
+                    
                     // Update frontend state for agent-created sketches
                     if (data.sketch_id && data.plane_id) {
                         const sketch: CreatedSketch = {
@@ -153,7 +266,12 @@ export function CADApplication() {
                         };
                         setCreatedSketches(prev => {
                             const exists = prev.some(s => s.sketch_id === sketch.sketch_id);
-                            return exists ? prev : [...prev, sketch];
+                            if (!exists) {
+                                console.log('📝 Adding new sketch to state:', sketch);
+                                return [...prev, sketch];
+                            }
+                            console.log('📝 Sketch already exists in state');
+                            return prev;
                         });
                     }
                 });
@@ -314,6 +432,10 @@ export function CADApplication() {
                     onUpdateSketches={setCreatedSketches}
                     onUpdateStatus={updateStatus}
                     onClearRenderer={clearRenderer}
+                    onSetDrawingTool={handleSetDrawingTool}
+                    onSetActiveSketch={handleSetActiveSketch}
+                    currentDrawingTool={currentDrawingTool}
+                    activeSketchId={activeSketchId}
                 />
             </div>
 
