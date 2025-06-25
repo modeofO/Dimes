@@ -228,6 +228,31 @@ export class CppBackendClient {
         }
         requestBody.width = elementData.parameters.width || 10;
         requestBody.height = elementData.parameters.height || 10;
+      } else if (elementData.element_type === 'arc') {
+        // Handle arc parameters
+        const arcType = elementData.parameters.arc_type || 'three_points';
+        requestBody.arc_type = arcType;
+        
+        if (arcType === 'three_points') {
+          requestBody.x1 = elementData.parameters.x1 || 0;
+          requestBody.y1 = elementData.parameters.y1 || 0;
+          requestBody.x_mid = elementData.parameters.x_mid || 0;
+          requestBody.y_mid = elementData.parameters.y_mid || 0;
+          requestBody.x2 = elementData.parameters.x2 || 0;
+          requestBody.y2 = elementData.parameters.y2 || 0;
+        } else if (arcType === 'endpoints_radius') {
+          requestBody.x1 = elementData.parameters.x1 || 0;
+          requestBody.y1 = elementData.parameters.y1 || 0;
+          requestBody.x2 = elementData.parameters.x2 || 0;
+          requestBody.y2 = elementData.parameters.y2 || 0;
+          requestBody.radius = elementData.parameters.radius || 5;
+          requestBody.large_arc = elementData.parameters.large_arc || false;
+        }
+      } else if (elementData.element_type === 'polygon') {
+        requestBody.center_x = elementData.parameters.center_x || 0;
+        requestBody.center_y = elementData.parameters.center_y || 0;
+        requestBody.sides = elementData.parameters.sides || 6;
+        requestBody.radius = elementData.parameters.radius || 5;
       }
       
       console.log('📋 Flattened request body object:', requestBody);
@@ -261,8 +286,8 @@ export class CppBackendClient {
       const requestBody = {
         session_id: sessionId,
         sketch_id: filletData.sketch_id,
-        element1_id: filletData.element1_id,
-        element2_id: filletData.element2_id,
+        line1_id: filletData.line1_id,
+        line2_id: filletData.line2_id,
         radius: filletData.radius,
       };
       
@@ -283,6 +308,407 @@ export class CppBackendClient {
       return response;
     } catch (error) {
       logger.error('Failed to add fillet in C++ backend:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Add chamfer to sketch in the C++ backend
+   */
+  async addChamfer(sessionId, chamferData) {
+    try {
+      console.log('🔶 Chamfer data received:', chamferData);
+
+      const requestBody = {
+        session_id: sessionId,
+        sketch_id: chamferData.sketch_id,
+        line1_id: chamferData.line1_id,
+        line2_id: chamferData.line2_id,
+        distance: chamferData.distance,
+      };
+      
+      console.log('🔶 Flattened chamfer request body:', requestBody);
+      
+      const jsonString = JSON.stringify(requestBody);
+      
+      console.log('🔧 Node.js sending chamfer request to C++:');
+      console.log('📋 JSON string:', jsonString);
+
+      const response = await this.makeRequest('/api/v1/chamfers', {
+        method: 'POST',
+        headers: {
+          'X-Session-ID': sessionId,
+        },
+        body: jsonString,
+      });
+      return response;
+    } catch (error) {
+      logger.error('Failed to add chamfer in C++ backend:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Trim line to line in the C++ backend
+   */
+  async trimLineToLine(sessionId, trimData) {
+    try {
+      console.log('✂️ Trim line to line data received:', trimData);
+
+      const requestBody = {
+        session_id: sessionId,
+        sketch_id: trimData.sketch_id,
+        line_to_trim_id: trimData.line_to_trim_id,
+        cutting_line_id: trimData.cutting_line_id,
+        keep_start: trimData.keep_start,
+      };
+      
+      console.log('✂️ Flattened trim line to line request body:', requestBody);
+      
+      const jsonString = JSON.stringify(requestBody);
+      
+      console.log('🔧 Node.js sending trim line to line request to C++:');
+      console.log('📋 JSON string:', jsonString);
+
+      const response = await this.makeRequest('/api/v1/trim-line-to-line', {
+        method: 'POST',
+        headers: {
+          'X-Session-ID': sessionId,
+        },
+        body: jsonString,
+      });
+      return response;
+    } catch (error) {
+      logger.error('Failed to trim line to line in C++ backend:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Trim line to geometry in the C++ backend
+   */
+  async trimLineToGeometry(sessionId, trimData) {
+    try {
+      console.log('✂️ Trim line to geometry data received:', trimData);
+
+      const requestBody = {
+        session_id: sessionId,
+        sketch_id: trimData.sketch_id,
+        line_to_trim_id: trimData.line_to_trim_id,
+        cutting_geometry_id: trimData.cutting_geometry_id,
+        keep_start: trimData.keep_start,
+      };
+      
+      console.log('✂️ Flattened trim line to geometry request body:', requestBody);
+      
+      const jsonString = JSON.stringify(requestBody);
+      
+      console.log('🔧 Node.js sending trim line to geometry request to C++:');
+      console.log('📋 JSON string:', jsonString);
+
+      const response = await this.makeRequest('/api/v1/trim-line-to-geometry', {
+        method: 'POST',
+        headers: {
+          'X-Session-ID': sessionId,
+        },
+        body: jsonString,
+      });
+      return response;
+    } catch (error) {
+      logger.error('Failed to trim line to geometry in C++ backend:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Extend line to line in the C++ backend
+   */
+  async extendLineToLine(sessionId, extendData) {
+    try {
+      console.log('📏 Extend line to line data received:', extendData);
+
+      const requestBody = {
+        session_id: sessionId,
+        sketch_id: extendData.sketch_id,
+        line_to_extend_id: extendData.line_to_extend_id,
+        target_line_id: extendData.target_line_id,
+        extend_start: extendData.extend_start,
+      };
+      
+      console.log('📏 Flattened extend line to line request body:', requestBody);
+      
+      const jsonString = JSON.stringify(requestBody);
+      
+      console.log('🔧 Node.js sending extend line to line request to C++:');
+      console.log('📋 JSON string:', jsonString);
+
+      const response = await this.makeRequest('/api/v1/extend-line-to-line', {
+        method: 'POST',
+        headers: {
+          'X-Session-ID': sessionId,
+        },
+        body: jsonString,
+      });
+      return response;
+    } catch (error) {
+      logger.error('Failed to extend line to line in C++ backend:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Extend line to geometry in the C++ backend
+   */
+  async extendLineToGeometry(sessionId, extendData) {
+    try {
+      console.log('📏 Extend line to geometry data received:', extendData);
+
+      const requestBody = {
+        session_id: sessionId,
+        sketch_id: extendData.sketch_id,
+        line_to_extend_id: extendData.line_to_extend_id,
+        target_geometry_id: extendData.target_geometry_id,
+        extend_start: extendData.extend_start,
+      };
+      
+      console.log('📏 Flattened extend line to geometry request body:', requestBody);
+      
+      const jsonString = JSON.stringify(requestBody);
+      
+      console.log('🔧 Node.js sending extend line to geometry request to C++:');
+      console.log('📋 JSON string:', jsonString);
+
+      const response = await this.makeRequest('/api/v1/extend-line-to-geometry', {
+        method: 'POST',
+        headers: {
+          'X-Session-ID': sessionId,
+        },
+        body: jsonString,
+      });
+      return response;
+    } catch (error) {
+      logger.error('Failed to extend line to geometry in C++ backend:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Mirror elements in the C++ backend
+   */
+  async mirrorElements(sessionId, mirrorData) {
+    try {
+      console.log('🪞 Mirror elements data received:', mirrorData);
+
+      const requestBody = {
+        session_id: sessionId,
+        sketch_id: mirrorData.sketch_id,
+        element_ids: mirrorData.element_ids,
+        mirror_line_id: mirrorData.mirror_line_id,
+        keep_original: mirrorData.keep_original,
+      };
+      
+      console.log('🪞 Flattened mirror elements request body:', requestBody);
+      
+      const jsonString = JSON.stringify(requestBody);
+      
+      console.log('🔧 Node.js sending mirror elements request to C++:');
+      console.log('📋 JSON string:', jsonString);
+
+      const response = await this.makeRequest('/api/v1/mirror-elements', {
+        method: 'POST',
+        headers: {
+          'X-Session-ID': sessionId,
+        },
+        body: jsonString,
+      });
+      return response;
+    } catch (error) {
+      logger.error('Failed to mirror elements in C++ backend:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Mirror elements by two points in the C++ backend
+   */
+  async mirrorElementsByTwoPoints(sessionId, mirrorData) {
+    try {
+      console.log('🪞 Mirror elements by two points data received:', mirrorData);
+
+      const requestBody = {
+        session_id: sessionId,
+        sketch_id: mirrorData.sketch_id,
+        element_ids: mirrorData.element_ids,
+        x1: mirrorData.x1,
+        y1: mirrorData.y1,
+        x2: mirrorData.x2,
+        y2: mirrorData.y2,
+        keep_original: mirrorData.keep_original,
+      };
+      
+      console.log('🪞 Flattened mirror elements by two points request body:', requestBody);
+      
+      const jsonString = JSON.stringify(requestBody);
+      
+      console.log('🔧 Node.js sending mirror elements by two points request to C++:');
+      console.log('📋 JSON string:', jsonString);
+
+      const response = await this.makeRequest('/api/v1/mirror-elements-by-two-points', {
+        method: 'POST',
+        headers: {
+          'X-Session-ID': sessionId,
+        },
+        body: jsonString,
+      });
+      return response;
+    } catch (error) {
+      logger.error('Failed to mirror elements by two points in C++ backend:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Offset element in the C++ backend
+   */
+  async offsetElement(sessionId, offsetData) {
+    try {
+      console.log('📐 Offset element data received:', offsetData);
+
+      const requestBody = {
+        session_id: sessionId,
+        sketch_id: offsetData.sketch_id,
+        element_id: offsetData.element_id,
+        offset_distance: offsetData.offset_distance,
+      };
+      
+      console.log('📐 Flattened offset element request body:', requestBody);
+      
+      const jsonString = JSON.stringify(requestBody);
+      
+      console.log('🔧 Node.js sending offset element request to C++:');
+      console.log('📋 JSON string:', jsonString);
+
+      const response = await this.makeRequest('/api/v1/offset-element', {
+        method: 'POST',
+        headers: {
+          'X-Session-ID': sessionId,
+        },
+        body: jsonString,
+      });
+      return response;
+    } catch (error) {
+      logger.error('Failed to offset element in C++ backend:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Offset element directionally in the C++ backend
+   */
+  async offsetElementDirectional(sessionId, offsetData) {
+    try {
+      console.log('📐 Offset element directional data received:', offsetData);
+
+      const requestBody = {
+        session_id: sessionId,
+        sketch_id: offsetData.sketch_id,
+        element_id: offsetData.element_id,
+        offset_distance: offsetData.offset_distance,
+        direction: offsetData.direction,
+      };
+      
+      console.log('📐 Flattened offset element directional request body:', requestBody);
+      
+      const jsonString = JSON.stringify(requestBody);
+      
+      console.log('🔧 Node.js sending offset element directional request to C++:');
+      console.log('📋 JSON string:', jsonString);
+
+      const response = await this.makeRequest('/api/v1/offset-element-directional', {
+        method: 'POST',
+        headers: {
+          'X-Session-ID': sessionId,
+        },
+        body: jsonString,
+      });
+      return response;
+    } catch (error) {
+      logger.error('Failed to offset element directionally in C++ backend:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Copy element in the C++ backend
+   */
+  async copyElement(sessionId, copyData) {
+    try {
+      console.log('📋 Copy element data received:', copyData);
+
+      const requestBody = {
+        session_id: sessionId,
+        sketch_id: copyData.sketch_id,
+        element_id: copyData.element_id,
+        num_copies: copyData.num_copies,
+        direction_x: copyData.direction_x,
+        direction_y: copyData.direction_y,
+        distance: copyData.distance,
+      };
+      
+      console.log('📋 Flattened copy element request body:', requestBody);
+      
+      const jsonString = JSON.stringify(requestBody);
+      
+      console.log('🔧 Node.js sending copy element request to C++:');
+      console.log('📋 JSON string:', jsonString);
+
+      const response = await this.makeRequest('/api/v1/copy-element', {
+        method: 'POST',
+        headers: {
+          'X-Session-ID': sessionId,
+        },
+        body: jsonString,
+      });
+      return response;
+    } catch (error) {
+      logger.error('Failed to copy element in C++ backend:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Move element in the C++ backend
+   */
+  async moveElement(sessionId, moveData) {
+    try {
+      console.log('➡️ Move element data received:', moveData);
+
+      const requestBody = {
+        session_id: sessionId,
+        sketch_id: moveData.sketch_id,
+        element_id: moveData.element_id,
+        direction_x: moveData.direction_x,
+        direction_y: moveData.direction_y,
+        distance: moveData.distance,
+      };
+      
+      console.log('➡️ Flattened move element request body:', requestBody);
+      
+      const jsonString = JSON.stringify(requestBody);
+      
+      console.log('🔧 Node.js sending move element request to C++:');
+      console.log('📋 JSON string:', jsonString);
+
+      const response = await this.makeRequest('/api/v1/move-element', {
+        method: 'POST',
+        headers: {
+          'X-Session-ID': sessionId,
+        },
+        body: jsonString,
+      });
+      return response;
+    } catch (error) {
+      logger.error('Failed to move element in C++ backend:', error.message);
       throw error;
     }
   }

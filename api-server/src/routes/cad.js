@@ -50,10 +50,10 @@ export default function(webSocketManager) {
     handleValidationErrors,
   ];
 
-  // Sketch element validation
+  // Sketch element validation - updated to support all new element types
   const validateSketchElement = [
     body('sketch_id').isString().notEmpty().withMessage('Sketch ID is required'),
-    body('element_type').isIn(['line', 'circle']).withMessage('Invalid element type'),
+    body('element_type').isIn(['line', 'circle', 'rectangle', 'arc', 'polygon']).withMessage('Invalid element type'),
     body('parameters').isObject().withMessage('Parameters must be an object'),
     handleValidationErrors,
   ];
@@ -86,6 +86,119 @@ export default function(webSocketManager) {
   const validateExport = [
     param('sessionId').isString().notEmpty().withMessage('Session ID is required'),
     param('format').isIn(['step', 'stp', 'stl', 'obj', 'iges']).withMessage('Invalid export format'),
+    handleValidationErrors,
+  ];
+
+  // Fillet validation
+  const validateFillet = [
+    body('sketch_id').isString().notEmpty().withMessage('Sketch ID is required'),
+    body('line1_id').isString().notEmpty().withMessage('First line ID is required'),
+    body('line2_id').isString().notEmpty().withMessage('Second line ID is required'),
+    body('radius').isFloat({ min: 0.001 }).withMessage('Radius must be a positive number'),
+    handleValidationErrors,
+  ];
+
+  // Chamfer validation
+  const validateChamfer = [
+    body('sketch_id').isString().notEmpty().withMessage('Sketch ID is required'),
+    body('line1_id').isString().notEmpty().withMessage('First line ID is required'),
+    body('line2_id').isString().notEmpty().withMessage('Second line ID is required'),
+    body('distance').isFloat({ min: 0.001 }).withMessage('Distance must be a positive number'),
+    handleValidationErrors,
+  ];
+
+  // Trim line to line validation
+  const validateTrimLineToLine = [
+    body('sketch_id').isString().notEmpty().withMessage('Sketch ID is required'),
+    body('line_to_trim_id').isString().notEmpty().withMessage('Line to trim ID is required'),
+    body('cutting_line_id').isString().notEmpty().withMessage('Cutting line ID is required'),
+    body('keep_start').isBoolean().withMessage('Keep start must be a boolean'),
+    handleValidationErrors,
+  ];
+
+  // Trim line to geometry validation
+  const validateTrimLineToGeometry = [
+    body('sketch_id').isString().notEmpty().withMessage('Sketch ID is required'),
+    body('line_to_trim_id').isString().notEmpty().withMessage('Line to trim ID is required'),
+    body('cutting_geometry_id').isString().notEmpty().withMessage('Cutting geometry ID is required'),
+    body('keep_start').isBoolean().withMessage('Keep start must be a boolean'),
+    handleValidationErrors,
+  ];
+
+  // Extend line to line validation
+  const validateExtendLineToLine = [
+    body('sketch_id').isString().notEmpty().withMessage('Sketch ID is required'),
+    body('line_to_extend_id').isString().notEmpty().withMessage('Line to extend ID is required'),
+    body('target_line_id').isString().notEmpty().withMessage('Target line ID is required'),
+    body('extend_start').isBoolean().withMessage('Extend start must be a boolean'),
+    handleValidationErrors,
+  ];
+
+  // Extend line to geometry validation
+  const validateExtendLineToGeometry = [
+    body('sketch_id').isString().notEmpty().withMessage('Sketch ID is required'),
+    body('line_to_extend_id').isString().notEmpty().withMessage('Line to extend ID is required'),
+    body('target_geometry_id').isString().notEmpty().withMessage('Target geometry ID is required'),
+    body('extend_start').isBoolean().withMessage('Extend start must be a boolean'),
+    handleValidationErrors,
+  ];
+
+  // Mirror elements validation
+  const validateMirrorElements = [
+    body('sketch_id').isString().notEmpty().withMessage('Sketch ID is required'),
+    body('element_ids').isArray({ min: 1 }).withMessage('Element IDs must be a non-empty array'),
+    body('mirror_line_id').isString().notEmpty().withMessage('Mirror line ID is required'),
+    body('keep_original').isBoolean().withMessage('Keep original must be a boolean'),
+    handleValidationErrors,
+  ];
+
+  // Mirror elements by two points validation
+  const validateMirrorElementsByTwoPoints = [
+    body('sketch_id').isString().notEmpty().withMessage('Sketch ID is required'),
+    body('element_ids').isArray({ min: 1 }).withMessage('Element IDs must be a non-empty array'),
+    body('x1').isFloat().withMessage('X1 must be a number'),
+    body('y1').isFloat().withMessage('Y1 must be a number'),
+    body('x2').isFloat().withMessage('X2 must be a number'),
+    body('y2').isFloat().withMessage('Y2 must be a number'),
+    body('keep_original').isBoolean().withMessage('Keep original must be a boolean'),
+    handleValidationErrors,
+  ];
+
+  // Offset element validation
+  const validateOffsetElement = [
+    body('sketch_id').isString().notEmpty().withMessage('Sketch ID is required'),
+    body('element_id').isString().notEmpty().withMessage('Element ID is required'),
+    body('offset_distance').isFloat().withMessage('Offset distance must be a number'),
+    handleValidationErrors,
+  ];
+
+  // Offset element directional validation
+  const validateOffsetElementDirectional = [
+    body('sketch_id').isString().notEmpty().withMessage('Sketch ID is required'),
+    body('element_id').isString().notEmpty().withMessage('Element ID is required'),
+    body('offset_distance').isFloat({ min: 0.001 }).withMessage('Offset distance must be a positive number'),
+    body('direction').isIn(['left', 'right']).withMessage('Direction must be left or right'),
+    handleValidationErrors,
+  ];
+
+  // Copy element validation
+  const validateCopyElement = [
+    body('sketch_id').isString().notEmpty().withMessage('Sketch ID is required'),
+    body('element_id').isString().notEmpty().withMessage('Element ID is required'),
+    body('num_copies').isInt({ min: 1 }).withMessage('Number of copies must be a positive integer'),
+    body('direction_x').isFloat().withMessage('Direction X must be a number'),
+    body('direction_y').isFloat().withMessage('Direction Y must be a number'),
+    body('distance').isFloat({ min: 0.001 }).withMessage('Distance must be a positive number'),
+    handleValidationErrors,
+  ];
+
+  // Move element validation
+  const validateMoveElement = [
+    body('sketch_id').isString().notEmpty().withMessage('Sketch ID is required'),
+    body('element_id').isString().notEmpty().withMessage('Element ID is required'),
+    body('direction_x').isFloat().withMessage('Direction X must be a number'),
+    body('direction_y').isFloat().withMessage('Direction Y must be a number'),
+    body('distance').isFloat({ min: 0.001 }).withMessage('Distance must be a positive number'),
     handleValidationErrors,
   ];
 
@@ -230,6 +343,450 @@ export default function(webSocketManager) {
 
     } catch (error) {
       next(new ApiError(500, 'Failed to add sketch element', error.message));
+    }
+  });
+
+  /**
+   * POST /api/v1/cad/fillets
+   * Add fillet to sketch
+   */
+  router.post('/fillets', validateFillet, async (req, res, next) => {
+    try {
+      const sessionId = req.sessionId;
+      const filletData = req.body;
+
+      logger.info(`Adding fillet for session ${sessionId}`, { filletData });
+
+      const result = await cppBackend.addFillet(sessionId, filletData);
+
+      console.log('🔍 Raw C++ backend addFillet result:', JSON.stringify(result, null, 2));
+
+      // Send WebSocket notification for real-time updates
+      if (webSocketManager && result.success && result.data) {
+        console.log('🔊 Sending WebSocket notification for fillet addition');
+        webSocketManager.sendToClient(sessionId, {
+          type: 'visualization_data',
+          payload: result.data.visualization_data || result.data,
+          timestamp: Date.now(),
+        });
+      }
+
+      res.json({
+        success: true,
+        session_id: sessionId,
+        timestamp: Date.now(),
+        data: result.data || result,
+      });
+
+    } catch (error) {
+      next(new ApiError(500, 'Failed to add fillet', error.message));
+    }
+  });
+
+  /**
+   * POST /api/v1/cad/chamfers
+   * Add chamfer to sketch
+   */
+  router.post('/chamfers', validateChamfer, async (req, res, next) => {
+    try {
+      const sessionId = req.sessionId;
+      const chamferData = req.body;
+
+      logger.info(`Adding chamfer for session ${sessionId}`, { chamferData });
+
+      const result = await cppBackend.addChamfer(sessionId, chamferData);
+
+      console.log('🔍 Raw C++ backend addChamfer result:', JSON.stringify(result, null, 2));
+
+      // Send WebSocket notification for real-time updates
+      if (webSocketManager && result.success && result.data) {
+        console.log('🔊 Sending WebSocket notification for chamfer addition');
+        webSocketManager.sendToClient(sessionId, {
+          type: 'visualization_data',
+          payload: result.data.visualization_data || result.data,
+          timestamp: Date.now(),
+        });
+      }
+
+      res.json({
+        success: true,
+        session_id: sessionId,
+        timestamp: Date.now(),
+        data: result.data || result,
+      });
+
+    } catch (error) {
+      next(new ApiError(500, 'Failed to add chamfer', error.message));
+    }
+  });
+
+  /**
+   * POST /api/v1/cad/trim-line-to-line
+   * Trim line to line
+   */
+  router.post('/trim-line-to-line', validateTrimLineToLine, async (req, res, next) => {
+    try {
+      const sessionId = req.sessionId;
+      const trimData = req.body;
+
+      logger.info(`Trimming line to line for session ${sessionId}`, { trimData });
+
+      const result = await cppBackend.trimLineToLine(sessionId, trimData);
+
+      console.log('🔍 Raw C++ backend trimLineToLine result:', JSON.stringify(result, null, 2));
+
+      // Send WebSocket notification for real-time updates
+      if (webSocketManager && result.success && result.data) {
+        console.log('🔊 Sending WebSocket notification for trim operation');
+        webSocketManager.sendToClient(sessionId, {
+          type: 'visualization_data',
+          payload: result.data.visualization_data || result.data,
+          timestamp: Date.now(),
+        });
+      }
+
+      res.json({
+        success: true,
+        session_id: sessionId,
+        timestamp: Date.now(),
+        data: result.data || result,
+      });
+
+    } catch (error) {
+      next(new ApiError(500, 'Failed to trim line to line', error.message));
+    }
+  });
+
+  /**
+   * POST /api/v1/cad/trim-line-to-geometry
+   * Trim line to geometry
+   */
+  router.post('/trim-line-to-geometry', validateTrimLineToGeometry, async (req, res, next) => {
+    try {
+      const sessionId = req.sessionId;
+      const trimData = req.body;
+
+      logger.info(`Trimming line to geometry for session ${sessionId}`, { trimData });
+
+      const result = await cppBackend.trimLineToGeometry(sessionId, trimData);
+
+      console.log('🔍 Raw C++ backend trimLineToGeometry result:', JSON.stringify(result, null, 2));
+
+      // Send WebSocket notification for real-time updates
+      if (webSocketManager && result.success && result.data) {
+        console.log('🔊 Sending WebSocket notification for trim operation');
+        webSocketManager.sendToClient(sessionId, {
+          type: 'visualization_data',
+          payload: result.data.visualization_data || result.data,
+          timestamp: Date.now(),
+        });
+      }
+
+      res.json({
+        success: true,
+        session_id: sessionId,
+        timestamp: Date.now(),
+        data: result.data || result,
+      });
+
+    } catch (error) {
+      next(new ApiError(500, 'Failed to trim line to geometry', error.message));
+    }
+  });
+
+  /**
+   * POST /api/v1/cad/extend-line-to-line
+   * Extend line to line
+   */
+  router.post('/extend-line-to-line', validateExtendLineToLine, async (req, res, next) => {
+    try {
+      const sessionId = req.sessionId;
+      const extendData = req.body;
+
+      logger.info(`Extending line to line for session ${sessionId}`, { extendData });
+
+      const result = await cppBackend.extendLineToLine(sessionId, extendData);
+
+      console.log('🔍 Raw C++ backend extendLineToLine result:', JSON.stringify(result, null, 2));
+
+      // Send WebSocket notification for real-time updates
+      if (webSocketManager && result.success && result.data) {
+        console.log('🔊 Sending WebSocket notification for extend operation');
+        webSocketManager.sendToClient(sessionId, {
+          type: 'visualization_data',
+          payload: result.data.visualization_data || result.data,
+          timestamp: Date.now(),
+        });
+      }
+
+      res.json({
+        success: true,
+        session_id: sessionId,
+        timestamp: Date.now(),
+        data: result.data || result,
+      });
+
+    } catch (error) {
+      next(new ApiError(500, 'Failed to extend line to line', error.message));
+    }
+  });
+
+  /**
+   * POST /api/v1/cad/extend-line-to-geometry
+   * Extend line to geometry
+   */
+  router.post('/extend-line-to-geometry', validateExtendLineToGeometry, async (req, res, next) => {
+    try {
+      const sessionId = req.sessionId;
+      const extendData = req.body;
+
+      logger.info(`Extending line to geometry for session ${sessionId}`, { extendData });
+
+      const result = await cppBackend.extendLineToGeometry(sessionId, extendData);
+
+      console.log('🔍 Raw C++ backend extendLineToGeometry result:', JSON.stringify(result, null, 2));
+
+      // Send WebSocket notification for real-time updates
+      if (webSocketManager && result.success && result.data) {
+        console.log('🔊 Sending WebSocket notification for extend operation');
+        webSocketManager.sendToClient(sessionId, {
+          type: 'visualization_data',
+          payload: result.data.visualization_data || result.data,
+          timestamp: Date.now(),
+        });
+      }
+
+      res.json({
+        success: true,
+        session_id: sessionId,
+        timestamp: Date.now(),
+        data: result.data || result,
+      });
+
+    } catch (error) {
+      next(new ApiError(500, 'Failed to extend line to geometry', error.message));
+    }
+  });
+
+  /**
+   * POST /api/v1/cad/mirror-elements
+   * Mirror elements across a line
+   */
+  router.post('/mirror-elements', validateMirrorElements, async (req, res, next) => {
+    try {
+      const sessionId = req.sessionId;
+      const mirrorData = req.body;
+
+      logger.info(`Mirroring elements for session ${sessionId}`, { mirrorData });
+
+      const result = await cppBackend.mirrorElements(sessionId, mirrorData);
+
+      console.log('🔍 Raw C++ backend mirrorElements result:', JSON.stringify(result, null, 2));
+
+      // Send WebSocket notification for real-time updates
+      if (webSocketManager && result.success && result.data) {
+        console.log('🔊 Sending WebSocket notification for mirror operation');
+        webSocketManager.sendToClient(sessionId, {
+          type: 'visualization_data',
+          payload: result.data.visualization_data || result.data,
+          timestamp: Date.now(),
+        });
+      }
+
+      res.json({
+        success: true,
+        session_id: sessionId,
+        timestamp: Date.now(),
+        data: result.data || result,
+      });
+
+    } catch (error) {
+      next(new ApiError(500, 'Failed to mirror elements', error.message));
+    }
+  });
+
+  /**
+   * POST /api/v1/cad/mirror-elements-by-two-points
+   * Mirror elements across a line defined by two points
+   */
+  router.post('/mirror-elements-by-two-points', validateMirrorElementsByTwoPoints, async (req, res, next) => {
+    try {
+      const sessionId = req.sessionId;
+      const mirrorData = req.body;
+
+      logger.info(`Mirroring elements by two points for session ${sessionId}`, { mirrorData });
+
+      const result = await cppBackend.mirrorElementsByTwoPoints(sessionId, mirrorData);
+
+      console.log('🔍 Raw C++ backend mirrorElementsByTwoPoints result:', JSON.stringify(result, null, 2));
+
+      // Send WebSocket notification for real-time updates
+      if (webSocketManager && result.success && result.data) {
+        console.log('🔊 Sending WebSocket notification for mirror operation');
+        webSocketManager.sendToClient(sessionId, {
+          type: 'visualization_data',
+          payload: result.data.visualization_data || result.data,
+          timestamp: Date.now(),
+        });
+      }
+
+      res.json({
+        success: true,
+        session_id: sessionId,
+        timestamp: Date.now(),
+        data: result.data || result,
+      });
+
+    } catch (error) {
+      next(new ApiError(500, 'Failed to mirror elements by two points', error.message));
+    }
+  });
+
+  /**
+   * POST /api/v1/cad/offset-element
+   * Offset element
+   */
+  router.post('/offset-element', validateOffsetElement, async (req, res, next) => {
+    try {
+      const sessionId = req.sessionId;
+      const offsetData = req.body;
+
+      logger.info(`Offsetting element for session ${sessionId}`, { offsetData });
+
+      const result = await cppBackend.offsetElement(sessionId, offsetData);
+
+      console.log('🔍 Raw C++ backend offsetElement result:', JSON.stringify(result, null, 2));
+
+      // Send WebSocket notification for real-time updates
+      if (webSocketManager && result.success && result.data) {
+        console.log('🔊 Sending WebSocket notification for offset operation');
+        webSocketManager.sendToClient(sessionId, {
+          type: 'visualization_data',
+          payload: result.data.visualization_data || result.data,
+          timestamp: Date.now(),
+        });
+      }
+
+      res.json({
+        success: true,
+        session_id: sessionId,
+        timestamp: Date.now(),
+        data: result.data || result,
+      });
+
+    } catch (error) {
+      next(new ApiError(500, 'Failed to offset element', error.message));
+    }
+  });
+
+  /**
+   * POST /api/v1/cad/offset-element-directional
+   * Offset element directionally
+   */
+  router.post('/offset-element-directional', validateOffsetElementDirectional, async (req, res, next) => {
+    try {
+      const sessionId = req.sessionId;
+      const offsetData = req.body;
+
+      logger.info(`Offsetting element directionally for session ${sessionId}`, { offsetData });
+
+      const result = await cppBackend.offsetElementDirectional(sessionId, offsetData);
+
+      console.log('🔍 Raw C++ backend offsetElementDirectional result:', JSON.stringify(result, null, 2));
+
+      // Send WebSocket notification for real-time updates
+      if (webSocketManager && result.success && result.data) {
+        console.log('🔊 Sending WebSocket notification for directional offset operation');
+        webSocketManager.sendToClient(sessionId, {
+          type: 'visualization_data',
+          payload: result.data.visualization_data || result.data,
+          timestamp: Date.now(),
+        });
+      }
+
+      res.json({
+        success: true,
+        session_id: sessionId,
+        timestamp: Date.now(),
+        data: result.data || result,
+      });
+
+    } catch (error) {
+      next(new ApiError(500, 'Failed to offset element directionally', error.message));
+    }
+  });
+
+  /**
+   * POST /api/v1/cad/copy-element
+   * Copy element
+   */
+  router.post('/copy-element', validateCopyElement, async (req, res, next) => {
+    try {
+      const sessionId = req.sessionId;
+      const copyData = req.body;
+
+      logger.info(`Copying element for session ${sessionId}`, { copyData });
+
+      const result = await cppBackend.copyElement(sessionId, copyData);
+
+      console.log('🔍 Raw C++ backend copyElement result:', JSON.stringify(result, null, 2));
+
+      // Send WebSocket notification for real-time updates
+      if (webSocketManager && result.success && result.data) {
+        console.log('🔊 Sending WebSocket notification for copy operation');
+        webSocketManager.sendToClient(sessionId, {
+          type: 'visualization_data',
+          payload: result.data.visualization_data || result.data,
+          timestamp: Date.now(),
+        });
+      }
+
+      res.json({
+        success: true,
+        session_id: sessionId,
+        timestamp: Date.now(),
+        data: result.data || result,
+      });
+
+    } catch (error) {
+      next(new ApiError(500, 'Failed to copy element', error.message));
+    }
+  });
+
+  /**
+   * POST /api/v1/cad/move-element
+   * Move element
+   */
+  router.post('/move-element', validateMoveElement, async (req, res, next) => {
+    try {
+      const sessionId = req.sessionId;
+      const moveData = req.body;
+
+      logger.info(`Moving element for session ${sessionId}`, { moveData });
+
+      const result = await cppBackend.moveElement(sessionId, moveData);
+
+      console.log('🔍 Raw C++ backend moveElement result:', JSON.stringify(result, null, 2));
+
+      // Send WebSocket notification for real-time updates
+      if (webSocketManager && result.success && result.data) {
+        console.log('🔊 Sending WebSocket notification for move operation');
+        webSocketManager.sendToClient(sessionId, {
+          type: 'visualization_data',
+          payload: result.data.visualization_data || result.data,
+          timestamp: Date.now(),
+        });
+      }
+
+      res.json({
+        success: true,
+        session_id: sessionId,
+        timestamp: Date.now(),
+        data: result.data || result,
+      });
+
+    } catch (error) {
+      next(new ApiError(500, 'Failed to move element', error.message));
     }
   });
 
