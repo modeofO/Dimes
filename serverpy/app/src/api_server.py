@@ -264,6 +264,16 @@ class CopyElementRequest(BaseModel):
     distance: float = Field(..., description="Distance between copies")
 
 
+class MoveElementRequest(BaseModel):
+    """Request model for move operations"""
+    session_id: str = Field(..., description="Session ID")
+    sketch_id: str = Field(..., description="Sketch ID")
+    element_id: str = Field(..., description="ID of element to move")
+    direction_x: float = Field(..., description="X component of direction vector")
+    direction_y: float = Field(..., description="Y component of direction vector")
+    distance: float = Field(..., description="Distance to move")
+
+
 class APIResponse(BaseModel):
     """Standard API response format"""
     success: bool
@@ -687,6 +697,26 @@ class CADAPIServer:
                 
             except Exception as e:
                 print(f"❌ Error in copy_element: {e}")
+                return APIResponse(
+                    success=False,
+                    timestamp=int(time.time()),
+                    error=str(e)
+                )
+        
+        @self.app.post("/api/v1/move-element")
+        async def move_element(request: MoveElementRequest):
+            """Move element endpoint - handles moving geometry elements"""
+            try:
+                response_data = await self._handle_move_element(request)
+                
+                return APIResponse(
+                    success=True,
+                    timestamp=int(time.time()),
+                    data=response_data
+                )
+                
+            except Exception as e:
+                print(f"❌ Error in move_element: {e}")
                 return APIResponse(
                     success=False,
                     timestamp=int(time.time()),
@@ -1661,6 +1691,59 @@ class CADAPIServer:
         }
         
         print(f"✅ Elements copied successfully")
+        return response_data
+    
+    async def _handle_move_element(self, request: MoveElementRequest) -> Dict[str, Any]:
+        """Handle move element - Real implementation using geometry engine"""
+        print(f"➡️ Moving element: {request.element_id}")
+        
+        session_manager = SessionManager.get_instance()
+        engine = session_manager.get_or_create_session(request.session_id)
+        
+        if engine is None:
+            raise Exception("Failed to get session")
+        
+        # Validate that the sketch exists
+        if not engine.sketch_exists(request.sketch_id):
+            raise Exception(f"Sketch '{request.sketch_id}' does not exist")
+        
+        # Validate that the element exists
+        if not engine.element_exists(request.element_id):
+            raise Exception(f"Element '{request.element_id}' does not exist")
+        
+        # Perform move operation
+        success = engine.move_element_in_sketch(
+            request.sketch_id,
+            request.element_id,
+            request.direction_x,
+            request.direction_y,
+            request.distance
+        )
+        
+        if not success:
+            raise Exception("Failed to move element in geometry engine")
+        
+        # Get visualization data for the moved element
+        viz_data = engine.get_sketch_element_visualization_data(request.sketch_id, request.element_id)
+        
+        response_data = {
+            "element_id": request.element_id,
+            "sketch_id": request.sketch_id,
+            "direction": {
+                "x": request.direction_x,
+                "y": request.direction_y
+            },
+            "distance": request.distance,
+            "session_id": request.session_id,
+            "operation": "move_element",
+            "message": f"Element {request.element_id} moved successfully"
+        }
+        
+        # Add visualization data if available
+        if viz_data:
+            response_data["visualization_data"] = viz_data
+        
+        print(f"✅ Element moved successfully")
         return response_data
     
     # ==================== UTILITY METHODS ====================

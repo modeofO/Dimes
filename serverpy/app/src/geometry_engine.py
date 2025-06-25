@@ -2130,6 +2130,148 @@ class Sketch:
             print(f"❌ Error creating copied element: {e}")
             return None
 
+    def move_element(self, element_id: str, direction_x: float, direction_y: float, distance: float) -> bool:
+        """
+        Move a geometry element to a new position
+        
+        Args:
+            element_id: ID of element to move
+            direction_x: X component of direction vector (normalized automatically)
+            direction_y: Y component of direction vector (normalized automatically)
+            distance: Distance to move
+            
+        Returns:
+            True if successful, False if failed
+        """
+        try:
+            print(f"➡️ Moving element {element_id} with direction ({direction_x}, {direction_y}) and distance {distance}")
+            
+            # Find the element
+            element = self.get_element_by_id(element_id)
+            if not element:
+                print(f"❌ Element {element_id} not found")
+                return False
+            
+            # Normalize direction vector
+            direction_length = math.sqrt(direction_x**2 + direction_y**2)
+            if direction_length < 1e-10:
+                print(f"❌ Direction vector too small: ({direction_x}, {direction_y})")
+                return False
+            
+            dir_x = direction_x / direction_length
+            dir_y = direction_y / direction_length
+            
+            # Calculate offset
+            offset_x = dir_x * distance
+            offset_y = dir_y * distance
+            
+            # Move element based on type
+            success = self._apply_move_to_element(element, offset_x, offset_y)
+            
+            if success:
+                print(f"✅ Successfully moved element {element_id}")
+            else:
+                print(f"❌ Failed to move element {element_id}")
+            
+            return success
+            
+        except Exception as e:
+            print(f"❌ Error moving element: {e}")
+            return False
+    
+    def _apply_move_to_element(self, element: SketchElement, offset_x: float, offset_y: float) -> bool:
+        """Apply move offset to an element (modifies the element in place)"""
+        try:
+            element_type = element.element_type
+            
+            if element_type == SketchElementType.LINE:
+                # Move both endpoints
+                if not element.start_point or not element.end_point:
+                    return False
+                
+                new_start = gp_Pnt2d(
+                    element.start_point.X() + offset_x,
+                    element.start_point.Y() + offset_y
+                )
+                new_end = gp_Pnt2d(
+                    element.end_point.X() + offset_x,
+                    element.end_point.Y() + offset_y
+                )
+                
+                element.start_point = new_start
+                element.end_point = new_end
+                return True
+            
+            elif element_type == SketchElementType.CIRCLE:
+                # Move center point
+                if not element.center_point:
+                    return False
+                
+                new_center = gp_Pnt2d(
+                    element.center_point.X() + offset_x,
+                    element.center_point.Y() + offset_y
+                )
+                
+                element.center_point = new_center
+                return True
+            
+            elif element_type == SketchElementType.RECTANGLE:
+                # Move corner point
+                if not element.start_point:
+                    return False
+                
+                new_corner = gp_Pnt2d(
+                    element.start_point.X() + offset_x,
+                    element.start_point.Y() + offset_y
+                )
+                
+                element.start_point = new_corner
+                return True
+            
+            elif element_type == SketchElementType.ARC:
+                # Move all points (start, end, center)
+                if (not element.start_point or not element.end_point or not element.center_point):
+                    return False
+                
+                new_start = gp_Pnt2d(
+                    element.start_point.X() + offset_x,
+                    element.start_point.Y() + offset_y
+                )
+                new_end = gp_Pnt2d(
+                    element.end_point.X() + offset_x,
+                    element.end_point.Y() + offset_y
+                )
+                new_center = gp_Pnt2d(
+                    element.center_point.X() + offset_x,
+                    element.center_point.Y() + offset_y
+                )
+                
+                element.start_point = new_start
+                element.end_point = new_end
+                element.center_point = new_center
+                return True
+            
+            elif element_type == SketchElementType.POLYGON:
+                # Move center point
+                if not element.center_point:
+                    return False
+                
+                new_center = gp_Pnt2d(
+                    element.center_point.X() + offset_x,
+                    element.center_point.Y() + offset_y
+                )
+                
+                element.center_point = new_center
+                return True
+            
+            else:
+                print(f"❌ Unsupported element type for moving: {element_type}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Error applying move to element: {e}")
+            return False
+
 
 class SketchPlane:
     """
@@ -3616,3 +3758,40 @@ class OCCTEngine:
         except Exception as e:
             print(f"❌ Error copying element in sketch: {e}")
             return []
+    
+    def move_element_in_sketch(self, sketch_id: str, element_id: str, direction_x: float, direction_y: float, distance: float) -> bool:
+        """
+        Move a geometry element to a new position - equivalent to C++ moveElement
+        
+        Args:
+            sketch_id: Sketch identifier
+            element_id: ID of element to move
+            direction_x: X component of direction vector
+            direction_y: Y component of direction vector
+            distance: Distance to move
+            
+        Returns:
+            True if successful, False if failed
+        """
+        print(f"➡️ Moving element {element_id} in sketch {sketch_id}")
+        
+        if not self.sketch_exists(sketch_id):
+            print(f"❌ Sketch not found: {sketch_id}")
+            return False
+        
+        try:
+            sketch = self.sketches[sketch_id]
+            
+            # Perform move operation
+            success = sketch.move_element(element_id, direction_x, direction_y, distance)
+            
+            if success:
+                print(f"✅ Successfully moved element {element_id} in sketch {sketch_id}")
+            else:
+                print(f"❌ Failed to move element {element_id} in sketch {sketch_id}")
+            
+            return success
+            
+        except Exception as e:
+            print(f"❌ Error moving element in sketch: {e}")
+            return False
