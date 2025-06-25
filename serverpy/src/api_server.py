@@ -170,6 +170,15 @@ class FilletRequest(BaseModel):
     radius: float = Field(..., description="Fillet radius")
 
 
+class ChamferRequest(BaseModel):
+    """Request model for chamfer operations"""
+    session_id: str = Field(..., description="Session ID")
+    sketch_id: str = Field(..., description="Sketch ID")
+    line1_id: str = Field(..., description="First line element ID")
+    line2_id: str = Field(..., description="Second line element ID")
+    distance: float = Field(..., description="Chamfer distance")
+
+
 class APIResponse(BaseModel):
     """Standard API response format"""
     success: bool
@@ -393,6 +402,26 @@ class CADAPIServer:
                 
             except Exception as e:
                 print(f"❌ Error in add_fillet: {e}")
+                return APIResponse(
+                    success=False,
+                    timestamp=int(time.time()),
+                    error=str(e)
+                )
+        
+        @self.app.post("/api/v1/chamfers")
+        async def add_chamfer(request: ChamferRequest):
+            """Add chamfer endpoint - handles chamfer operations between two lines"""
+            try:
+                response_data = await self._handle_add_chamfer(request)
+                
+                return APIResponse(
+                    success=True,
+                    timestamp=int(time.time()),
+                    data=response_data
+                )
+                
+            except Exception as e:
+                print(f"❌ Error in add_chamfer: {e}")
                 return APIResponse(
                     success=False,
                     timestamp=int(time.time()),
@@ -943,6 +972,55 @@ class CADAPIServer:
             response_data["visualization_data"] = viz_data
         
         print(f"✅ Fillet created successfully: {fillet_id}")
+        return response_data
+    
+    async def _handle_add_chamfer(self, request: ChamferRequest) -> Dict[str, Any]:
+        """Handle chamfer addition - Real implementation using geometry engine"""
+        print(f"🔵 Adding chamfer to sketch: {request.sketch_id} between lines {request.line1_id} & {request.line2_id}")
+        
+        session_manager = SessionManager.get_instance()
+        engine = session_manager.get_or_create_session(request.session_id)
+        
+        if engine is None:
+            raise Exception("Failed to get session")
+        
+        # Validate that the sketch exists
+        if not engine.sketch_exists(request.sketch_id):
+            raise Exception(f"Sketch '{request.sketch_id}' does not exist")
+        
+        # Validate chamfer distance
+        if request.distance <= 0:
+            raise Exception(f"Chamfer distance must be positive, got {request.distance}")
+        
+        # Create chamfer using geometry engine
+        chamfer_id = engine.add_chamfer_to_sketch(
+            request.sketch_id,
+            request.line1_id,
+            request.line2_id,
+            request.distance
+        )
+        
+        if not chamfer_id:
+            raise Exception("Failed to create chamfer in geometry engine")
+        
+        # Get visualization data for the created chamfer
+        viz_data = engine.get_sketch_element_visualization_data(request.sketch_id, chamfer_id)
+        
+        response_data = {
+            "chamfer_id": chamfer_id,
+            "sketch_id": request.sketch_id,
+            "line1_id": request.line1_id,
+            "line2_id": request.line2_id,
+            "distance": request.distance,
+            "session_id": request.session_id,
+            "message": f"Chamfer {chamfer_id} created successfully between lines {request.line1_id} and {request.line2_id}"
+        }
+        
+        # Add visualization data if available
+        if viz_data:
+            response_data["visualization_data"] = viz_data
+        
+        print(f"✅ Chamfer created successfully: {chamfer_id}")
         return response_data
     
     # ==================== UTILITY METHODS ====================

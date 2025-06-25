@@ -500,6 +500,61 @@ class Sketch:
             print(f"❌ Error adding fillet to sketch: {e}")
             return ""
     
+    def add_chamfer(self, line1_id: str, line2_id: str, distance: float) -> str:
+        """Add chamfer between two lines - modifies existing lines and creates connecting line"""
+        try:
+            print(f"🔸 Adding chamfer between lines {line1_id} and {line2_id} with distance {distance}")
+            
+            # Find the two line elements
+            line1 = self.get_element_by_id(line1_id)
+            line2 = self.get_element_by_id(line2_id)
+            
+            if not line1 or line1.element_type != SketchElementType.LINE:
+                print(f"❌ Line {line1_id} not found or not a line")
+                return ""
+            
+            if not line2 or line2.element_type != SketchElementType.LINE:
+                print(f"❌ Line {line2_id} not found or not a line")
+                return ""
+            
+            # Calculate chamfer geometry
+            chamfer_result = self._calculate_chamfer_geometry(line1, line2, distance)
+            
+            if not chamfer_result:
+                print(f"❌ Failed to calculate chamfer geometry")
+                return ""
+            
+            # Unpack chamfer calculation results
+            new_line1_end, new_line2_start, chamfer_start, chamfer_end = chamfer_result
+            
+            # Generate unique chamfer ID
+            chamfer_id = f"chamfer_{len(self.elements) + 1}_{int(time.time() * 1000) % 10000}"
+            
+            # Create chamfer line element
+            chamfer_element = SketchElement(
+                id=chamfer_id,
+                element_type=SketchElementType.LINE,
+                start_point=chamfer_start,
+                end_point=chamfer_end,
+                referenced_elements=[line1_id, line2_id]  # Track which lines this chamfer connects
+            )
+            
+            # Modify the existing lines to connect to chamfer
+            line1.end_point = new_line1_end
+            line2.start_point = new_line2_start
+            
+            # Add chamfer to sketch
+            if self.add_element(chamfer_element):
+                print(f"✅ Added chamfer {chamfer_id} between lines {line1_id} and {line2_id}")
+                return chamfer_id
+            else:
+                print(f"❌ Failed to add chamfer element to sketch")
+                return ""
+                
+        except Exception as e:
+            print(f"❌ Error adding chamfer to sketch: {e}")
+            return ""
+    
     def _calculate_fillet_geometry(self, line1: SketchElement, line2: SketchElement, radius: float) -> Optional[Tuple[gp_Pnt2d, gp_Pnt2d, gp_Pnt2d, gp_Pnt2d, gp_Pnt2d]]:
         """Calculate fillet geometry between two lines"""
         try:
@@ -624,6 +679,72 @@ class Sketch:
             
         except Exception as e:
             print(f"❌ Error finding line intersection: {e}")
+            return None
+    
+    def _calculate_chamfer_geometry(self, line1: SketchElement, line2: SketchElement, distance: float) -> Optional[Tuple[gp_Pnt2d, gp_Pnt2d, gp_Pnt2d, gp_Pnt2d]]:
+        """Calculate chamfer geometry between two lines"""
+        try:
+            # Get line endpoints
+            l1_start = line1.start_point
+            l1_end = line1.end_point
+            l2_start = line2.start_point
+            l2_end = line2.end_point
+            
+            if not all([l1_start, l1_end, l2_start, l2_end]):
+                return None
+            
+            # Convert to regular coordinates for calculation
+            l1_x1, l1_y1 = l1_start.X(), l1_start.Y()
+            l1_x2, l1_y2 = l1_end.X(), l1_end.Y()
+            l2_x1, l2_y1 = l2_start.X(), l2_start.Y()
+            l2_x2, l2_y2 = l2_end.X(), l2_end.Y()
+            
+            # Calculate line directions (unit vectors)
+            l1_dx = l1_x2 - l1_x1
+            l1_dy = l1_y2 - l1_y1
+            l1_len = math.sqrt(l1_dx**2 + l1_dy**2)
+            if l1_len < 1e-10:
+                return None
+            l1_dx /= l1_len
+            l1_dy /= l1_len
+            
+            l2_dx = l2_x2 - l2_x1
+            l2_dy = l2_y2 - l2_y1
+            l2_len = math.sqrt(l2_dx**2 + l2_dy**2)
+            if l2_len < 1e-10:
+                return None
+            l2_dx /= l2_len
+            l2_dy /= l2_len
+            
+            # Find intersection point of the two lines (extended if necessary)
+            intersection = self._find_line_intersection(
+                l1_x1, l1_y1, l1_x2, l1_y2,
+                l2_x1, l2_y1, l2_x2, l2_y2
+            )
+            
+            if not intersection:
+                print("❌ Lines are parallel - cannot create chamfer")
+                return None
+            
+            int_x, int_y = intersection
+            
+            # Calculate chamfer points at specified distance from intersection
+            # Move back along each line by the chamfer distance
+            c1_x = int_x - distance * l1_dx
+            c1_y = int_y - distance * l1_dy
+            c2_x = int_x - distance * l2_dx
+            c2_y = int_y - distance * l2_dy
+            
+            # Create result points
+            new_line1_end = gp_Pnt2d(c1_x, c1_y)
+            new_line2_start = gp_Pnt2d(c2_x, c2_y)
+            chamfer_start = gp_Pnt2d(c1_x, c1_y)
+            chamfer_end = gp_Pnt2d(c2_x, c2_y)
+            
+            return (new_line1_end, new_line2_start, chamfer_start, chamfer_end)
+            
+        except Exception as e:
+            print(f"❌ Error calculating chamfer geometry: {e}")
             return None
 
 
@@ -1386,6 +1507,46 @@ class OCCTEngine:
             
         except Exception as e:
             print(f"❌ Error adding fillet to sketch: {e}")
+            return ""
+    
+    def add_chamfer_to_sketch(self, sketch_id: str, line1_id: str, line2_id: str, distance: float) -> str:
+        """
+        Add chamfer between two lines in sketch - equivalent to C++ addChamferToSketch
+        
+        Args:
+            sketch_id: Sketch identifier
+            line1_id: First line element ID
+            line2_id: Second line element ID
+            distance: Chamfer distance (how far back from intersection)
+            
+        Returns:
+            Chamfer element ID if successful, empty string if failed
+        """
+        print(f"🔸 Adding chamfer to sketch {sketch_id}: lines {line1_id} & {line2_id} distance={distance}")
+        
+        if not self.sketch_exists(sketch_id):
+            print(f"❌ Sketch not found: {sketch_id}")
+            return ""
+        
+        if distance <= 0:
+            print(f"❌ Chamfer distance must be positive, got {distance}")
+            return ""
+        
+        try:
+            sketch = self.sketches[sketch_id]
+            
+            # Add chamfer to sketch
+            chamfer_id = sketch.add_chamfer(line1_id, line2_id, distance)
+            
+            if chamfer_id:
+                print(f"✅ Added chamfer {chamfer_id} to sketch {sketch_id}")
+            else:
+                print(f"❌ Failed to add chamfer to sketch {sketch_id}")
+            
+            return chamfer_id
+            
+        except Exception as e:
+            print(f"❌ Error adding chamfer to sketch: {e}")
             return ""
     
     def get_sketch_element_visualization_data(self, sketch_id: str, element_id: str) -> Optional[Dict[str, Any]]:
