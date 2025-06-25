@@ -1667,6 +1667,279 @@ class Sketch:
             print(f"❌ Error mirroring point: {e}")
             return point
 
+    def offset_element(self, element_id: str, offset_distance: float) -> str:
+        """
+        Offset a geometry element - shifts open geometry parallel, scales closed geometry
+        
+        Args:
+            element_id: ID of element to offset
+            offset_distance: Offset distance (positive = outward/right, negative = inward/left)
+            
+        Returns:
+            New offset element ID if successful, empty string if failed
+        """
+        try:
+            print(f"📐 Offsetting element {element_id} by distance {offset_distance}")
+            
+            # Find the element
+            element = self.get_element_by_id(element_id)
+            if not element:
+                print(f"❌ Element {element_id} not found")
+                return ""
+            
+            # Create offset element based on type
+            offset_element = None
+            
+            if element.element_type == SketchElementType.LINE:
+                offset_element = self._offset_line(element, offset_distance)
+            elif element.element_type == SketchElementType.CIRCLE:
+                offset_element = self._offset_circle(element, offset_distance)
+            elif element.element_type == SketchElementType.RECTANGLE:
+                offset_element = self._offset_rectangle(element, offset_distance)
+            elif element.element_type == SketchElementType.ARC:
+                offset_element = self._offset_arc(element, offset_distance)
+            elif element.element_type == SketchElementType.POLYGON:
+                offset_element = self._offset_polygon(element, offset_distance)
+            else:
+                print(f"❌ Offset not supported for element type: {element.element_type}")
+                return ""
+            
+            if offset_element:
+                # Add offset element to sketch
+                if self.add_element(offset_element):
+                    print(f"✅ Offset element created: {offset_element.id}")
+                    return offset_element.id
+                else:
+                    print(f"❌ Failed to add offset element to sketch")
+                    return ""
+            else:
+                print(f"❌ Failed to create offset element")
+                return ""
+                
+        except Exception as e:
+            print(f"❌ Error offsetting element: {e}")
+            return ""
+    
+    def offset_element_directional(self, element_id: str, offset_distance: float, direction: str) -> str:
+        """
+        Offset a line element in a specific direction (left/right relative to line direction)
+        
+        Args:
+            element_id: ID of line element to offset
+            offset_distance: Offset distance (always positive)
+            direction: Direction to offset ("left" or "right" relative to line direction)
+            
+        Returns:
+            New offset element ID if successful, empty string if failed
+        """
+        try:
+            print(f"📐 Offsetting element {element_id} by distance {offset_distance} to the {direction}")
+            
+            # Find the element
+            element = self.get_element_by_id(element_id)
+            if not element:
+                print(f"❌ Element {element_id} not found")
+                return ""
+            
+            # Only lines and arcs support directional offset
+            if element.element_type not in [SketchElementType.LINE, SketchElementType.ARC]:
+                print(f"❌ Directional offset only supported for lines and arcs")
+                return ""
+            
+            # Determine actual offset distance based on direction
+            if direction.lower() == "left":
+                actual_offset = offset_distance
+            elif direction.lower() == "right":
+                actual_offset = -offset_distance
+            else:
+                print(f"❌ Invalid direction: {direction}. Use 'left' or 'right'")
+                return ""
+            
+            # Use regular offset with adjusted distance
+            return self.offset_element(element_id, actual_offset)
+            
+        except Exception as e:
+            print(f"❌ Error offsetting element directionally: {e}")
+            return ""
+    
+    def _offset_line(self, line: SketchElement, offset_distance: float) -> Optional[SketchElement]:
+        """Offset a line by moving it parallel to itself"""
+        try:
+            if not line.start_point or not line.end_point:
+                return None
+            
+            # Calculate line direction vector
+            start_x, start_y = line.start_point.X(), line.start_point.Y()
+            end_x, end_y = line.end_point.X(), line.end_point.Y()
+            
+            dx = end_x - start_x
+            dy = end_y - start_y
+            
+            # Calculate line length
+            length = math.sqrt(dx * dx + dy * dy)
+            if length < 1e-10:
+                return None
+            
+            # Calculate perpendicular unit vector (rotate 90 degrees counterclockwise)
+            perp_x = -dy / length
+            perp_y = dx / length
+            
+            # Calculate offset points
+            offset_start_x = start_x + perp_x * offset_distance
+            offset_start_y = start_y + perp_y * offset_distance
+            offset_end_x = end_x + perp_x * offset_distance
+            offset_end_y = end_y + perp_y * offset_distance
+            
+            # Generate unique ID for offset element
+            offset_id = f"offset_{line.id}_{int(time.time() * 1000) % 10000}"
+            
+            return SketchElement(
+                id=offset_id,
+                element_type=SketchElementType.LINE,
+                start_point=gp_Pnt2d(offset_start_x, offset_start_y),
+                end_point=gp_Pnt2d(offset_end_x, offset_end_y)
+            )
+            
+        except Exception as e:
+            print(f"❌ Error offsetting line: {e}")
+            return None
+    
+    def _offset_circle(self, circle: SketchElement, offset_distance: float) -> Optional[SketchElement]:
+        """Offset a circle by changing its radius"""
+        try:
+            if not circle.center_point or not circle.parameters or len(circle.parameters) < 1:
+                return None
+            
+            original_radius = circle.parameters[0]
+            new_radius = original_radius + offset_distance
+            
+            # Check for invalid radius
+            if new_radius <= 0:
+                print(f"❌ Offset would create invalid radius: {new_radius}")
+                return None
+            
+            # Generate unique ID for offset element
+            offset_id = f"offset_{circle.id}_{int(time.time() * 1000) % 10000}"
+            
+            return SketchElement(
+                id=offset_id,
+                element_type=SketchElementType.CIRCLE,
+                center_point=circle.center_point,
+                parameters=[new_radius]
+            )
+            
+        except Exception as e:
+            print(f"❌ Error offsetting circle: {e}")
+            return None
+    
+    def _offset_rectangle(self, rectangle: SketchElement, offset_distance: float) -> Optional[SketchElement]:
+        """Offset a rectangle by scaling it inward/outward"""
+        try:
+            if not rectangle.start_point or not rectangle.parameters or len(rectangle.parameters) < 2:
+                return None
+            
+            original_width = rectangle.parameters[0]
+            original_height = rectangle.parameters[1]
+            
+            # Calculate new dimensions (offset affects all sides)
+            new_width = original_width + 2 * offset_distance
+            new_height = original_height + 2 * offset_distance
+            
+            # Check for invalid dimensions
+            if new_width <= 0 or new_height <= 0:
+                print(f"❌ Offset would create invalid dimensions: {new_width}x{new_height}")
+                return None
+            
+            # Calculate new corner position (move corner inward/outward)
+            corner_x = rectangle.start_point.X() - offset_distance
+            corner_y = rectangle.start_point.Y() - offset_distance
+            
+            # Generate unique ID for offset element
+            offset_id = f"offset_{rectangle.id}_{int(time.time() * 1000) % 10000}"
+            
+            return SketchElement(
+                id=offset_id,
+                element_type=SketchElementType.RECTANGLE,
+                start_point=gp_Pnt2d(corner_x, corner_y),
+                parameters=[new_width, new_height]
+            )
+            
+        except Exception as e:
+            print(f"❌ Error offsetting rectangle: {e}")
+            return None
+    
+    def _offset_arc(self, arc: SketchElement, offset_distance: float) -> Optional[SketchElement]:
+        """Offset an arc by changing its radius while keeping center and angles"""
+        try:
+            if (not arc.start_point or not arc.end_point or 
+                not arc.center_point or not arc.parameters or len(arc.parameters) < 3):
+                return None
+            
+            original_radius = arc.parameters[0]
+            start_angle = arc.parameters[1]
+            end_angle = arc.parameters[2]
+            
+            new_radius = original_radius + offset_distance
+            
+            # Check for invalid radius
+            if new_radius <= 0:
+                print(f"❌ Offset would create invalid arc radius: {new_radius}")
+                return None
+            
+            # Calculate new start and end points based on new radius
+            center_x, center_y = arc.center_point.X(), arc.center_point.Y()
+            
+            new_start_x = center_x + new_radius * math.cos(start_angle)
+            new_start_y = center_y + new_radius * math.sin(start_angle)
+            new_end_x = center_x + new_radius * math.cos(end_angle)
+            new_end_y = center_y + new_radius * math.sin(end_angle)
+            
+            # Generate unique ID for offset element
+            offset_id = f"offset_{arc.id}_{int(time.time() * 1000) % 10000}"
+            
+            return SketchElement(
+                id=offset_id,
+                element_type=SketchElementType.ARC,
+                start_point=gp_Pnt2d(new_start_x, new_start_y),
+                end_point=gp_Pnt2d(new_end_x, new_end_y),
+                center_point=arc.center_point,
+                parameters=[new_radius, start_angle, end_angle]
+            )
+            
+        except Exception as e:
+            print(f"❌ Error offsetting arc: {e}")
+            return None
+    
+    def _offset_polygon(self, polygon: SketchElement, offset_distance: float) -> Optional[SketchElement]:
+        """Offset a polygon by scaling it inward/outward from center"""
+        try:
+            if not polygon.center_point or not polygon.parameters or len(polygon.parameters) < 2:
+                return None
+            
+            original_radius = polygon.parameters[0]
+            sides = polygon.parameters[1]
+            
+            new_radius = original_radius + offset_distance
+            
+            # Check for invalid radius
+            if new_radius <= 0:
+                print(f"❌ Offset would create invalid polygon radius: {new_radius}")
+                return None
+            
+            # Generate unique ID for offset element
+            offset_id = f"offset_{polygon.id}_{int(time.time() * 1000) % 10000}"
+            
+            return SketchElement(
+                id=offset_id,
+                element_type=SketchElementType.POLYGON,
+                center_point=polygon.center_point,
+                parameters=[new_radius, sides]
+            )
+            
+        except Exception as e:
+            print(f"❌ Error offsetting polygon: {e}")
+            return None
+
 
 class SketchPlane:
     """
@@ -3034,3 +3307,74 @@ class OCCTEngine:
         except Exception as e:
             print(f"❌ Error mirroring elements by two points in sketch: {e}")
             return []
+    
+    def offset_element_in_sketch(self, sketch_id: str, element_id: str, offset_distance: float) -> str:
+        """
+        Offset a geometry element in sketch - equivalent to C++ offsetElement
+        
+        Args:
+            sketch_id: Sketch identifier
+            element_id: ID of element to offset
+            offset_distance: Offset distance (positive = outward/right, negative = inward/left)
+            
+        Returns:
+            New offset element ID if successful, empty string if failed
+        """
+        print(f"📐 Offsetting element {element_id} by distance {offset_distance} in sketch {sketch_id}")
+        
+        if not self.sketch_exists(sketch_id):
+            print(f"❌ Sketch not found: {sketch_id}")
+            return ""
+        
+        try:
+            sketch = self.sketches[sketch_id]
+            
+            # Perform offset operation
+            offset_element_id = sketch.offset_element(element_id, offset_distance)
+            
+            if offset_element_id:
+                print(f"✅ Successfully offset element {element_id} in sketch {sketch_id}")
+            else:
+                print(f"❌ Failed to offset element {element_id} in sketch {sketch_id}")
+            
+            return offset_element_id
+            
+        except Exception as e:
+            print(f"❌ Error offsetting element in sketch: {e}")
+            return ""
+    
+    def offset_element_directional_in_sketch(self, sketch_id: str, element_id: str, offset_distance: float, direction: str) -> str:
+        """
+        Offset a line element in a specific direction - equivalent to C++ offsetElementDirectional
+        
+        Args:
+            sketch_id: Sketch identifier
+            element_id: ID of line element to offset
+            offset_distance: Offset distance (always positive)
+            direction: Direction to offset ("left" or "right" relative to line direction)
+            
+        Returns:
+            New offset element ID if successful, empty string if failed
+        """
+        print(f"📐 Offsetting element {element_id} directionally ({direction}) by distance {offset_distance} in sketch {sketch_id}")
+        
+        if not self.sketch_exists(sketch_id):
+            print(f"❌ Sketch not found: {sketch_id}")
+            return ""
+        
+        try:
+            sketch = self.sketches[sketch_id]
+            
+            # Perform directional offset operation
+            offset_element_id = sketch.offset_element_directional(element_id, offset_distance, direction)
+            
+            if offset_element_id:
+                print(f"✅ Successfully offset element {element_id} directionally in sketch {sketch_id}")
+            else:
+                print(f"❌ Failed to offset element {element_id} directionally in sketch {sketch_id}")
+            
+            return offset_element_id
+            
+        except Exception as e:
+            print(f"❌ Error offsetting element directionally in sketch: {e}")
+            return ""

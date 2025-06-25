@@ -236,6 +236,23 @@ class MirrorElementsByTwoPointsRequest(BaseModel):
     keep_original: bool = Field(default=True, description="If True, keep original elements; if False, replace with mirrored versions")
 
 
+class OffsetElementRequest(BaseModel):
+    """Request model for offset operations"""
+    session_id: str = Field(..., description="Session ID")
+    sketch_id: str = Field(..., description="Sketch ID")
+    element_id: str = Field(..., description="ID of element to offset")
+    offset_distance: float = Field(..., description="Offset distance (positive = outward/right, negative = inward/left)")
+
+
+class OffsetElementDirectionalRequest(BaseModel):
+    """Request model for directional offset operations (lines/arcs only)"""
+    session_id: str = Field(..., description="Session ID")
+    sketch_id: str = Field(..., description="Sketch ID")
+    element_id: str = Field(..., description="ID of line/arc element to offset")
+    offset_distance: float = Field(..., description="Offset distance (always positive)")
+    direction: str = Field(..., description="Direction to offset ('left' or 'right' relative to element direction)")
+
+
 class APIResponse(BaseModel):
     """Standard API response format"""
     success: bool
@@ -599,6 +616,46 @@ class CADAPIServer:
                 
             except Exception as e:
                 print(f"❌ Error in mirror_elements_by_two_points: {e}")
+                return APIResponse(
+                    success=False,
+                    timestamp=int(time.time()),
+                    error=str(e)
+                )
+        
+        @self.app.post("/api/v1/offset-element")
+        async def offset_element(request: OffsetElementRequest):
+            """Offset element endpoint - handles offsetting geometry elements"""
+            try:
+                response_data = await self._handle_offset_element(request)
+                
+                return APIResponse(
+                    success=True,
+                    timestamp=int(time.time()),
+                    data=response_data
+                )
+                
+            except Exception as e:
+                print(f"❌ Error in offset_element: {e}")
+                return APIResponse(
+                    success=False,
+                    timestamp=int(time.time()),
+                    error=str(e)
+                )
+        
+        @self.app.post("/api/v1/offset-element-directional")
+        async def offset_element_directional(request: OffsetElementDirectionalRequest):
+            """Offset element directional endpoint - handles directional offsetting of lines/arcs"""
+            try:
+                response_data = await self._handle_offset_element_directional(request)
+                
+                return APIResponse(
+                    success=True,
+                    timestamp=int(time.time()),
+                    data=response_data
+                )
+                
+            except Exception as e:
+                print(f"❌ Error in offset_element_directional: {e}")
                 return APIResponse(
                     success=False,
                     timestamp=int(time.time()),
@@ -1436,6 +1493,100 @@ class CADAPIServer:
         }
         
         print(f"✅ Elements mirrored successfully")
+        return response_data
+    
+    async def _handle_offset_element(self, request: OffsetElementRequest) -> Dict[str, Any]:
+        """Handle offset element - Real implementation using geometry engine"""
+        print(f"📐 Offsetting element: {request.element_id} by distance: {request.offset_distance}")
+        
+        session_manager = SessionManager.get_instance()
+        engine = session_manager.get_or_create_session(request.session_id)
+        
+        if engine is None:
+            raise Exception("Failed to get session")
+        
+        # Validate that the sketch exists
+        if not engine.sketch_exists(request.sketch_id):
+            raise Exception(f"Sketch '{request.sketch_id}' does not exist")
+        
+        # Perform offset operation
+        offset_element_id = engine.offset_element_in_sketch(
+            request.sketch_id,
+            request.element_id,
+            request.offset_distance
+        )
+        
+        if not offset_element_id:
+            raise Exception("Failed to offset element in geometry engine")
+        
+        # Get visualization data for the offset element
+        viz_data = engine.get_sketch_element_visualization_data(request.sketch_id, offset_element_id)
+        
+        response_data = {
+            "original_element_id": request.element_id,
+            "offset_element_id": offset_element_id,
+            "offset_distance": request.offset_distance,
+            "sketch_id": request.sketch_id,
+            "session_id": request.session_id,
+            "operation": "offset_element",
+            "message": f"Element {request.element_id} offset successfully by distance {request.offset_distance}"
+        }
+        
+        # Add visualization data if available
+        if viz_data:
+            response_data["visualization_data"] = viz_data
+        
+        print(f"✅ Element offset successfully")
+        return response_data
+    
+    async def _handle_offset_element_directional(self, request: OffsetElementDirectionalRequest) -> Dict[str, Any]:
+        """Handle directional offset element - Real implementation using geometry engine"""
+        print(f"📐 Offsetting element: {request.element_id} directionally ({request.direction}) by distance: {request.offset_distance}")
+        
+        session_manager = SessionManager.get_instance()
+        engine = session_manager.get_or_create_session(request.session_id)
+        
+        if engine is None:
+            raise Exception("Failed to get session")
+        
+        # Validate that the sketch exists
+        if not engine.sketch_exists(request.sketch_id):
+            raise Exception(f"Sketch '{request.sketch_id}' does not exist")
+        
+        # Validate direction parameter
+        if request.direction.lower() not in ["left", "right"]:
+            raise Exception(f"Invalid direction '{request.direction}'. Must be 'left' or 'right'")
+        
+        # Perform directional offset operation
+        offset_element_id = engine.offset_element_directional_in_sketch(
+            request.sketch_id,
+            request.element_id,
+            request.offset_distance,
+            request.direction
+        )
+        
+        if not offset_element_id:
+            raise Exception("Failed to offset element directionally in geometry engine")
+        
+        # Get visualization data for the offset element
+        viz_data = engine.get_sketch_element_visualization_data(request.sketch_id, offset_element_id)
+        
+        response_data = {
+            "original_element_id": request.element_id,
+            "offset_element_id": offset_element_id,
+            "offset_distance": request.offset_distance,
+            "direction": request.direction,
+            "sketch_id": request.sketch_id,
+            "session_id": request.session_id,
+            "operation": "offset_element_directional",
+            "message": f"Element {request.element_id} offset successfully {request.direction} by distance {request.offset_distance}"
+        }
+        
+        # Add visualization data if available
+        if viz_data:
+            response_data["visualization_data"] = viz_data
+        
+        print(f"✅ Element offset directionally successfully")
         return response_data
     
     # ==================== UTILITY METHODS ====================
