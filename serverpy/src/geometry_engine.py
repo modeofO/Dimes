@@ -746,6 +746,331 @@ class Sketch:
         except Exception as e:
             print(f"❌ Error calculating chamfer geometry: {e}")
             return None
+    
+    def trim_line_to_line(self, line_to_trim_id: str, cutting_line_id: str, keep_start: bool = True) -> bool:
+        """Trim a line at its intersection with another line - simple implementation"""
+        try:
+            print(f"✂️ Trimming line {line_to_trim_id} at intersection with line {cutting_line_id}")
+            
+            # Find the two line elements
+            line_to_trim = self.get_element_by_id(line_to_trim_id)
+            cutting_line = self.get_element_by_id(cutting_line_id)
+            
+            if not line_to_trim or line_to_trim.element_type != SketchElementType.LINE:
+                print(f"❌ Line to trim {line_to_trim_id} not found or not a line")
+                return False
+            
+            if not cutting_line or cutting_line.element_type != SketchElementType.LINE:
+                print(f"❌ Cutting line {cutting_line_id} not found or not a line")
+                return False
+            
+            # Calculate intersection point
+            intersection = self._calculate_line_line_intersection(line_to_trim, cutting_line)
+            
+            if not intersection:
+                print(f"❌ Lines do not intersect - cannot trim")
+                return False
+            
+            # Apply trim based on keep_start flag
+            if keep_start:
+                # Keep start portion, trim end at intersection
+                line_to_trim.end_point = intersection
+                print(f"✅ Trimmed line {line_to_trim_id} - kept start portion")
+            else:
+                # Keep end portion, trim start at intersection
+                line_to_trim.start_point = intersection
+                print(f"✅ Trimmed line {line_to_trim_id} - kept end portion")
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error trimming line: {e}")
+            return False
+    
+    def trim_line_to_geometry(self, line_to_trim_id: str, cutting_geometry_id: str, keep_start: bool = True) -> bool:
+        """Trim a line at its intersection with complex geometry (rectangle, polygon, etc.)"""
+        try:
+            print(f"✂️ Trimming line {line_to_trim_id} at intersection with geometry {cutting_geometry_id}")
+            
+            # Find the line to trim
+            line_to_trim = self.get_element_by_id(line_to_trim_id)
+            cutting_geometry = self.get_element_by_id(cutting_geometry_id)
+            
+            if not line_to_trim or line_to_trim.element_type != SketchElementType.LINE:
+                print(f"❌ Line to trim {line_to_trim_id} not found or not a line")
+                return False
+            
+            if not cutting_geometry:
+                print(f"❌ Cutting geometry {cutting_geometry_id} not found")
+                return False
+            
+            # Find intersection points based on geometry type
+            intersection_points = []
+            
+            if cutting_geometry.element_type == SketchElementType.RECTANGLE:
+                intersection_points = self._find_line_rectangle_intersections(line_to_trim, cutting_geometry)
+            elif cutting_geometry.element_type == SketchElementType.POLYGON:
+                intersection_points = self._find_line_polygon_intersections(line_to_trim, cutting_geometry)
+            elif cutting_geometry.element_type == SketchElementType.CIRCLE:
+                intersection_points = self._find_line_circle_intersections(line_to_trim, cutting_geometry)
+            else:
+                print(f"❌ Unsupported cutting geometry type: {cutting_geometry.element_type}")
+                return False
+            
+            if not intersection_points:
+                print(f"❌ No intersections found - cannot trim")
+                return False
+            
+            # Determine which intersection point to use for trimming
+            trim_point = self._select_trim_point(line_to_trim, intersection_points, keep_start)
+            
+            if not trim_point:
+                print(f"❌ Could not determine trim point")
+                return False
+            
+            # Apply trim
+            if keep_start:
+                line_to_trim.end_point = trim_point
+                print(f"✅ Trimmed line {line_to_trim_id} - kept start portion")
+            else:
+                line_to_trim.start_point = trim_point
+                print(f"✅ Trimmed line {line_to_trim_id} - kept end portion")
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error trimming line to geometry: {e}")
+            return False
+    
+    def _calculate_line_line_intersection(self, line1: SketchElement, line2: SketchElement) -> Optional[gp_Pnt2d]:
+        """Calculate intersection point between two lines"""
+        try:
+            # Get line endpoints
+            l1_start, l1_end = line1.start_point, line1.end_point
+            l2_start, l2_end = line2.start_point, line2.end_point
+            
+            if not all([l1_start, l1_end, l2_start, l2_end]):
+                return None
+            
+            # Use existing intersection function
+            intersection = self._find_line_intersection(
+                l1_start.X(), l1_start.Y(), l1_end.X(), l1_end.Y(),
+                l2_start.X(), l2_start.Y(), l2_end.X(), l2_end.Y()
+            )
+            
+            if intersection:
+                return gp_Pnt2d(intersection[0], intersection[1])
+            return None
+            
+        except Exception as e:
+            print(f"❌ Error calculating line-line intersection: {e}")
+            return None
+    
+    def _find_line_rectangle_intersections(self, line: SketchElement, rectangle: SketchElement) -> List[gp_Pnt2d]:
+        """Find intersection points between a line and rectangle edges"""
+        try:
+            intersections = []
+            
+            if not rectangle.start_point or not rectangle.parameters or len(rectangle.parameters) < 2:
+                return intersections
+            
+            # Get rectangle parameters
+            corner = rectangle.start_point
+            width = rectangle.parameters[0]
+            height = rectangle.parameters[1]
+            
+            # Create rectangle edges as lines
+            edges = [
+                # Bottom edge
+                (corner.X(), corner.Y(), corner.X() + width, corner.Y()),
+                # Right edge  
+                (corner.X() + width, corner.Y(), corner.X() + width, corner.Y() + height),
+                # Top edge
+                (corner.X() + width, corner.Y() + height, corner.X(), corner.Y() + height),
+                # Left edge
+                (corner.X(), corner.Y() + height, corner.X(), corner.Y())
+            ]
+            
+            # Check intersection with each edge
+            for edge in edges:
+                intersection = self._find_line_intersection(
+                    line.start_point.X(), line.start_point.Y(),
+                    line.end_point.X(), line.end_point.Y(),
+                    edge[0], edge[1], edge[2], edge[3]
+                )
+                
+                if intersection:
+                    # Verify intersection is actually on the rectangle edge (not extended)
+                    if self._point_on_line_segment(intersection, edge):
+                        intersections.append(gp_Pnt2d(intersection[0], intersection[1]))
+            
+            return intersections
+            
+        except Exception as e:
+            print(f"❌ Error finding line-rectangle intersections: {e}")
+            return []
+    
+    def _find_line_polygon_intersections(self, line: SketchElement, polygon: SketchElement) -> List[gp_Pnt2d]:
+        """Find intersection points between a line and polygon edges"""
+        try:
+            intersections = []
+            
+            if not polygon.center_point or not polygon.parameters or len(polygon.parameters) < 2:
+                return intersections
+            
+            # Get polygon parameters
+            center = polygon.center_point
+            radius = polygon.parameters[0]
+            sides = int(polygon.parameters[1])
+            
+            # Generate polygon vertices
+            vertices = []
+            for i in range(sides):
+                angle = 2.0 * math.pi * i / sides
+                vertex_x = center.X() + radius * math.cos(angle)
+                vertex_y = center.Y() + radius * math.sin(angle)
+                vertices.append((vertex_x, vertex_y))
+            
+            # Check intersection with each polygon edge
+            for i in range(sides):
+                current_vertex = vertices[i]
+                next_vertex = vertices[(i + 1) % sides]  # Wrap around to first vertex
+                
+                intersection = self._find_line_intersection(
+                    line.start_point.X(), line.start_point.Y(),
+                    line.end_point.X(), line.end_point.Y(),
+                    current_vertex[0], current_vertex[1],
+                    next_vertex[0], next_vertex[1]
+                )
+                
+                if intersection:
+                    # Verify intersection is on the polygon edge
+                    edge = (current_vertex[0], current_vertex[1], next_vertex[0], next_vertex[1])
+                    if self._point_on_line_segment(intersection, edge):
+                        intersections.append(gp_Pnt2d(intersection[0], intersection[1]))
+            
+            return intersections
+            
+        except Exception as e:
+            print(f"❌ Error finding line-polygon intersections: {e}")
+            return []
+    
+    def _find_line_circle_intersections(self, line: SketchElement, circle: SketchElement) -> List[gp_Pnt2d]:
+        """Find intersection points between a line and circle"""
+        try:
+            intersections = []
+            
+            if not circle.center_point or not circle.parameters or len(circle.parameters) < 1:
+                return intersections
+            
+            # Get circle parameters
+            center = circle.center_point
+            radius = circle.parameters[0]
+            
+            # Line parameters
+            if not line.start_point or not line.end_point:
+                return intersections
+            
+            # Calculate line-circle intersection using quadratic formula
+            # Line: P = start + t * (end - start)
+            # Circle: (x - cx)² + (y - cy)² = r²
+            
+            start_x, start_y = line.start_point.X(), line.start_point.Y()
+            end_x, end_y = line.end_point.X(), line.end_point.Y()
+            center_x, center_y = center.X(), center.Y()
+            
+            # Direction vector
+            dx = end_x - start_x
+            dy = end_y - start_y
+            
+            # Vector from start to center
+            fx = start_x - center_x
+            fy = start_y - center_y
+            
+            # Quadratic equation: a*t² + b*t + c = 0
+            a = dx * dx + dy * dy
+            b = 2 * (fx * dx + fy * dy)
+            c = fx * fx + fy * fy - radius * radius
+            
+            discriminant = b * b - 4 * a * c
+            
+            if discriminant >= 0:
+                sqrt_discriminant = math.sqrt(discriminant)
+                
+                # Two potential intersection points
+                t1 = (-b - sqrt_discriminant) / (2 * a)
+                t2 = (-b + sqrt_discriminant) / (2 * a)
+                
+                # Check if intersections are within line segment (0 <= t <= 1)
+                for t in [t1, t2]:
+                    if 0 <= t <= 1:
+                        int_x = start_x + t * dx
+                        int_y = start_y + t * dy
+                        intersections.append(gp_Pnt2d(int_x, int_y))
+            
+            return intersections
+            
+        except Exception as e:
+            print(f"❌ Error finding line-circle intersections: {e}")
+            return []
+    
+    def _point_on_line_segment(self, point: Tuple[float, float], line_segment: Tuple[float, float, float, float]) -> bool:
+        """Check if a point lies on a line segment (not just the extended line)"""
+        try:
+            px, py = point
+            x1, y1, x2, y2 = line_segment
+            
+            # Check if point is within bounding box of line segment
+            min_x, max_x = min(x1, x2), max(x1, x2)
+            min_y, max_y = min(y1, y2), max(y1, y2)
+            
+            return (min_x - 1e-10 <= px <= max_x + 1e-10 and 
+                    min_y - 1e-10 <= py <= max_y + 1e-10)
+            
+        except Exception as e:
+            print(f"❌ Error checking point on line segment: {e}")
+            return False
+    
+    def _select_trim_point(self, line: SketchElement, intersection_points: List[gp_Pnt2d], keep_start: bool) -> Optional[gp_Pnt2d]:
+        """Select which intersection point to use for trimming based on keep_start flag"""
+        try:
+            if not intersection_points:
+                return None
+            
+            if len(intersection_points) == 1:
+                return intersection_points[0]
+            
+            # For multiple intersections, choose based on distance from start/end
+            if keep_start:
+                # Find intersection closest to end point (furthest from start)
+                end_point = line.end_point
+                closest_point = None
+                min_distance = float('inf')
+                
+                for point in intersection_points:
+                    distance = math.sqrt((point.X() - end_point.X())**2 + (point.Y() - end_point.Y())**2)
+                    if distance < min_distance:
+                        min_distance = distance
+                        closest_point = point
+                
+                return closest_point
+            else:
+                # Find intersection closest to start point (furthest from end)
+                start_point = line.start_point
+                closest_point = None
+                min_distance = float('inf')
+                
+                for point in intersection_points:
+                    distance = math.sqrt((point.X() - start_point.X())**2 + (point.Y() - start_point.Y())**2)
+                    if distance < min_distance:
+                        min_distance = distance
+                        closest_point = point
+                
+                return closest_point
+            
+        except Exception as e:
+            print(f"❌ Error selecting trim point: {e}")
+            return None
 
 
 class SketchPlane:
@@ -1548,6 +1873,78 @@ class OCCTEngine:
         except Exception as e:
             print(f"❌ Error adding chamfer to sketch: {e}")
             return ""
+    
+    def trim_line_to_line_in_sketch(self, sketch_id: str, line_to_trim_id: str, cutting_line_id: str, keep_start: bool = True) -> bool:
+        """
+        Trim a line at its intersection with another line - equivalent to C++ trimLineToLine
+        
+        Args:
+            sketch_id: Sketch identifier
+            line_to_trim_id: ID of line to be trimmed
+            cutting_line_id: ID of line that cuts the first line
+            keep_start: If True, keep start portion; if False, keep end portion
+            
+        Returns:
+            True if successful, False if failed
+        """
+        print(f"✂️ Trimming line {line_to_trim_id} to line {cutting_line_id} in sketch {sketch_id}")
+        
+        if not self.sketch_exists(sketch_id):
+            print(f"❌ Sketch not found: {sketch_id}")
+            return False
+        
+        try:
+            sketch = self.sketches[sketch_id]
+            
+            # Perform trim operation
+            success = sketch.trim_line_to_line(line_to_trim_id, cutting_line_id, keep_start)
+            
+            if success:
+                print(f"✅ Successfully trimmed line {line_to_trim_id} in sketch {sketch_id}")
+            else:
+                print(f"❌ Failed to trim line {line_to_trim_id} in sketch {sketch_id}")
+            
+            return success
+            
+        except Exception as e:
+            print(f"❌ Error trimming line in sketch: {e}")
+            return False
+    
+    def trim_line_to_geometry_in_sketch(self, sketch_id: str, line_to_trim_id: str, cutting_geometry_id: str, keep_start: bool = True) -> bool:
+        """
+        Trim a line at its intersection with complex geometry - equivalent to C++ trimLineToGeometry
+        
+        Args:
+            sketch_id: Sketch identifier
+            line_to_trim_id: ID of line to be trimmed
+            cutting_geometry_id: ID of geometry that cuts the line (rectangle, polygon, circle)
+            keep_start: If True, keep start portion; if False, keep end portion
+            
+        Returns:
+            True if successful, False if failed
+        """
+        print(f"✂️ Trimming line {line_to_trim_id} to geometry {cutting_geometry_id} in sketch {sketch_id}")
+        
+        if not self.sketch_exists(sketch_id):
+            print(f"❌ Sketch not found: {sketch_id}")
+            return False
+        
+        try:
+            sketch = self.sketches[sketch_id]
+            
+            # Perform trim operation
+            success = sketch.trim_line_to_geometry(line_to_trim_id, cutting_geometry_id, keep_start)
+            
+            if success:
+                print(f"✅ Successfully trimmed line {line_to_trim_id} to geometry in sketch {sketch_id}")
+            else:
+                print(f"❌ Failed to trim line {line_to_trim_id} to geometry in sketch {sketch_id}")
+            
+            return success
+            
+        except Exception as e:
+            print(f"❌ Error trimming line to geometry in sketch: {e}")
+            return False
     
     def get_sketch_element_visualization_data(self, sketch_id: str, element_id: str) -> Optional[Dict[str, Any]]:
         """

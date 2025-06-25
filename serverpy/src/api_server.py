@@ -179,6 +179,24 @@ class ChamferRequest(BaseModel):
     distance: float = Field(..., description="Chamfer distance")
 
 
+class TrimLineToLineRequest(BaseModel):
+    """Request model for simple line-to-line trim operations"""
+    session_id: str = Field(..., description="Session ID")
+    sketch_id: str = Field(..., description="Sketch ID")
+    line_to_trim_id: str = Field(..., description="ID of line to be trimmed")
+    cutting_line_id: str = Field(..., description="ID of line that cuts the first line")
+    keep_start: bool = Field(default=True, description="If True, keep start portion; if False, keep end portion")
+
+
+class TrimLineToGeometryRequest(BaseModel):
+    """Request model for complex line-to-geometry trim operations"""
+    session_id: str = Field(..., description="Session ID")
+    sketch_id: str = Field(..., description="Sketch ID")
+    line_to_trim_id: str = Field(..., description="ID of line to be trimmed")
+    cutting_geometry_id: str = Field(..., description="ID of geometry that cuts the line (rectangle, polygon, circle)")
+    keep_start: bool = Field(default=True, description="If True, keep start portion; if False, keep end portion")
+
+
 class APIResponse(BaseModel):
     """Standard API response format"""
     success: bool
@@ -422,6 +440,46 @@ class CADAPIServer:
                 
             except Exception as e:
                 print(f"❌ Error in add_chamfer: {e}")
+                return APIResponse(
+                    success=False,
+                    timestamp=int(time.time()),
+                    error=str(e)
+                )
+        
+        @self.app.post("/api/v1/trim-line-to-line")
+        async def trim_line_to_line(request: TrimLineToLineRequest):
+            """Trim line to line endpoint - handles simple line-to-line trim operations"""
+            try:
+                response_data = await self._handle_trim_line_to_line(request)
+                
+                return APIResponse(
+                    success=True,
+                    timestamp=int(time.time()),
+                    data=response_data
+                )
+                
+            except Exception as e:
+                print(f"❌ Error in trim_line_to_line: {e}")
+                return APIResponse(
+                    success=False,
+                    timestamp=int(time.time()),
+                    error=str(e)
+                )
+        
+        @self.app.post("/api/v1/trim-line-to-geometry")
+        async def trim_line_to_geometry(request: TrimLineToGeometryRequest):
+            """Trim line to geometry endpoint - handles complex line-to-geometry trim operations"""
+            try:
+                response_data = await self._handle_trim_line_to_geometry(request)
+                
+                return APIResponse(
+                    success=True,
+                    timestamp=int(time.time()),
+                    data=response_data
+                )
+                
+            except Exception as e:
+                print(f"❌ Error in trim_line_to_geometry: {e}")
                 return APIResponse(
                     success=False,
                     timestamp=int(time.time()),
@@ -1021,6 +1079,82 @@ class CADAPIServer:
             response_data["visualization_data"] = viz_data
         
         print(f"✅ Chamfer created successfully: {chamfer_id}")
+        return response_data
+    
+    async def _handle_trim_line_to_line(self, request: TrimLineToLineRequest) -> Dict[str, Any]:
+        """Handle line-to-line trim operation - Real implementation using geometry engine"""
+        print(f"✂️ Trimming line: {request.line_to_trim_id} with line: {request.cutting_line_id}")
+        
+        session_manager = SessionManager.get_instance()
+        engine = session_manager.get_or_create_session(request.session_id)
+        
+        if engine is None:
+            raise Exception("Failed to get session")
+        
+        # Validate that the sketch exists
+        if not engine.sketch_exists(request.sketch_id):
+            raise Exception(f"Sketch '{request.sketch_id}' does not exist")
+        
+        # Perform line-to-line trim
+        success = engine.trim_line_to_line_in_sketch(
+            request.sketch_id,
+            request.line_to_trim_id,
+            request.cutting_line_id,
+            request.keep_start
+        )
+        
+        if not success:
+            raise Exception("Failed to trim line in geometry engine")
+        
+        response_data = {
+            "line_to_trim_id": request.line_to_trim_id,
+            "cutting_line_id": request.cutting_line_id,
+            "sketch_id": request.sketch_id,
+            "keep_start": request.keep_start,
+            "session_id": request.session_id,
+            "operation": "trim_line_to_line",
+            "message": f"Line {request.line_to_trim_id} trimmed successfully with line {request.cutting_line_id}"
+        }
+        
+        print(f"✅ Line trimmed successfully")
+        return response_data
+    
+    async def _handle_trim_line_to_geometry(self, request: TrimLineToGeometryRequest) -> Dict[str, Any]:
+        """Handle line-to-geometry trim operation - Real implementation using geometry engine"""
+        print(f"✂️ Trimming line: {request.line_to_trim_id} with geometry: {request.cutting_geometry_id}")
+        
+        session_manager = SessionManager.get_instance()
+        engine = session_manager.get_or_create_session(request.session_id)
+        
+        if engine is None:
+            raise Exception("Failed to get session")
+        
+        # Validate that the sketch exists
+        if not engine.sketch_exists(request.sketch_id):
+            raise Exception(f"Sketch '{request.sketch_id}' does not exist")
+        
+        # Perform line-to-geometry trim
+        success = engine.trim_line_to_geometry_in_sketch(
+            request.sketch_id,
+            request.line_to_trim_id,
+            request.cutting_geometry_id,
+            request.keep_start
+        )
+        
+        if not success:
+            raise Exception("Failed to trim line in geometry engine")
+        
+        response_data = {
+            "line_to_trim_id": request.line_to_trim_id,
+            "cutting_geometry_id": request.cutting_geometry_id,
+            "sketch_id": request.sketch_id,
+            "keep_start": request.keep_start,
+            "session_id": request.session_id,
+            "operation": "trim_line_to_geometry",
+            "message": f"Line {request.line_to_trim_id} trimmed successfully with geometry {request.cutting_geometry_id}"
+        }
+        
+        print(f"✅ Line trimmed successfully")
         return response_data
     
     # ==================== UTILITY METHODS ====================
