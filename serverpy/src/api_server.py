@@ -55,8 +55,102 @@ class AddSketchElementRequest(BaseModel):
     """Request model for adding sketch elements"""
     session_id: str = Field(..., description="Session ID")
     sketch_id: str = Field(..., description="Sketch ID")
-    element_type: str = Field(..., description="Element type (line, circle, rectangle)")
-    parameters: Dict[str, Any] = Field(..., description="Element parameters")
+    element_type: str = Field(..., description="Element type (line, circle, rectangle, arc, polygon)")
+    parameters: Optional[Dict[str, Any]] = Field(None, description="Element parameters (nested format)")
+    
+    # Flattened parameters (for compatibility with Node.js server)
+    # Line parameters
+    x1: Optional[float] = Field(None, description="Line start X (flattened format)")
+    y1: Optional[float] = Field(None, description="Line start Y (flattened format)")
+    x2: Optional[float] = Field(None, description="Line end X (flattened format)")
+    y2: Optional[float] = Field(None, description="Line end Y (flattened format)")
+    
+    # Circle parameters
+    center_x: Optional[float] = Field(None, description="Circle center X (flattened format)")
+    center_y: Optional[float] = Field(None, description="Circle center Y (flattened format)")
+    radius: Optional[float] = Field(None, description="Circle/Arc radius (flattened format)")
+    
+    # Rectangle parameters
+    x: Optional[float] = Field(None, description="Rectangle corner X (flattened format)")
+    y: Optional[float] = Field(None, description="Rectangle corner Y (flattened format)")
+    width: Optional[float] = Field(None, description="Rectangle width (flattened format)")
+    height: Optional[float] = Field(None, description="Rectangle height (flattened format)")
+    
+    # Arc parameters (flattened)
+    arc_type: Optional[str] = Field(None, description="Arc type: 'three_points' or 'endpoints_radius'")
+    x_mid: Optional[float] = Field(None, description="Arc middle point X for three_points type")
+    y_mid: Optional[float] = Field(None, description="Arc middle point Y for three_points type")
+    large_arc: Optional[bool] = Field(None, description="Large arc flag for endpoints_radius type")
+    
+    # Polygon parameters (flattened)
+    sides: Optional[int] = Field(None, description="Number of polygon sides (flattened format)")
+    
+    def get_parameters(self) -> Dict[str, Any]:
+        """Get parameters in unified format, handling both nested and flattened formats"""
+        if self.parameters:
+            # Use nested format if provided
+            return self.parameters
+        
+        # Convert flattened format to nested format
+        params = {}
+        
+        if self.element_type == "line":
+            if all(x is not None for x in [self.x1, self.y1, self.x2, self.y2]):
+                params = {
+                    "x1": self.x1,
+                    "y1": self.y1, 
+                    "x2": self.x2,
+                    "y2": self.y2
+                }
+        elif self.element_type == "circle":
+            if all(x is not None for x in [self.center_x, self.center_y, self.radius]):
+                params = {
+                    "center_x": self.center_x,
+                    "center_y": self.center_y,
+                    "radius": self.radius
+                }
+        elif self.element_type == "rectangle":
+            if all(x is not None for x in [self.x, self.y, self.width, self.height]):
+                params = {
+                    "x": self.x,
+                    "y": self.y,
+                    "width": self.width,
+                    "height": self.height
+                }
+        elif self.element_type == "arc":
+            arc_type = self.arc_type or "three_points"
+            params = {"arc_type": arc_type}
+            
+            if arc_type == "three_points":
+                if all(x is not None for x in [self.x1, self.y1, self.x_mid, self.y_mid, self.x2, self.y2]):
+                    params = {**params, **{
+                        "x1": self.x1,
+                        "y1": self.y1,
+                        "x_mid": self.x_mid,
+                        "y_mid": self.y_mid,
+                        "x2": self.x2,
+                        "y2": self.y2
+                    }}
+            elif arc_type == "endpoints_radius":
+                if all(x is not None for x in [self.x1, self.y1, self.x2, self.y2, self.radius]):
+                    params = {**params, **{
+                        "x1": self.x1,
+                        "y1": self.y1,
+                        "x2": self.x2,
+                        "y2": self.y2,
+                        "radius": self.radius,
+                        "large_arc": self.large_arc or False
+                    }}
+        elif self.element_type == "polygon":
+            if all(x is not None for x in [self.center_x, self.center_y, self.sides, self.radius]):
+                params = {
+                    "center_x": self.center_x,
+                    "center_y": self.center_y,
+                    "sides": self.sides,
+                    "radius": self.radius
+                }
+        
+        return params
 
 
 class ExtrudeRequest(BaseModel):
@@ -586,17 +680,170 @@ class CADAPIServer:
         """Handle adding sketch element - equivalent to C++ handleAddSketchElement"""
         print(f"📏 Adding {request.element_type} to sketch: {request.sketch_id}")
         
-        # Placeholder implementation
-        element_id = f"element_{int(time.time())}"
+        session_manager = SessionManager.get_instance()
+        engine = session_manager.get_or_create_session(request.session_id)
+        
+        if engine is None:
+            raise Exception("Failed to get session")
+        
+        # Validate that the sketch exists
+        if not engine.sketch_exists(request.sketch_id):
+            raise Exception(f"Sketch '{request.sketch_id}' does not exist")
+        
+        element_id = ""
+        
+        # Handle different element types
+        if request.element_type == "line":
+            # Extract line parameters
+            params = request.get_parameters()
+            
+            # Validate and extract required parameters
+            try:
+                x1 = float(params["x1"])
+                y1 = float(params["y1"])
+                x2 = float(params["x2"])
+                y2 = float(params["y2"])
+            except (KeyError, TypeError, ValueError) as e:
+                raise Exception(f"Line requires valid numeric parameters: x1, y1, x2, y2. Error: {e}")
+            
+            # Create line using geometry engine
+            element_id = engine.add_line_to_sketch(
+                request.sketch_id, 
+                x1, y1, x2, y2
+            )
+            
+            if not element_id:
+                raise Exception("Failed to create line in geometry engine")
+        
+        elif request.element_type == "circle":
+            # Extract circle parameters
+            params = request.get_parameters()
+            
+            # Validate and extract required parameters
+            try:
+                center_x = float(params["center_x"])
+                center_y = float(params["center_y"])
+                radius = float(params["radius"])
+            except (KeyError, TypeError, ValueError) as e:
+                raise Exception(f"Circle requires valid numeric parameters: center_x, center_y, radius. Error: {e}")
+            
+            # Create circle using geometry engine
+            element_id = engine.add_circle_to_sketch(
+                request.sketch_id, 
+                center_x, center_y, radius
+            )
+            
+            if not element_id:
+                raise Exception("Failed to create circle in geometry engine")
+        
+        elif request.element_type == "rectangle":
+            # Extract rectangle parameters
+            params = request.get_parameters()
+            
+            # Validate and extract required parameters
+            try:
+                x = float(params["x"])
+                y = float(params["y"])
+                width = float(params["width"])
+                height = float(params["height"])
+            except (KeyError, TypeError, ValueError) as e:
+                raise Exception(f"Rectangle requires valid numeric parameters: x, y, width, height. Error: {e}")
+            
+            # Create rectangle using geometry engine
+            element_id = engine.add_rectangle_to_sketch(
+                request.sketch_id, 
+                x, y, width, height
+            )
+            
+            if not element_id:
+                raise Exception("Failed to create rectangle in geometry engine")
+        
+        elif request.element_type == "arc":
+            # Extract arc parameters
+            params = request.get_parameters()
+            
+            # Validate and extract required parameters
+            try:
+                arc_type = params["arc_type"]
+                
+                if arc_type == "three_points":
+                    x1 = float(params["x1"])
+                    y1 = float(params["y1"])
+                    x_mid = float(params["x_mid"])
+                    y_mid = float(params["y_mid"])
+                    x2 = float(params["x2"])
+                    y2 = float(params["y2"])
+                    
+                    # Create arc using geometry engine
+                    element_id = engine.add_arc_to_sketch(
+                        request.sketch_id, 
+                        arc_type,
+                        x1=x1, y1=y1, x_mid=x_mid, y_mid=y_mid, x2=x2, y2=y2
+                    )
+                    
+                elif arc_type == "endpoints_radius":
+                    x1 = float(params["x1"])
+                    y1 = float(params["y1"])
+                    x2 = float(params["x2"])
+                    y2 = float(params["y2"])
+                    radius = float(params["radius"])
+                    large_arc = params.get("large_arc", False)
+                    
+                    # Create arc using geometry engine
+                    element_id = engine.add_arc_to_sketch(
+                        request.sketch_id, 
+                        arc_type,
+                        x1=x1, y1=y1, x2=x2, y2=y2, radius=radius, large_arc=large_arc
+                    )
+                else:
+                    raise Exception(f"Unknown arc type: {arc_type}")
+                    
+            except (KeyError, TypeError, ValueError) as e:
+                raise Exception(f"Arc requires valid parameters based on arc_type. Error: {e}")
+            
+            if not element_id:
+                raise Exception("Failed to create arc in geometry engine")
+        
+        elif request.element_type == "polygon":
+            # Extract polygon parameters
+            params = request.get_parameters()
+            
+            # Validate and extract required parameters
+            try:
+                center_x = float(params["center_x"])
+                center_y = float(params["center_y"])
+                sides = int(params["sides"])
+                radius = float(params["radius"])
+            except (KeyError, TypeError, ValueError) as e:
+                raise Exception(f"Polygon requires valid numeric parameters: center_x, center_y, sides, radius. Error: {e}")
+            
+            # Create polygon using geometry engine
+            element_id = engine.add_polygon_to_sketch(
+                request.sketch_id, 
+                center_x, center_y, sides, radius
+            )
+            
+            if not element_id:
+                raise Exception("Failed to create polygon in geometry engine")
+        
+        else:
+            raise Exception(f"Element type '{request.element_type}' not yet implemented")
+        
+        # Get visualization data for the created element
+        viz_data = engine.get_sketch_element_visualization_data(request.sketch_id, element_id)
         
         response_data = {
             "element_id": element_id,
             "element_type": request.element_type,
             "sketch_id": request.sketch_id,
             "session_id": request.session_id,
-            "parameters": request.parameters,
-            "message": "Sketch element added (placeholder implementation)"
+            "parameters": request.get_parameters(),
+            "message": f"Sketch element {element_id} added successfully"
         }
+        
+        # Add visualization data if available
+        if viz_data:
+            response_data["visualization_data"] = viz_data
         
         print(f"✅ Sketch element added: {element_id}")
         return response_data
