@@ -63,7 +63,7 @@ server/Win32/
 # ========================================
 
 # Cache
-serverpy/src/__pycache__/
+serverpy/app/src/__pycache__/
 
 
 # ========================================

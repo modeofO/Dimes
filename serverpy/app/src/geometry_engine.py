@@ -1355,6 +1355,317 @@ class Sketch:
         except Exception as e:
             print(f"❌ Error finding infinite line-circle intersections: {e}")
             return []
+    
+    def mirror_elements(self, element_ids: List[str], mirror_line_id: str, keep_original: bool = True) -> List[str]:
+        """
+        Mirror geometry elements across an existing line element
+        
+        Args:
+            element_ids: List of element IDs to mirror
+            mirror_line_id: ID of line element to use as mirror axis
+            keep_original: If True, keep original elements; if False, replace with mirrored versions
+            
+        Returns:
+            List of new mirrored element IDs
+        """
+        try:
+            print(f"🪞 Mirroring {len(element_ids)} elements across line {mirror_line_id}")
+            
+            # Find the mirror line
+            mirror_line = self.get_element_by_id(mirror_line_id)
+            if not mirror_line or mirror_line.element_type != SketchElementType.LINE:
+                print(f"❌ Mirror line {mirror_line_id} not found or not a line")
+                return []
+            
+            if not mirror_line.start_point or not mirror_line.end_point:
+                print(f"❌ Mirror line {mirror_line_id} missing start or end point")
+                return []
+            
+            # Calculate mirror line equation: ax + by + c = 0
+            mirror_eq = self._calculate_line_equation(mirror_line)
+            if not mirror_eq:
+                print(f"❌ Could not calculate mirror line equation")
+                return []
+            
+            mirrored_element_ids = []
+            
+            # Process each element to be mirrored
+            for element_id in element_ids:
+                element = self.get_element_by_id(element_id)
+                if not element:
+                    print(f"⚠️ Element {element_id} not found, skipping")
+                    continue
+                
+                # Create mirrored version of the element
+                mirrored_element = self._create_mirrored_element(element, mirror_eq)
+                
+                if mirrored_element:
+                    # Add mirrored element to sketch
+                    if self.add_element(mirrored_element):
+                        mirrored_element_ids.append(mirrored_element.id)
+                        print(f"✅ Mirrored {element.element_type.value} {element_id} -> {mirrored_element.id}")
+                    else:
+                        print(f"❌ Failed to add mirrored element for {element_id}")
+                else:
+                    print(f"❌ Failed to create mirrored element for {element_id}")
+            
+            # Remove original elements if requested
+            if not keep_original:
+                for element_id in element_ids:
+                    self.elements = [e for e in self.elements if e.id != element_id]
+                print(f"🗑️ Removed {len(element_ids)} original elements")
+            
+            print(f"✅ Mirror operation completed: {len(mirrored_element_ids)} elements created")
+            return mirrored_element_ids
+            
+        except Exception as e:
+            print(f"❌ Error mirroring elements: {e}")
+            return []
+    
+    def mirror_elements_by_two_points(self, element_ids: List[str], point1: gp_Pnt2d, point2: gp_Pnt2d, keep_original: bool = True) -> List[str]:
+        """
+        Mirror geometry elements across a line defined by two points
+        
+        Args:
+            element_ids: List of element IDs to mirror
+            point1: First point defining the mirror line
+            point2: Second point defining the mirror line
+            keep_original: If True, keep original elements; if False, replace with mirrored versions
+            
+        Returns:
+            List of new mirrored element IDs
+        """
+        try:
+            print(f"🪞 Mirroring {len(element_ids)} elements across line defined by two points")
+            
+            # Create temporary line equation from two points
+            mirror_eq = self._calculate_line_equation_from_points(point1, point2)
+            if not mirror_eq:
+                print(f"❌ Could not calculate mirror line equation from points")
+                return []
+            
+            mirrored_element_ids = []
+            
+            # Process each element to be mirrored
+            for element_id in element_ids:
+                element = self.get_element_by_id(element_id)
+                if not element:
+                    print(f"⚠️ Element {element_id} not found, skipping")
+                    continue
+                
+                # Create mirrored version of the element
+                mirrored_element = self._create_mirrored_element(element, mirror_eq)
+                
+                if mirrored_element:
+                    # Add mirrored element to sketch
+                    if self.add_element(mirrored_element):
+                        mirrored_element_ids.append(mirrored_element.id)
+                        print(f"✅ Mirrored {element.element_type.value} {element_id} -> {mirrored_element.id}")
+                    else:
+                        print(f"❌ Failed to add mirrored element for {element_id}")
+                else:
+                    print(f"❌ Failed to create mirrored element for {element_id}")
+            
+            # Remove original elements if requested
+            if not keep_original:
+                for element_id in element_ids:
+                    self.elements = [e for e in self.elements if e.id != element_id]
+                print(f"🗑️ Removed {len(element_ids)} original elements")
+            
+            print(f"✅ Mirror operation completed: {len(mirrored_element_ids)} elements created")
+            return mirrored_element_ids
+            
+        except Exception as e:
+            print(f"❌ Error mirroring elements by two points: {e}")
+            return []
+    
+    def _calculate_line_equation(self, line: SketchElement) -> Optional[Tuple[float, float, float]]:
+        """Calculate line equation coefficients ax + by + c = 0 from line element"""
+        try:
+            if not line.start_point or not line.end_point:
+                return None
+            
+            x1, y1 = line.start_point.X(), line.start_point.Y()
+            x2, y2 = line.end_point.X(), line.end_point.Y()
+            
+            return self._calculate_line_equation_from_coordinates(x1, y1, x2, y2)
+            
+        except Exception as e:
+            print(f"❌ Error calculating line equation: {e}")
+            return None
+    
+    def _calculate_line_equation_from_points(self, point1: gp_Pnt2d, point2: gp_Pnt2d) -> Optional[Tuple[float, float, float]]:
+        """Calculate line equation coefficients ax + by + c = 0 from two points"""
+        try:
+            x1, y1 = point1.X(), point1.Y()
+            x2, y2 = point2.X(), point2.Y()
+            
+            return self._calculate_line_equation_from_coordinates(x1, y1, x2, y2)
+            
+        except Exception as e:
+            print(f"❌ Error calculating line equation from points: {e}")
+            return None
+    
+    def _calculate_line_equation_from_coordinates(self, x1: float, y1: float, x2: float, y2: float) -> Optional[Tuple[float, float, float]]:
+        """Calculate line equation coefficients ax + by + c = 0 from coordinates"""
+        try:
+            # For line through points (x1,y1) and (x2,y2):
+            # Direction vector: (dx, dy) = (x2-x1, y2-y1)
+            # Normal vector: (a, b) = (dy, -dx) = (y2-y1, x1-x2)
+            # Equation: a(x-x1) + b(y-y1) = 0
+            # Expanded: ax - ax1 + by - by1 = 0
+            # Standard form: ax + by + c = 0 where c = -ax1 - by1
+            
+            dx = x2 - x1
+            dy = y2 - y1
+            
+            # Check for degenerate line (same points)
+            if abs(dx) < 1e-10 and abs(dy) < 1e-10:
+                return None
+            
+            a = dy  # y2 - y1
+            b = -dx  # -(x2 - x1) = x1 - x2
+            c = -a * x1 - b * y1  # -ax1 - by1
+            
+            return (a, b, c)
+            
+        except Exception as e:
+            print(f"❌ Error calculating line equation from coordinates: {e}")
+            return None
+    
+    def _create_mirrored_element(self, element: SketchElement, mirror_eq: Tuple[float, float, float]) -> Optional[SketchElement]:
+        """Create a mirrored copy of an element across the mirror line"""
+        try:
+            a, b, c = mirror_eq
+            element_type = element.element_type
+            
+            # Generate unique ID for mirrored element
+            mirrored_id = f"mirror_{element.id}_{int(time.time() * 1000) % 10000}"
+            
+            if element_type == SketchElementType.LINE:
+                # Mirror both endpoints
+                if not element.start_point or not element.end_point:
+                    return None
+                
+                mirrored_start = self._mirror_point(element.start_point, mirror_eq)
+                mirrored_end = self._mirror_point(element.end_point, mirror_eq)
+                
+                return SketchElement(
+                    id=mirrored_id,
+                    element_type=SketchElementType.LINE,
+                    start_point=mirrored_start,
+                    end_point=mirrored_end
+                )
+            
+            elif element_type == SketchElementType.CIRCLE:
+                # Mirror center point, radius stays the same
+                if not element.center_point or not element.parameters:
+                    return None
+                
+                mirrored_center = self._mirror_point(element.center_point, mirror_eq)
+                radius = element.parameters[0]
+                
+                return SketchElement(
+                    id=mirrored_id,
+                    element_type=SketchElementType.CIRCLE,
+                    center_point=mirrored_center,
+                    parameters=[radius]
+                )
+            
+            elif element_type == SketchElementType.RECTANGLE:
+                # Mirror corner point, keep dimensions
+                if not element.start_point or not element.parameters or len(element.parameters) < 2:
+                    return None
+                
+                mirrored_corner = self._mirror_point(element.start_point, mirror_eq)
+                width = element.parameters[0]
+                height = element.parameters[1]
+                
+                return SketchElement(
+                    id=mirrored_id,
+                    element_type=SketchElementType.RECTANGLE,
+                    start_point=mirrored_corner,
+                    parameters=[width, height]
+                )
+            
+            elif element_type == SketchElementType.ARC:
+                # Mirror start point, end point, and center point
+                if (not element.start_point or not element.end_point or 
+                    not element.center_point or not element.parameters):
+                    return None
+                
+                mirrored_start = self._mirror_point(element.start_point, mirror_eq)
+                mirrored_end = self._mirror_point(element.end_point, mirror_eq)
+                mirrored_center = self._mirror_point(element.center_point, mirror_eq)
+                
+                # For arc, we need to recalculate angles after mirroring
+                radius = element.parameters[0]
+                
+                # Calculate new start and end angles
+                start_angle = math.atan2(mirrored_start.Y() - mirrored_center.Y(), 
+                                       mirrored_start.X() - mirrored_center.X())
+                end_angle = math.atan2(mirrored_end.Y() - mirrored_center.Y(), 
+                                     mirrored_end.X() - mirrored_center.X())
+                
+                return SketchElement(
+                    id=mirrored_id,
+                    element_type=SketchElementType.ARC,
+                    start_point=mirrored_start,
+                    end_point=mirrored_end,
+                    center_point=mirrored_center,
+                    parameters=[radius, start_angle, end_angle]
+                )
+            
+            elif element_type == SketchElementType.POLYGON:
+                # Mirror center point, keep other parameters
+                if not element.center_point or not element.parameters:
+                    return None
+                
+                mirrored_center = self._mirror_point(element.center_point, mirror_eq)
+                radius = element.parameters[0]
+                sides = element.parameters[1]
+                
+                return SketchElement(
+                    id=mirrored_id,
+                    element_type=SketchElementType.POLYGON,
+                    center_point=mirrored_center,
+                    parameters=[radius, sides]
+                )
+            
+            else:
+                print(f"❌ Unsupported element type for mirroring: {element_type}")
+                return None
+                
+        except Exception as e:
+            print(f"❌ Error creating mirrored element: {e}")
+            return None
+    
+    def _mirror_point(self, point: gp_Pnt2d, mirror_eq: Tuple[float, float, float]) -> gp_Pnt2d:
+        """Mirror a point across a line defined by ax + by + c = 0"""
+        try:
+            a, b, c = mirror_eq
+            x0, y0 = point.X(), point.Y()
+            
+            # Formula for reflecting point (x0,y0) across line ax + by + c = 0:
+            # x' = x0 - 2a(ax0 + by0 + c)/(a² + b²)
+            # y' = y0 - 2b(ax0 + by0 + c)/(a² + b²)
+            
+            denominator = a * a + b * b
+            if denominator < 1e-10:
+                # Degenerate line, return original point
+                return point
+            
+            numerator = a * x0 + b * y0 + c
+            factor = 2 * numerator / denominator
+            
+            x_mirrored = x0 - a * factor
+            y_mirrored = y0 - b * factor
+            
+            return gp_Pnt2d(x_mirrored, y_mirrored)
+            
+        except Exception as e:
+            print(f"❌ Error mirroring point: {e}")
+            return point
 
 
 class SketchPlane:
@@ -2644,3 +2955,82 @@ class OCCTEngine:
             counter += 1
         
         return f"sketch_{counter}" 
+    
+    def mirror_elements_in_sketch(self, sketch_id: str, element_ids: List[str], mirror_line_id: str, keep_original: bool = True) -> List[str]:
+        """
+        Mirror geometry elements across an existing line element - equivalent to C++ mirrorElements
+        
+        Args:
+            sketch_id: Sketch identifier
+            element_ids: List of element IDs to mirror
+            mirror_line_id: ID of line element to use as mirror axis
+            keep_original: If True, keep original elements; if False, replace with mirrored versions
+            
+        Returns:
+            List of new mirrored element IDs
+        """
+        print(f"🪞 Mirroring {len(element_ids)} elements across line {mirror_line_id} in sketch {sketch_id}")
+        
+        if not self.sketch_exists(sketch_id):
+            print(f"❌ Sketch not found: {sketch_id}")
+            return []
+        
+        try:
+            sketch = self.sketches[sketch_id]
+            
+            # Perform mirror operation
+            mirrored_ids = sketch.mirror_elements(element_ids, mirror_line_id, keep_original)
+            
+            if mirrored_ids:
+                print(f"✅ Successfully mirrored {len(mirrored_ids)} elements in sketch {sketch_id}")
+            else:
+                print(f"❌ Failed to mirror elements in sketch {sketch_id}")
+            
+            return mirrored_ids
+            
+        except Exception as e:
+            print(f"❌ Error mirroring elements in sketch: {e}")
+            return []
+    
+    def mirror_elements_by_two_points_in_sketch(self, sketch_id: str, element_ids: List[str], 
+                                               x1: float, y1: float, x2: float, y2: float, 
+                                               keep_original: bool = True) -> List[str]:
+        """
+        Mirror geometry elements across a line defined by two points - equivalent to C++ mirrorElementsByTwoPoints
+        
+        Args:
+            sketch_id: Sketch identifier
+            element_ids: List of element IDs to mirror
+            x1, y1: First point defining the mirror line
+            x2, y2: Second point defining the mirror line
+            keep_original: If True, keep original elements; if False, replace with mirrored versions
+            
+        Returns:
+            List of new mirrored element IDs
+        """
+        print(f"🪞 Mirroring {len(element_ids)} elements across line defined by two points in sketch {sketch_id}")
+        
+        if not self.sketch_exists(sketch_id):
+            print(f"❌ Sketch not found: {sketch_id}")
+            return []
+        
+        try:
+            sketch = self.sketches[sketch_id]
+            
+            # Create 2D points
+            point1 = gp_Pnt2d(x1, y1)
+            point2 = gp_Pnt2d(x2, y2)
+            
+            # Perform mirror operation
+            mirrored_ids = sketch.mirror_elements_by_two_points(element_ids, point1, point2, keep_original)
+            
+            if mirrored_ids:
+                print(f"✅ Successfully mirrored {len(mirrored_ids)} elements in sketch {sketch_id}")
+            else:
+                print(f"❌ Failed to mirror elements in sketch {sketch_id}")
+            
+            return mirrored_ids
+            
+        except Exception as e:
+            print(f"❌ Error mirroring elements by two points in sketch: {e}")
+            return []

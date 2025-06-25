@@ -215,6 +215,27 @@ class ExtendLineToGeometryRequest(BaseModel):
     extend_start: bool = Field(default=False, description="If True, extend start; if False, extend end")
 
 
+class MirrorElementsRequest(BaseModel):
+    """Request model for mirror operations using existing line"""
+    session_id: str = Field(..., description="Session ID")
+    sketch_id: str = Field(..., description="Sketch ID")
+    element_ids: List[str] = Field(..., description="List of element IDs to mirror")
+    mirror_line_id: str = Field(..., description="ID of line element to use as mirror axis")
+    keep_original: bool = Field(default=True, description="If True, keep original elements; if False, replace with mirrored versions")
+
+
+class MirrorElementsByTwoPointsRequest(BaseModel):
+    """Request model for mirror operations using two points to define mirror line"""
+    session_id: str = Field(..., description="Session ID")
+    sketch_id: str = Field(..., description="Sketch ID")
+    element_ids: List[str] = Field(..., description="List of element IDs to mirror")
+    x1: float = Field(..., description="First point X coordinate")
+    y1: float = Field(..., description="First point Y coordinate")
+    x2: float = Field(..., description="Second point X coordinate")
+    y2: float = Field(..., description="Second point Y coordinate")
+    keep_original: bool = Field(default=True, description="If True, keep original elements; if False, replace with mirrored versions")
+
+
 class APIResponse(BaseModel):
     """Standard API response format"""
     success: bool
@@ -538,6 +559,46 @@ class CADAPIServer:
                 
             except Exception as e:
                 print(f"❌ Error in extend_line_to_geometry: {e}")
+                return APIResponse(
+                    success=False,
+                    timestamp=int(time.time()),
+                    error=str(e)
+                )
+        
+        @self.app.post("/api/v1/mirror-elements")
+        async def mirror_elements(request: MirrorElementsRequest):
+            """Mirror elements endpoint - handles mirroring elements across an existing line"""
+            try:
+                response_data = await self._handle_mirror_elements(request)
+                
+                return APIResponse(
+                    success=True,
+                    timestamp=int(time.time()),
+                    data=response_data
+                )
+                
+            except Exception as e:
+                print(f"❌ Error in mirror_elements: {e}")
+                return APIResponse(
+                    success=False,
+                    timestamp=int(time.time()),
+                    error=str(e)
+                )
+        
+        @self.app.post("/api/v1/mirror-elements-by-two-points")
+        async def mirror_elements_by_two_points(request: MirrorElementsByTwoPointsRequest):
+            """Mirror elements by two points endpoint - handles mirroring elements across a line defined by two points"""
+            try:
+                response_data = await self._handle_mirror_elements_by_two_points(request)
+                
+                return APIResponse(
+                    success=True,
+                    timestamp=int(time.time()),
+                    data=response_data
+                )
+                
+            except Exception as e:
+                print(f"❌ Error in mirror_elements_by_two_points: {e}")
                 return APIResponse(
                     success=False,
                     timestamp=int(time.time()),
@@ -1289,6 +1350,92 @@ class CADAPIServer:
         }
         
         print(f"✅ Line extended successfully")
+        return response_data
+    
+    async def _handle_mirror_elements(self, request: MirrorElementsRequest) -> Dict[str, Any]:
+        """Handle mirror elements - Real implementation using geometry engine"""
+        print(f"🪞 Mirroring elements: {request.element_ids} across line: {request.mirror_line_id}")
+        
+        session_manager = SessionManager.get_instance()
+        engine = session_manager.get_or_create_session(request.session_id)
+        
+        if engine is None:
+            raise Exception("Failed to get session")
+        
+        # Validate that the sketch exists
+        if not engine.sketch_exists(request.sketch_id):
+            raise Exception(f"Sketch '{request.sketch_id}' does not exist")
+        
+        # Perform mirror operation
+        mirrored_element_ids = engine.mirror_elements_in_sketch(
+            request.sketch_id,
+            request.element_ids,
+            request.mirror_line_id,
+            request.keep_original
+        )
+        
+        if not mirrored_element_ids:
+            raise Exception("Failed to mirror elements in geometry engine")
+        
+        response_data = {
+            "original_element_ids": request.element_ids,
+            "mirrored_element_ids": mirrored_element_ids,
+            "mirror_line_id": request.mirror_line_id,
+            "sketch_id": request.sketch_id,
+            "keep_original": request.keep_original,
+            "session_id": request.session_id,
+            "operation": "mirror_elements",
+            "message": f"{len(mirrored_element_ids)} elements mirrored successfully across line {request.mirror_line_id}"
+        }
+        
+        print(f"✅ Elements mirrored successfully")
+        return response_data
+    
+    async def _handle_mirror_elements_by_two_points(self, request: MirrorElementsByTwoPointsRequest) -> Dict[str, Any]:
+        """Handle mirror elements by two points - Real implementation using geometry engine"""
+        print(f"🪞 Mirroring elements: {request.element_ids} across line defined by points: ({request.x1}, {request.y1}) and ({request.x2}, {request.y2})")
+        
+        session_manager = SessionManager.get_instance()
+        engine = session_manager.get_or_create_session(request.session_id)
+        
+        if engine is None:
+            raise Exception("Failed to get session")
+        
+        # Validate that the sketch exists
+        if not engine.sketch_exists(request.sketch_id):
+            raise Exception(f"Sketch '{request.sketch_id}' does not exist")
+        
+        # Perform mirror operation
+        mirrored_element_ids = engine.mirror_elements_by_two_points_in_sketch(
+            request.sketch_id,
+            request.element_ids,
+            request.x1,
+            request.y1,
+            request.x2,
+            request.y2,
+            request.keep_original
+        )
+        
+        if not mirrored_element_ids:
+            raise Exception("Failed to mirror elements in geometry engine")
+        
+        response_data = {
+            "original_element_ids": request.element_ids,
+            "mirrored_element_ids": mirrored_element_ids,
+            "mirror_line_points": {
+                "x1": request.x1,
+                "y1": request.y1,
+                "x2": request.x2,
+                "y2": request.y2
+            },
+            "sketch_id": request.sketch_id,
+            "keep_original": request.keep_original,
+            "session_id": request.session_id,
+            "operation": "mirror_elements_by_two_points",
+            "message": f"{len(mirrored_element_ids)} elements mirrored successfully across line defined by two points"
+        }
+        
+        print(f"✅ Elements mirrored successfully")
         return response_data
     
     # ==================== UTILITY METHODS ====================
