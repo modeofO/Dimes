@@ -93,6 +93,24 @@ export interface AddSketchElementRequest {
         center_x?: number;
         center_y?: number;
         radius?: number;
+        
+        // For rectangles
+        corner?: [number, number];
+        width?: number;
+        height?: number;
+        
+        // For arcs
+        center?: [number, number];
+        start_angle?: number;
+        end_angle?: number;
+        start?: [number, number];
+        end?: [number, number];
+        point1?: [number, number];
+        point2?: [number, number];
+        point3?: [number, number];
+        
+        // For polygons
+        sides?: number;
     };
 }
 
@@ -137,6 +155,159 @@ export interface AddFilletResponse extends CADResponse {
         element1_id: string;
         element2_id: string;
         radius: number;
+        visualization_data?: SketchElementVisualizationData;
+    };
+}
+
+// New API types for additional 2D tools
+
+export interface AddChamferRequest {
+    sketch_id: string;
+    element1_id: string;
+    element2_id: string;
+    distance: number;
+}
+
+export interface AddChamferResponse extends CADResponse {
+    data: {
+        sketch_id: string;
+        chamfer_id: string;
+        element1_id: string;
+        element2_id: string;
+        distance: number;
+        visualization_data?: SketchElementVisualizationData;
+    };
+}
+
+export interface TrimLineRequest {
+    sketch_id: string;
+    line_to_trim_id: string;
+    cutting_line_id: string;
+}
+
+export interface TrimLineResponse extends CADResponse {
+    data: {
+        sketch_id: string;
+        trimmed_element_id: string;
+        visualization_data?: SketchElementVisualizationData;
+    };
+}
+
+export interface ExtendLineRequest {
+    sketch_id: string;
+    line_to_extend_id: string;
+    target_line_id: string;
+}
+
+export interface ExtendLineResponse extends CADResponse {
+    data: {
+        sketch_id: string;
+        extended_element_id: string;
+        visualization_data?: SketchElementVisualizationData;
+    };
+}
+
+export interface MirrorElementRequest {
+    sketch_id: string;
+    element_id: string;
+    mirror_line: {
+        point1: [number, number];
+        point2: [number, number];
+    };
+}
+
+export interface MirrorElementResponse extends CADResponse {
+    data: {
+        sketch_id: string;
+        mirrored_element_id: string;
+        original_element_id: string;
+        visualization_data?: SketchElementVisualizationData;
+    };
+}
+
+export interface OffsetElementRequest {
+    sketch_id: string;
+    element_id: string;
+    distance: number;
+}
+
+export interface OffsetElementResponse extends CADResponse {
+    data: {
+        sketch_id: string;
+        offset_element_id: string;
+        original_element_id: string;
+        distance: number;
+        visualization_data?: SketchElementVisualizationData;
+    };
+}
+
+export interface CopyElementRequest {
+    sketch_id: string;
+    element_id: string;
+    translation: [number, number];
+}
+
+export interface CopyElementResponse extends CADResponse {
+    data: {
+        sketch_id: string;
+        copied_element_id: string;
+        original_element_id: string;
+        translation: [number, number];
+        visualization_data?: SketchElementVisualizationData;
+    };
+}
+
+export interface MoveElementRequest {
+    sketch_id: string;
+    element_id: string;
+    translation: [number, number];
+}
+
+export interface MoveElementResponse extends CADResponse {
+    data: {
+        sketch_id: string;
+        moved_element_id: string;
+        translation: [number, number];
+        visualization_data?: SketchElementVisualizationData;
+    };
+}
+
+export interface CreateLinearArrayRequest {
+    sketch_id: string;
+    element_id: string;
+    direction: [number, number];
+    count: number;
+}
+
+export interface CreateLinearArrayResponse extends CADResponse {
+    data: {
+        sketch_id: string;
+        array_elements: string[];
+        original_element_id: string;
+        direction: [number, number];
+        count: number;
+        visualization_data?: SketchElementVisualizationData[];
+    };
+}
+
+export interface CreateMirrorArrayRequest {
+    sketch_id: string;
+    element_id: string;
+    mirror_line: {
+        point1: [number, number];
+        point2: [number, number];
+    };
+}
+
+export interface CreateMirrorArrayResponse extends CADResponse {
+    data: {
+        sketch_id: string;
+        mirrored_element_id: string;
+        original_element_id: string;
+        mirror_line: {
+            point1: [number, number];
+            point2: [number, number];
+        };
         visualization_data?: SketchElementVisualizationData;
     };
 }

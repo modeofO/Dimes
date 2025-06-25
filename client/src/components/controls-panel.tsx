@@ -60,7 +60,30 @@ export function ControlsPanel({
     const [elementType, setElementType] = useState('line');
     const [lineParams, setLineParams] = useState({ x1: 0, y1: 0, x2: 10, y2: 10 });
     const [circleParams, setCircleParams] = useState({ x: 0, y: 0, radius: 5 });
+    const [rectangleParams, setRectangleParams] = useState({ x: 0, y: 0, width: 10, height: 5 });
+    const [arcParams, setArcParams] = useState({ 
+        type: 'center_radius' as 'center_radius' | 'three_points' | 'endpoints_radius',
+        center: [0, 0] as [number, number], 
+        radius: 5, 
+        startAngle: 0, 
+        endAngle: 90 
+    });
+    const [polygonParams, setPolygonParams] = useState({ center: [0, 0] as [number, number], sides: 6, radius: 5 });
     const [extrudeDistance, setExtrudeDistance] = useState(10);
+    
+    // Tool parameters
+    const [filletRadius, setFilletRadius] = useState(1);
+    const [chamferDistance, setChamferDistance] = useState(1);
+    const [selectedElement1, setSelectedElement1] = useState('');
+    const [selectedElement2, setSelectedElement2] = useState('');
+    const [offsetDistance, setOffsetDistance] = useState(2);
+    const [translation, setTranslation] = useState({ x: 10, y: 10 });
+    const [mirrorLine, setMirrorLine] = useState({ 
+        point1: [0, 0] as [number, number], 
+        point2: [10, 0] as [number, number] 
+    });
+    const [arrayDirection, setArrayDirection] = useState({ x: 10, y: 0 });
+    const [arrayCount, setArrayCount] = useState(3);
 
     const createSketchPlane = useCallback(async () => {
         if (!client) return;
@@ -123,6 +146,28 @@ export function ControlsPanel({
                     circleParams.y,
                     circleParams.radius
                 );
+            } else if (elementType === 'rectangle') {
+                response = await client.addRectangleToSketch(
+                    selectedSketch,
+                    [rectangleParams.x, rectangleParams.y],
+                    rectangleParams.width,
+                    rectangleParams.height
+                );
+            } else if (elementType === 'arc') {
+                response = await client.addArcToSketch(selectedSketch, {
+                    type: arcParams.type,
+                    center: arcParams.center,
+                    radius: arcParams.radius,
+                    start_angle: arcParams.startAngle * Math.PI / 180, // Convert to radians
+                    end_angle: arcParams.endAngle * Math.PI / 180
+                });
+            } else if (elementType === 'polygon') {
+                response = await client.addPolygonToSketch(
+                    selectedSketch,
+                    polygonParams.center,
+                    polygonParams.sides,
+                    polygonParams.radius
+                );
             } else {
                 return;
             }
@@ -135,7 +180,7 @@ export function ControlsPanel({
             console.error('Failed to add sketch element:', error);
             onUpdateStatus(`❌ Error adding element: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
         }
-    }, [client, selectedSketch, elementType, lineParams, circleParams, onUpdateStatus]);
+    }, [client, selectedSketch, elementType, lineParams, circleParams, rectangleParams, arcParams, polygonParams, onUpdateStatus]);
 
     const extrudeFeature = useCallback(async () => {
         if (!client || !selectedObject) return;
@@ -178,6 +223,160 @@ export function ControlsPanel({
             onUpdateStatus(`❌ Error extruding: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
         }
     }, [client, selectedObject, extrudeDistance, createdSketches, onUpdateStatus]);
+
+    // New tool functions
+    const addChamfer = useCallback(async () => {
+        if (!client || !selectedSketch || !selectedElement1 || !selectedElement2) {
+            onUpdateStatus('Please select two elements for chamfer', 'warning');
+            return;
+        }
+        
+        try {
+            onUpdateStatus('Adding chamfer...', 'info');
+            const response = await client.addChamferToSketch(selectedSketch, selectedElement1, selectedElement2, chamferDistance);
+            if (response.success) {
+                onUpdateStatus('✅ Added chamfer', 'success');
+            }
+        } catch (error) {
+            onUpdateStatus(`❌ Error adding chamfer: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+        }
+    }, [client, selectedSketch, selectedElement1, selectedElement2, chamferDistance, onUpdateStatus]);
+
+    const trimLine = useCallback(async () => {
+        if (!client || !selectedSketch || !selectedElement1 || !selectedElement2) {
+            onUpdateStatus('Please select line to trim and cutting line', 'warning');
+            return;
+        }
+        
+        try {
+            onUpdateStatus('Trimming line...', 'info');
+            const response = await client.trimLineToLine(selectedSketch, selectedElement1, selectedElement2);
+            if (response.success) {
+                onUpdateStatus('✅ Trimmed line', 'success');
+            }
+        } catch (error) {
+            onUpdateStatus(`❌ Error trimming line: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+        }
+    }, [client, selectedSketch, selectedElement1, selectedElement2, onUpdateStatus]);
+
+    const extendLine = useCallback(async () => {
+        if (!client || !selectedSketch || !selectedElement1 || !selectedElement2) {
+            onUpdateStatus('Please select line to extend and target line', 'warning');
+            return;
+        }
+        
+        try {
+            onUpdateStatus('Extending line...', 'info');
+            const response = await client.extendLineToLine(selectedSketch, selectedElement1, selectedElement2);
+            if (response.success) {
+                onUpdateStatus('✅ Extended line', 'success');
+            }
+        } catch (error) {
+            onUpdateStatus(`❌ Error extending line: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+        }
+    }, [client, selectedSketch, selectedElement1, selectedElement2, onUpdateStatus]);
+
+    const mirrorElement = useCallback(async () => {
+        if (!client || !selectedSketch || !selectedElement1) {
+            onUpdateStatus('Please select an element to mirror', 'warning');
+            return;
+        }
+        
+        try {
+            onUpdateStatus('Mirroring element...', 'info');
+            const response = await client.mirrorElement(selectedSketch, selectedElement1, mirrorLine);
+            if (response.success) {
+                onUpdateStatus('✅ Mirrored element', 'success');
+            }
+        } catch (error) {
+            onUpdateStatus(`❌ Error mirroring element: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+        }
+    }, [client, selectedSketch, selectedElement1, mirrorLine, onUpdateStatus]);
+
+    const offsetElement = useCallback(async () => {
+        if (!client || !selectedSketch || !selectedElement1) {
+            onUpdateStatus('Please select an element to offset', 'warning');
+            return;
+        }
+        
+        try {
+            onUpdateStatus('Offsetting element...', 'info');
+            const response = await client.offsetElement(selectedSketch, selectedElement1, offsetDistance);
+            if (response.success) {
+                onUpdateStatus('✅ Offset element', 'success');
+            }
+        } catch (error) {
+            onUpdateStatus(`❌ Error offsetting element: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+        }
+    }, [client, selectedSketch, selectedElement1, offsetDistance, onUpdateStatus]);
+
+    const copyElement = useCallback(async () => {
+        if (!client || !selectedSketch || !selectedElement1) {
+            onUpdateStatus('Please select an element to copy', 'warning');
+            return;
+        }
+        
+        try {
+            onUpdateStatus('Copying element...', 'info');
+            const response = await client.copyElement(selectedSketch, selectedElement1, [translation.x, translation.y]);
+            if (response.success) {
+                onUpdateStatus('✅ Copied element', 'success');
+            }
+        } catch (error) {
+            onUpdateStatus(`❌ Error copying element: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+        }
+    }, [client, selectedSketch, selectedElement1, translation, onUpdateStatus]);
+
+    const moveElement = useCallback(async () => {
+        if (!client || !selectedSketch || !selectedElement1) {
+            onUpdateStatus('Please select an element to move', 'warning');
+            return;
+        }
+        
+        try {
+            onUpdateStatus('Moving element...', 'info');
+            const response = await client.moveElement(selectedSketch, selectedElement1, [translation.x, translation.y]);
+            if (response.success) {
+                onUpdateStatus('✅ Moved element', 'success');
+            }
+        } catch (error) {
+            onUpdateStatus(`❌ Error moving element: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+        }
+    }, [client, selectedSketch, selectedElement1, translation, onUpdateStatus]);
+
+    const createLinearArray = useCallback(async () => {
+        if (!client || !selectedSketch || !selectedElement1) {
+            onUpdateStatus('Please select an element for linear array', 'warning');
+            return;
+        }
+        
+        try {
+            onUpdateStatus('Creating linear array...', 'info');
+            const response = await client.createLinearArray(selectedSketch, selectedElement1, [arrayDirection.x, arrayDirection.y], arrayCount);
+            if (response.success) {
+                onUpdateStatus('✅ Created linear array', 'success');
+            }
+        } catch (error) {
+            onUpdateStatus(`❌ Error creating linear array: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+        }
+    }, [client, selectedSketch, selectedElement1, arrayDirection, arrayCount, onUpdateStatus]);
+
+    const createMirrorArray = useCallback(async () => {
+        if (!client || !selectedSketch || !selectedElement1) {
+            onUpdateStatus('Please select an element for mirror array', 'warning');
+            return;
+        }
+        
+        try {
+            onUpdateStatus('Creating mirror array...', 'info');
+            const response = await client.createMirrorArray(selectedSketch, selectedElement1, mirrorLine);
+            if (response.success) {
+                onUpdateStatus('✅ Created mirror array', 'success');
+            }
+        } catch (error) {
+            onUpdateStatus(`❌ Error creating mirror array: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+        }
+    }, [client, selectedSketch, selectedElement1, mirrorLine, onUpdateStatus]);
 
     const clearAllShapes = useCallback(() => {
         if (onClearRenderer) {
@@ -296,6 +495,9 @@ export function ControlsPanel({
                         >
                             <option value="line">Line</option>
                             <option value="circle">Circle</option>
+                            <option value="rectangle">Rectangle</option>
+                            <option value="arc">Arc</option>
+                            <option value="polygon">Polygon</option>
                         </select>
                         
                         {elementType === 'line' && (
@@ -363,6 +565,125 @@ export function ControlsPanel({
                             </div>
                         )}
                         
+                        {elementType === 'rectangle' && (
+                            <div className="space-y-2">
+                                <div className="grid grid-cols-2 gap-2">
+                                    <input
+                                        type="number"
+                                        placeholder="Corner X"
+                                        value={rectangleParams.x}
+                                        onChange={(e) => setRectangleParams(prev => ({ ...prev, x: Number(e.target.value) }))}
+                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
+                                    />
+                                    <input
+                                        type="number"
+                                        placeholder="Corner Y"
+                                        value={rectangleParams.y}
+                                        onChange={(e) => setRectangleParams(prev => ({ ...prev, y: Number(e.target.value) }))}
+                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <input
+                                        type="number"
+                                        placeholder="Width"
+                                        value={rectangleParams.width}
+                                        onChange={(e) => setRectangleParams(prev => ({ ...prev, width: Number(e.target.value) }))}
+                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
+                                    />
+                                    <input
+                                        type="number"
+                                        placeholder="Height"
+                                        value={rectangleParams.height}
+                                        onChange={(e) => setRectangleParams(prev => ({ ...prev, height: Number(e.target.value) }))}
+                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
+                                    />
+                                </div>
+                            </div>
+                        )}
+                        
+                        {elementType === 'arc' && (
+                            <div className="space-y-2">
+                                <div className="grid grid-cols-2 gap-2">
+                                    <input
+                                        type="number"
+                                        placeholder="Center X"
+                                        value={arcParams.center[0]}
+                                        onChange={(e) => setArcParams(prev => ({ ...prev, center: [Number(e.target.value), prev.center[1]] }))}
+                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
+                                    />
+                                    <input
+                                        type="number"
+                                        placeholder="Center Y"
+                                        value={arcParams.center[1]}
+                                        onChange={(e) => setArcParams(prev => ({ ...prev, center: [prev.center[0], Number(e.target.value)] }))}
+                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
+                                    />
+                                </div>
+                                <input
+                                    type="number"
+                                    placeholder="Radius"
+                                    value={arcParams.radius}
+                                    onChange={(e) => setArcParams(prev => ({ ...prev, radius: Number(e.target.value) }))}
+                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                                />
+                                <div className="grid grid-cols-2 gap-2">
+                                    <input
+                                        type="number"
+                                        placeholder="Start Angle (°)"
+                                        value={arcParams.startAngle}
+                                        onChange={(e) => setArcParams(prev => ({ ...prev, startAngle: Number(e.target.value) }))}
+                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
+                                    />
+                                    <input
+                                        type="number"
+                                        placeholder="End Angle (°)"
+                                        value={arcParams.endAngle}
+                                        onChange={(e) => setArcParams(prev => ({ ...prev, endAngle: Number(e.target.value) }))}
+                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
+                                    />
+                                </div>
+                            </div>
+                        )}
+                        
+                        {elementType === 'polygon' && (
+                            <div className="space-y-2">
+                                <div className="grid grid-cols-2 gap-2">
+                                    <input
+                                        type="number"
+                                        placeholder="Center X"
+                                        value={polygonParams.center[0]}
+                                        onChange={(e) => setPolygonParams(prev => ({ ...prev, center: [Number(e.target.value), prev.center[1]] }))}
+                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
+                                    />
+                                    <input
+                                        type="number"
+                                        placeholder="Center Y"
+                                        value={polygonParams.center[1]}
+                                        onChange={(e) => setPolygonParams(prev => ({ ...prev, center: [prev.center[0], Number(e.target.value)] }))}
+                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <input
+                                        type="number"
+                                        placeholder="Sides"
+                                        min="3"
+                                        value={polygonParams.sides}
+                                        onChange={(e) => setPolygonParams(prev => ({ ...prev, sides: Math.max(3, Number(e.target.value)) }))}
+                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
+                                    />
+                                    <input
+                                        type="number"
+                                        placeholder="Radius"
+                                        value={polygonParams.radius}
+                                        onChange={(e) => setPolygonParams(prev => ({ ...prev, radius: Number(e.target.value) }))}
+                                        className="px-2 py-1 border border-gray-300 rounded text-sm"
+                                    />
+                                </div>
+                            </div>
+                        )}
+                        
                         <button
                             onClick={addSketchElement}
                             disabled={!client || !selectedSketch}
@@ -400,6 +721,199 @@ export function ControlsPanel({
                         >
                             Extrude Feature
                         </button>
+                    </div>
+                </div>
+
+                {/* 2D Modification Tools */}
+                <div className="space-y-3">
+                    <h3 className="font-medium text-gray-700">5. Modification Tools</h3>
+                    <div className="space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                            <select
+                                value={selectedElement1}
+                                onChange={(e) => setSelectedElement1(e.target.value)}
+                                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                            >
+                                <option value="">Element 1</option>
+                                {createdSketches.find(s => s.sketch_id === selectedSketch)?.elements.map(el => (
+                                    <option key={el.id} value={el.id}>{el.id} ({el.type})</option>
+                                ))}
+                            </select>
+                            <select
+                                value={selectedElement2}
+                                onChange={(e) => setSelectedElement2(e.target.value)}
+                                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                            >
+                                <option value="">Element 2</option>
+                                {createdSketches.find(s => s.sketch_id === selectedSketch)?.elements.map(el => (
+                                    <option key={el.id} value={el.id}>{el.id} ({el.type})</option>
+                                ))}
+                            </select>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-2">
+                            <input
+                                type="number"
+                                placeholder="Fillet Radius"
+                                value={filletRadius}
+                                onChange={(e) => setFilletRadius(Number(e.target.value))}
+                                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                            />
+                            <button
+                                onClick={() => client?.addFilletToSketch(selectedSketch, selectedElement1, selectedElement2, filletRadius)}
+                                disabled={!client || !selectedSketch || !selectedElement1 || !selectedElement2}
+                                className="px-2 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 disabled:bg-gray-300"
+                            >
+                                Fillet
+                            </button>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-2">
+                            <input
+                                type="number"
+                                placeholder="Chamfer Distance"
+                                value={chamferDistance}
+                                onChange={(e) => setChamferDistance(Number(e.target.value))}
+                                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                            />
+                            <button
+                                onClick={addChamfer}
+                                disabled={!client || !selectedSketch || !selectedElement1 || !selectedElement2}
+                                className="px-2 py-1 bg-orange-500 text-white rounded text-sm hover:bg-orange-600 disabled:bg-gray-300"
+                            >
+                                Chamfer
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Positioning Tools */}
+                <div className="space-y-3">
+                    <h3 className="font-medium text-gray-700">6. Positioning Tools</h3>
+                    <div className="space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                onClick={trimLine}
+                                disabled={!client || !selectedSketch || !selectedElement1 || !selectedElement2}
+                                className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 disabled:bg-gray-300"
+                            >
+                                Trim
+                            </button>
+                            <button
+                                onClick={extendLine}
+                                disabled={!client || !selectedSketch || !selectedElement1 || !selectedElement2}
+                                className="px-2 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600 disabled:bg-gray-300"
+                            >
+                                Extend
+                            </button>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-2">
+                            <input
+                                type="number"
+                                placeholder="Offset Distance"
+                                value={offsetDistance}
+                                onChange={(e) => setOffsetDistance(Number(e.target.value))}
+                                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                            />
+                            <button
+                                onClick={offsetElement}
+                                disabled={!client || !selectedSketch || !selectedElement1}
+                                className="px-2 py-1 bg-purple-500 text-white rounded text-sm hover:bg-purple-600 disabled:bg-gray-300"
+                            >
+                                Offset
+                            </button>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-2">
+                            <input
+                                type="number"
+                                placeholder="Translate X"
+                                value={translation.x}
+                                onChange={(e) => setTranslation(prev => ({ ...prev, x: Number(e.target.value) }))}
+                                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                            />
+                            <input
+                                type="number"
+                                placeholder="Translate Y"
+                                value={translation.y}
+                                onChange={(e) => setTranslation(prev => ({ ...prev, y: Number(e.target.value) }))}
+                                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                            />
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                onClick={copyElement}
+                                disabled={!client || !selectedSketch || !selectedElement1}
+                                className="px-2 py-1 bg-cyan-500 text-white rounded text-sm hover:bg-cyan-600 disabled:bg-gray-300"
+                            >
+                                Copy
+                            </button>
+                            <button
+                                onClick={moveElement}
+                                disabled={!client || !selectedSketch || !selectedElement1}
+                                className="px-2 py-1 bg-indigo-500 text-white rounded text-sm hover:bg-indigo-600 disabled:bg-gray-300"
+                            >
+                                Move
+                            </button>
+                        </div>
+                        
+                        <button
+                            onClick={mirrorElement}
+                            disabled={!client || !selectedSketch || !selectedElement1}
+                            className="w-full px-2 py-1 bg-pink-500 text-white rounded text-sm hover:bg-pink-600 disabled:bg-gray-300"
+                        >
+                            Mirror
+                        </button>
+                    </div>
+                </div>
+
+                {/* Pattern Tools */}
+                <div className="space-y-3">
+                    <h3 className="font-medium text-gray-700">7. Pattern Tools</h3>
+                    <div className="space-y-2">
+                        <div className="grid grid-cols-3 gap-1">
+                            <input
+                                type="number"
+                                placeholder="Dir X"
+                                value={arrayDirection.x}
+                                onChange={(e) => setArrayDirection(prev => ({ ...prev, x: Number(e.target.value) }))}
+                                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                            />
+                            <input
+                                type="number"
+                                placeholder="Dir Y"
+                                value={arrayDirection.y}
+                                onChange={(e) => setArrayDirection(prev => ({ ...prev, y: Number(e.target.value) }))}
+                                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                            />
+                            <input
+                                type="number"
+                                placeholder="Count"
+                                min="2"
+                                value={arrayCount}
+                                onChange={(e) => setArrayCount(Math.max(2, Number(e.target.value)))}
+                                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                            />
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                onClick={createLinearArray}
+                                disabled={!client || !selectedSketch || !selectedElement1}
+                                className="px-2 py-1 bg-teal-500 text-white rounded text-sm hover:bg-teal-600 disabled:bg-gray-300"
+                            >
+                                Linear Array
+                            </button>
+                            <button
+                                onClick={createMirrorArray}
+                                disabled={!client || !selectedSketch || !selectedElement1}
+                                className="px-2 py-1 bg-violet-500 text-white rounded text-sm hover:bg-violet-600 disabled:bg-gray-300"
+                            >
+                                Mirror Array
+                            </button>
+                        </div>
                     </div>
                 </div>
 

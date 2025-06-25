@@ -103,18 +103,18 @@ export class VisualizationManager {
             const circle = new THREE.LineLoop(circleGeometry, circleMaterial);
             group.add(circle);
             
-        } else if (data.element_type === 'fillet') {
-            const filletGeometry = new THREE.BufferGeometry();
+        } else if (data.element_type === 'arc') {
+            const arcGeometry = new THREE.BufferGeometry();
             const positions = new Float32Array(data.points_3d);
-            filletGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            arcGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
             
-            const filletMaterial = new THREE.LineBasicMaterial({
-                color: 0x0080ff, // Blue color for fillets
-                linewidth: 3
+            const arcMaterial = new THREE.LineBasicMaterial({
+                color: 0xff8000, // Orange color for arcs
+                linewidth: 2
             });
             
-            const fillet = new THREE.Line(filletGeometry, filletMaterial);
-            group.add(fillet);
+            const arc = new THREE.Line(arcGeometry, arcMaterial);
+            group.add(arc);
             
         } else if (data.element_type === 'rectangle') {
             const rectGeometry = new THREE.BufferGeometry();
@@ -128,6 +128,46 @@ export class VisualizationManager {
             
             const rectangle = new THREE.LineLoop(rectGeometry, rectMaterial);
             group.add(rectangle);
+            
+        } else if (data.element_type === 'polygon') {
+            const polygonGeometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(data.points_3d);
+            polygonGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const polygonMaterial = new THREE.LineBasicMaterial({
+                color: 0x8000ff, // Purple color for polygons
+                linewidth: 2
+            });
+            
+            const polygon = new THREE.LineLoop(polygonGeometry, polygonMaterial);
+            group.add(polygon);
+            
+        } else if (data.element_type === 'fillet') {
+            const filletGeometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(data.points_3d);
+            filletGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const filletMaterial = new THREE.LineBasicMaterial({
+                color: 0x0080ff, // Blue color for fillets
+                linewidth: 3
+            });
+            
+            const fillet = new THREE.Line(filletGeometry, filletMaterial);
+            group.add(fillet);
+            
+        } else if (data.element_type === 'chamfer') {
+            const chamferGeometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(data.points_3d);
+            chamferGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const chamferMaterial = new THREE.LineBasicMaterial({
+                color: 0xff4000, // Red-orange color for chamfers
+                linewidth: 3
+            });
+            
+            const chamfer = new THREE.Line(chamferGeometry, chamferMaterial);
+            group.add(chamfer);
+            
         } else {
             console.warn(`Unknown element type for visualization: ${data.element_type}`);
             // Fallback: render as a simple line if points_3d has at least 6 values (2 points)

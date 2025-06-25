@@ -10,6 +10,24 @@ import {
     AddSketchElementResponse,
     AddFilletRequest,
     AddFilletResponse,
+    AddChamferRequest,
+    AddChamferResponse,
+    TrimLineRequest,
+    TrimLineResponse,
+    ExtendLineRequest,
+    ExtendLineResponse,
+    MirrorElementRequest,
+    MirrorElementResponse,
+    OffsetElementRequest,
+    OffsetElementResponse,
+    CopyElementRequest,
+    CopyElementResponse,
+    MoveElementRequest,
+    MoveElementResponse,
+    CreateLinearArrayRequest,
+    CreateLinearArrayResponse,
+    CreateMirrorArrayRequest,
+    CreateMirrorArrayResponse,
     ExtrudeFeatureRequest,
     ExtrudeFeatureResponse
 } from '../types/api';
@@ -123,6 +141,8 @@ export class CADClient {
         return response;
     }
     
+    // ==================== BASIC SKETCH ELEMENTS ====================
+    
     public async addLineToSketch(sketchId: string, x1: number, y1: number, x2: number, y2: number): Promise<AddSketchElementResponse> {
         const request: AddSketchElementRequest = {
             sketch_id: sketchId,
@@ -173,6 +193,91 @@ export class CADClient {
         return response;
     }
     
+    public async addRectangleToSketch(sketchId: string, corner: [number, number], width: number, height: number): Promise<AddSketchElementResponse> {
+        const request: AddSketchElementRequest = {
+            sketch_id: sketchId,
+            element_type: 'rectangle',
+            parameters: {
+                corner,
+                width,
+                height
+            }
+        };
+        
+        console.log('📐 Adding rectangle to sketch:', request);
+        
+        const response = await this.makeRequest<AddSketchElementResponse>('/api/v1/cad/sketch-elements', 'POST', request);
+        
+        console.log('📨 Received addRectangleToSketch response:', response);
+        
+        // If visualization data is included, trigger visualization callback
+        if (response.data?.visualization_data && this.elementVisualizationCallback) {
+            console.log('🎯 Updating element visualization with data:', response.data.visualization_data);
+            this.elementVisualizationCallback(response.data.visualization_data);
+        }
+        
+        return response;
+    }
+    
+    // ==================== NEW 2D TOOLS ====================
+    
+    public async addArcToSketch(sketchId: string, arcParams: {
+        type: 'center_radius' | 'three_points' | 'endpoints_radius';
+        center?: [number, number];
+        radius?: number;
+        start_angle?: number;
+        end_angle?: number;
+        start_point?: [number, number];
+        end_point?: [number, number];
+        point1?: [number, number];
+        point2?: [number, number];
+        point3?: [number, number];
+    }): Promise<AddSketchElementResponse> {
+        const request: AddSketchElementRequest = {
+            sketch_id: sketchId,
+            element_type: 'arc',
+            parameters: arcParams
+        };
+        
+        console.log('🌙 Adding arc to sketch:', request);
+        
+        const response = await this.makeRequest<AddSketchElementResponse>('/api/v1/cad/sketch-elements', 'POST', request);
+        
+        console.log('📨 Received addArcToSketch response:', response);
+        
+        if (response.data?.visualization_data && this.elementVisualizationCallback) {
+            this.elementVisualizationCallback(response.data.visualization_data);
+        }
+        
+        return response;
+    }
+    
+    public async addPolygonToSketch(sketchId: string, center: [number, number], sides: number, radius: number): Promise<AddSketchElementResponse> {
+        const request: AddSketchElementRequest = {
+            sketch_id: sketchId,
+            element_type: 'polygon',
+            parameters: {
+                center,
+                sides,
+                radius
+            }
+        };
+        
+        console.log('⬡ Adding polygon to sketch:', request);
+        
+        const response = await this.makeRequest<AddSketchElementResponse>('/api/v1/cad/sketch-elements', 'POST', request);
+        
+        console.log('📨 Received addPolygonToSketch response:', response);
+        
+        if (response.data?.visualization_data && this.elementVisualizationCallback) {
+            this.elementVisualizationCallback(response.data.visualization_data);
+        }
+        
+        return response;
+    }
+    
+    // ==================== MODIFICATION TOOLS ====================
+    
     public async addFilletToSketch(sketchId: string, element1Id: string, element2Id: string, radius: number): Promise<AddFilletResponse> {
         const request: AddFilletRequest = {
             sketch_id: sketchId,
@@ -195,6 +300,185 @@ export class CADClient {
         
         return response;
     }
+    
+    public async addChamferToSketch(sketchId: string, element1Id: string, element2Id: string, distance: number): Promise<AddChamferResponse> {
+        const request: AddChamferRequest = {
+            sketch_id: sketchId,
+            element1_id: element1Id,
+            element2_id: element2Id,
+            distance: distance
+        };
+        
+        console.log('🔶 Adding chamfer to sketch:', request);
+        
+        const response = await this.makeRequest<AddChamferResponse>('/api/v1/cad/chamfers', 'POST', request);
+        
+        console.log('📨 Received addChamferToSketch response:', response);
+        
+        if (response.data?.visualization_data && this.elementVisualizationCallback) {
+            this.elementVisualizationCallback(response.data.visualization_data);
+        }
+        
+        return response;
+    }
+    
+    // ==================== POSITIONING TOOLS ====================
+    
+    public async trimLineToLine(sketchId: string, lineToTrimId: string, cuttingLineId: string): Promise<TrimLineResponse> {
+        const request: TrimLineRequest = {
+            sketch_id: sketchId,
+            line_to_trim_id: lineToTrimId,
+            cutting_line_id: cuttingLineId
+        };
+        
+        console.log('✂️ Trimming line:', request);
+        
+        const response = await this.makeRequest<TrimLineResponse>('/api/v1/cad/trim-line-to-line', 'POST', request);
+        
+        if (response.data?.visualization_data && this.elementVisualizationCallback) {
+            this.elementVisualizationCallback(response.data.visualization_data);
+        }
+        
+        return response;
+    }
+    
+    public async extendLineToLine(sketchId: string, lineToExtendId: string, targetLineId: string): Promise<ExtendLineResponse> {
+        const request: ExtendLineRequest = {
+            sketch_id: sketchId,
+            line_to_extend_id: lineToExtendId,
+            target_line_id: targetLineId
+        };
+        
+        console.log('🔗 Extending line:', request);
+        
+        const response = await this.makeRequest<ExtendLineResponse>('/api/v1/cad/extend-line-to-line', 'POST', request);
+        
+        if (response.data?.visualization_data && this.elementVisualizationCallback) {
+            this.elementVisualizationCallback(response.data.visualization_data);
+        }
+        
+        return response;
+    }
+    
+    public async mirrorElement(sketchId: string, elementId: string, mirrorLine: { point1: [number, number]; point2: [number, number] }): Promise<MirrorElementResponse> {
+        const request: MirrorElementRequest = {
+            sketch_id: sketchId,
+            element_id: elementId,
+            mirror_line: mirrorLine
+        };
+        
+        console.log('🪞 Mirroring element:', request);
+        
+        const response = await this.makeRequest<MirrorElementResponse>('/api/v1/cad/mirror-elements', 'POST', request);
+        
+        if (response.data?.visualization_data && this.elementVisualizationCallback) {
+            this.elementVisualizationCallback(response.data.visualization_data);
+        }
+        
+        return response;
+    }
+    
+    public async offsetElement(sketchId: string, elementId: string, distance: number): Promise<OffsetElementResponse> {
+        const request: OffsetElementRequest = {
+            sketch_id: sketchId,
+            element_id: elementId,
+            distance: distance
+        };
+        
+        console.log('↔️ Offsetting element:', request);
+        
+        const response = await this.makeRequest<OffsetElementResponse>('/api/v1/cad/offset-elements', 'POST', request);
+        
+        if (response.data?.visualization_data && this.elementVisualizationCallback) {
+            this.elementVisualizationCallback(response.data.visualization_data);
+        }
+        
+        return response;
+    }
+    
+    public async copyElement(sketchId: string, elementId: string, translation: [number, number]): Promise<CopyElementResponse> {
+        const request: CopyElementRequest = {
+            sketch_id: sketchId,
+            element_id: elementId,
+            translation: translation
+        };
+        
+        console.log('📄 Copying element:', request);
+        
+        const response = await this.makeRequest<CopyElementResponse>('/api/v1/cad/copy-elements', 'POST', request);
+        
+        if (response.data?.visualization_data && this.elementVisualizationCallback) {
+            this.elementVisualizationCallback(response.data.visualization_data);
+        }
+        
+        return response;
+    }
+    
+    public async moveElement(sketchId: string, elementId: string, translation: [number, number]): Promise<MoveElementResponse> {
+        const request: MoveElementRequest = {
+            sketch_id: sketchId,
+            element_id: elementId,
+            translation: translation
+        };
+        
+        console.log('🚚 Moving element:', request);
+        
+        const response = await this.makeRequest<MoveElementResponse>('/api/v1/cad/move-elements', 'POST', request);
+        
+        if (response.data?.visualization_data && this.elementVisualizationCallback) {
+            this.elementVisualizationCallback(response.data.visualization_data);
+        }
+        
+        return response;
+    }
+    
+    // ==================== PATTERN TOOLS ====================
+    
+    public async createLinearArray(sketchId: string, elementId: string, direction: [number, number], count: number): Promise<CreateLinearArrayResponse> {
+        const request: CreateLinearArrayRequest = {
+            sketch_id: sketchId,
+            element_id: elementId,
+            direction: direction,
+            count: count
+        };
+        
+        console.log('📊 Creating linear array:', request);
+        
+        const response = await this.makeRequest<CreateLinearArrayResponse>('/api/v1/cad/linear-arrays', 'POST', request);
+        
+        if (response.data?.visualization_data && this.elementVisualizationCallback) {
+            // Handle multiple visualization data items for array elements
+            if (Array.isArray(response.data.visualization_data)) {
+                response.data.visualization_data.forEach(data => {
+                    this.elementVisualizationCallback!(data);
+                });
+            } else {
+                this.elementVisualizationCallback(response.data.visualization_data);
+            }
+        }
+        
+        return response;
+    }
+    
+    public async createMirrorArray(sketchId: string, elementId: string, mirrorLine: { point1: [number, number]; point2: [number, number] }): Promise<CreateMirrorArrayResponse> {
+        const request: CreateMirrorArrayRequest = {
+            sketch_id: sketchId,
+            element_id: elementId,
+            mirror_line: mirrorLine
+        };
+        
+        console.log('🔄 Creating mirror array:', request);
+        
+        const response = await this.makeRequest<CreateMirrorArrayResponse>('/api/v1/cad/mirror-arrays', 'POST', request);
+        
+        if (response.data?.visualization_data && this.elementVisualizationCallback) {
+            this.elementVisualizationCallback(response.data.visualization_data);
+        }
+        
+        return response;
+    }
+    
+    // ==================== 3D OPERATIONS ====================
     
     public async extrudeFeature(sketchId: string, distance: number, elementId?: string): Promise<ExtrudeFeatureResponse> {
         const request: ExtrudeFeatureRequest = {

@@ -23,7 +23,7 @@ export interface BoundingBox {
 
 // Sketch-based modeling types
 export type PlaneType = 'XY' | 'XZ' | 'YZ';
-export type SketchElementType = 'line' | 'circle' | 'arc' | 'rectangle' | 'fillet';
+export type SketchElementType = 'line' | 'circle' | 'arc' | 'rectangle' | 'polygon' | 'fillet' | 'chamfer';
 export type ExtrudeType = 'blind' | 'symmetric' | 'through_all' | 'to_surface';
 
 // New visualization data structures for non-mesh geometry
@@ -73,11 +73,25 @@ export interface SketchElementVisualizationData {
         width?: number;
         height?: number;
         
-        // For fillets
+        // For arcs
+        center?: [number, number];
+        start_angle?: number;
+        end_angle?: number;
+        start_point?: [number, number];
+        end_point?: [number, number];
+        point1?: [number, number];
+        point2?: [number, number];
+        point3?: [number, number];
+        
+        // For polygons
+        sides?: number;
+        
+        // For fillets and chamfers
         start_x?: number;
         start_y?: number;
         end_x?: number;
         end_y?: number;
+        distance?: number;
         referenced_elements?: string[];
     };
 }
@@ -103,11 +117,27 @@ export interface SketchElement {
     center_y?: number;
     radius?: number;
     
+    // For arcs
+    start_angle?: number;
+    end_angle?: number;
+    start_point?: [number, number];
+    end_point?: [number, number];
+    point1?: [number, number];
+    point2?: [number, number];
+    point3?: [number, number];
+    
     // For rectangles
     x?: number;
     y?: number;
     width?: number;
     height?: number;
+    
+    // For polygons
+    sides?: number;
+    
+    // For fillets and chamfers
+    distance?: number;
+    referenced_elements?: string[];
 }
 
 export interface Sketch {
