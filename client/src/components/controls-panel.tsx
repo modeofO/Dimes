@@ -42,9 +42,11 @@ interface ControlsPanelProps {
     onSetDrawingTool?: (tool: DrawingTool) => void;
     onSetActiveSketch?: (sketchId: string) => void;
     onSetArcType?: (arcType: ArcType) => void;
+    onSetPolygonSides?: (sides: number) => void;
     currentDrawingTool?: DrawingTool;
     activeSketchId?: string | null;
     currentArcType?: ArcType;
+    currentPolygonSides?: number;
 }
 
 export function ControlsPanel({
@@ -61,9 +63,11 @@ export function ControlsPanel({
     onSetDrawingTool,
     onSetActiveSketch,
     onSetArcType,
+    onSetPolygonSides,
     currentDrawingTool = 'select',
     activeSketchId,
-    currentArcType = 'endpoints_radius'
+    currentArcType = 'endpoints_radius',
+    currentPolygonSides = 6
 }: ControlsPanelProps) {
     // Form states
     const [planeType, setPlaneType] = useState('XY');
@@ -104,6 +108,11 @@ export function ControlsPanel({
     // Arc sub-tool state
     const [selectedArcType, setSelectedArcType] = useState<ArcType>('endpoints_radius');
     const [showArcSubTools, setShowArcSubTools] = useState(false);
+    
+    // Polygon sub-tool state
+    const [selectedPolygonSides, setSelectedPolygonSides] = useState(6);
+    const [polygonSidesInput, setPolygonSidesInput] = useState('6');
+    const [showPolygonSubTools, setShowPolygonSubTools] = useState(false);
 
     const createSketchPlane = useCallback(async () => {
         if (!client) return;
@@ -554,8 +563,8 @@ export function ControlsPanel({
                                 onClick={() => onSetDrawingTool?.('rectangle')}
                                 className={`px-2 py-1 text-xs rounded ${
                                     currentDrawingTool === 'rectangle' 
-                                    ? 'bg-yellow-600 text-white' 
-                                    : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+                                    ? 'bg-blue-600 text-white' 
+                                    : 'bg-blue-100 text-yellow-700 hover:bg-blue-200'
                                 }`}
                             >
                                 📐 Rectangle
@@ -578,14 +587,21 @@ export function ControlsPanel({
                                 🌙 Arc {currentDrawingTool === 'arc' && showArcSubTools ? '▼' : '▶'}
                             </button>
                             <button
-                                onClick={() => onSetDrawingTool?.('polygon')}
+                                onClick={() => {
+                                    if (currentDrawingTool === 'polygon') {
+                                        setShowPolygonSubTools(!showPolygonSubTools);
+                                    } else {
+                                        onSetDrawingTool?.('polygon');
+                                        setShowPolygonSubTools(true);
+                                    }
+                                }}
                                 className={`px-2 py-1 text-xs rounded ${
                                     currentDrawingTool === 'polygon' 
                                     ? 'bg-purple-600 text-white' 
                                     : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
                                 }`}
                             >
-                                ⬡ Polygon
+                                ⬡ Polygon {currentDrawingTool === 'polygon' && showPolygonSubTools ? '▼' : '▶'}
                             </button>
                         </div>
                         
@@ -628,6 +644,69 @@ export function ControlsPanel({
                                         ? '💡 Click three points: start, middle, end'
                                         : '💡 Click two endpoints, then enter radius'
                                     }
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* Polygon Sub-Tools */}
+                        {currentDrawingTool === 'polygon' && showPolygonSubTools && (
+                            <div className="mt-2 p-2 bg-purple-50 border border-purple-200 rounded">
+                                <div className="text-xs text-purple-800 mb-2 font-medium">Number of Sides:</div>
+                                <div className="grid grid-cols-3 gap-1 mb-2">
+                                    {[5, 6, 8].map(sides => (
+                                        <button
+                                            key={sides}
+                                            onClick={() => {
+                                                setSelectedPolygonSides(sides);
+                                                setPolygonSidesInput(sides.toString());
+                                                onSetPolygonSides?.(sides);
+                                                setShowPolygonSubTools(false);
+                                            }}
+                                            className={`px-2 py-1 text-xs rounded ${
+                                                currentPolygonSides === sides
+                                                ? 'bg-purple-600 text-white'
+                                                : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                                            }`}
+                                        >
+                                            {sides}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="flex gap-1">
+                                    <input
+                                        type="number"
+                                        min="3"
+                                        max="20"
+                                        value={polygonSidesInput}
+                                        onChange={(e) => {
+                                            const value = e.target.value;
+                                            setPolygonSidesInput(value);
+                                            
+                                            // Only update the actual sides if it's a valid number >= 3
+                                            const numValue = parseInt(value);
+                                            if (!isNaN(numValue) && numValue >= 3) {
+                                                setSelectedPolygonSides(numValue);
+                                            }
+                                        }}
+                                        className="flex-1 px-2 py-1 text-xs border border-purple-300 rounded"
+                                        placeholder="Custom"
+                                    />
+                                    <button
+                                        onClick={() => {
+                                            const numValue = parseInt(polygonSidesInput);
+                                            const validSides = !isNaN(numValue) && numValue >= 3 ? numValue : 3;
+                                            setSelectedPolygonSides(validSides);
+                                            setPolygonSidesInput(validSides.toString());
+                                            onSetPolygonSides?.(validSides);
+                                            setShowPolygonSubTools(false);
+                                        }}
+                                        className="px-2 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700"
+                                    >
+                                        Set
+                                    </button>
+                                </div>
+                                <div className="text-xs text-purple-600 mt-2">
+                                    💡 Click center, drag to set size ({currentPolygonSides} sides)
                                 </div>
                             </div>
                         )}
@@ -725,7 +804,7 @@ export function ControlsPanel({
                                 currentDrawingTool === 'circle' ? 'Click center, drag to set radius' :
                                 currentDrawingTool === 'rectangle' ? 'Click and drag corners' :
                                 currentDrawingTool === 'arc' ? 'Click center, drag to set radius' :
-                                currentDrawingTool === 'polygon' ? 'Click center, drag to set size' :
+                                currentDrawingTool === 'polygon' ? `Click center, drag to set size (${currentPolygonSides} sides)` :
                                 currentDrawingTool === 'fillet' ? 'Click two lines to fillet' :
                                 currentDrawingTool === 'chamfer' ? 'Click two lines to chamfer' :
                                 currentDrawingTool === 'trim' ? 'Click line to trim, then cutting line' :

@@ -57,6 +57,7 @@ export function CADApplication() {
     const [currentDrawingTool, setCurrentDrawingTool] = useState<DrawingTool>('select');
     const [activeSketchId, setActiveSketchId] = useState<string | null>(null);
     const [currentArcType, setCurrentArcType] = useState<'three_points' | 'endpoints_radius'>('endpoints_radius');
+    const [currentPolygonSides, setCurrentPolygonSides] = useState(6);
 
     // Debug: Track activeSketchId changes
     useEffect(() => {
@@ -105,6 +106,10 @@ export function CADApplication() {
             if (tool === 'arc') {
                 rendererRef.current.setArcType(currentArcType);
             }
+            // For polygon tool, also set the current polygon sides
+            if (tool === 'polygon') {
+                rendererRef.current.setPolygonSides(currentPolygonSides);
+            }
         }
         updateStatus(`Selected tool: ${tool}`, 'info');
     }, [updateStatus, currentArcType]);
@@ -131,6 +136,14 @@ export function CADApplication() {
             rendererRef.current.setArcType(arcType);
         }
         updateStatus(`Set arc type: ${arcType}`, 'info');
+    }, [updateStatus]);
+
+    const handleSetPolygonSides = useCallback((sides: number) => {
+        setCurrentPolygonSides(sides);
+        if (rendererRef.current) {
+            rendererRef.current.setPolygonSides(sides);
+        }
+        updateStatus(`Set polygon sides: ${sides}`, 'info');
     }, [updateStatus]);
 
     const handleInteractiveDrawing = useCallback(async (tool: DrawingTool, points: THREE.Vector2[], arcType?: 'three_points' | 'endpoints_radius') => {
@@ -240,10 +253,9 @@ export function CADApplication() {
                     break;
                 case 'polygon':
                     const polygonRadius = start.distanceTo(end);
-                    const sides = 6; // Default hexagon
-                    console.log('⬡ Creating polygon via API:', { center_x: start.x, center_y: start.y, sides, radius: polygonRadius });
+                    console.log('⬡ Creating polygon via API:', { center_x: start.x, center_y: start.y, sides: currentPolygonSides, radius: polygonRadius });
                     response = await clientRef.current.addPolygonToSketch(
-                        currentActiveSketchId, start.x, start.y, sides, polygonRadius
+                        currentActiveSketchId, start.x, start.y, currentPolygonSides, polygonRadius
                     );
                     break;
                 default:
@@ -260,7 +272,7 @@ export function CADApplication() {
             console.error('Interactive drawing error:', error);
             updateStatus(`❌ Error creating ${tool}: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
         }
-    }, [activeSketchId, updateStatus]);
+    }, [activeSketchId, updateStatus, currentPolygonSides, currentArcType]);
 
     // Update the renderer's drawing callback whenever the handler changes
     useEffect(() => {
@@ -512,9 +524,11 @@ export function CADApplication() {
                     onSetDrawingTool={handleSetDrawingTool}
                     onSetActiveSketch={handleSetActiveSketch}
                     onSetArcType={handleSetArcType}
+                    onSetPolygonSides={handleSetPolygonSides}
                     currentDrawingTool={currentDrawingTool}
                     activeSketchId={activeSketchId}
                     currentArcType={currentArcType}
+                    currentPolygonSides={currentPolygonSides}
                 />
             </div>
 

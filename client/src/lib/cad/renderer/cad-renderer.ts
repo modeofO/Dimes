@@ -322,6 +322,10 @@ export class CADRenderer {
         this.controls.setArcType(arcType);
     }
     
+    public setPolygonSides(sides: number): void {
+        this.controls.setPolygonSides(sides);
+    }
+    
     public setActiveSketchPlane(sketch_id: string, data: SketchVisualizationData): void {
         this.activeSketchPlane = {
             sketch_id,

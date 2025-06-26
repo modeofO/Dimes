@@ -122,7 +122,7 @@ export class VisualizationManager {
             rectGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
             
             const rectMaterial = new THREE.LineBasicMaterial({
-                color: 0xffff00, // Yellow color for rectangles
+                color: 0x0066ff, // Blue color for rectangles
                 linewidth: 2
             });
             

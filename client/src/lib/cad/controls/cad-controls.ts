@@ -27,6 +27,7 @@ export interface DrawingState {
     points?: THREE.Vector3[]; // For multi-point tools like three-point arc
     previewGeometry?: THREE.Object3D;
     arcType?: ArcType; // Selected arc type when tool is 'arc'
+    polygonSides?: number; // Selected number of sides for polygon
     activeSketchPlane?: {
         sketch_id: string;
         origin: THREE.Vector3;
@@ -90,6 +91,11 @@ export class CADControls extends OrbitControls {
             this.drawingState.arcType = 'endpoints_radius';
         }
         
+        // Set default polygon sides for polygon tool
+        if (tool === 'polygon' && !this.drawingState.polygonSides) {
+            this.drawingState.polygonSides = 6;
+        }
+        
         // Disable/enable orbit controls based on tool
         const isInteractiveTool = tool !== 'select';
         this.enablePan = !isInteractiveTool;
@@ -114,6 +120,12 @@ export class CADControls extends OrbitControls {
         }
         
         console.log(`Set arc type: ${arcType}`);
+    }
+    
+    public setPolygonSides(sides: number): void {
+        this.drawingState.polygonSides = sides;
+        
+        console.log(`Set polygon sides: ${sides}`);
     }
     
     public setActiveSketchPlane(sketch_id: string, origin: THREE.Vector3, normal: THREE.Vector3, u_axis: THREE.Vector3, v_axis: THREE.Vector3): void {
@@ -432,7 +444,7 @@ export class CADControls extends OrbitControls {
         
         const geometry = new THREE.BufferGeometry().setFromPoints(points);
         const material = new THREE.LineBasicMaterial({ 
-            color: 0xffff00, 
+            color: 0x0066ff, 
             transparent: true, 
             opacity: 0.7,
             linewidth: 2
@@ -514,7 +526,7 @@ export class CADControls extends OrbitControls {
     
     private createPolygonPreview(start: THREE.Vector3, end: THREE.Vector3): THREE.Object3D {
         const radius = start.distanceTo(end);
-        const sides = 6; // Default hexagon for preview
+        const sides = this.drawingState.polygonSides || 6; // Use current polygon sides setting
         
         if (!this.drawingState.activeSketchPlane) return this.createLinePreview(start, end);
         
