@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { CADClient } from '@/lib/cad/api/cad-client';
-import { DrawingTool } from '@/lib/cad/controls/cad-controls';
+import { DrawingTool, ArcType } from '@/lib/cad/controls/cad-controls';
 
 interface CreatedShape {
     id: string;
@@ -41,8 +41,10 @@ interface ControlsPanelProps {
     onClearRenderer?: () => void;
     onSetDrawingTool?: (tool: DrawingTool) => void;
     onSetActiveSketch?: (sketchId: string) => void;
+    onSetArcType?: (arcType: ArcType) => void;
     currentDrawingTool?: DrawingTool;
     activeSketchId?: string | null;
+    currentArcType?: ArcType;
 }
 
 export function ControlsPanel({
@@ -58,8 +60,10 @@ export function ControlsPanel({
     onClearRenderer,
     onSetDrawingTool,
     onSetActiveSketch,
+    onSetArcType,
     currentDrawingTool = 'select',
-    activeSketchId
+    activeSketchId,
+    currentArcType = 'endpoints_radius'
 }: ControlsPanelProps) {
     // Form states
     const [planeType, setPlaneType] = useState('XY');
@@ -71,11 +75,14 @@ export function ControlsPanel({
     const [circleParams, setCircleParams] = useState({ x: 0, y: 0, radius: 5 });
     const [rectangleParams, setRectangleParams] = useState({ x: 0, y: 0, width: 10, height: 5 });
     const [arcParams, setArcParams] = useState({ 
-        type: 'center_radius' as 'center_radius' | 'three_points' | 'endpoints_radius',
-        center: [0, 0] as [number, number], 
-        radius: 5, 
-        startAngle: 0, 
-        endAngle: 90 
+        arc_type: 'endpoints_radius' as ArcType,
+        x1: 0,
+        y1: 0,
+        x2: 10,
+        y2: 10,
+        radius: 5,
+        x_mid: 5,
+        y_mid: 5
     });
     const [polygonParams, setPolygonParams] = useState({ center: [0, 0] as [number, number], sides: 6, radius: 5 });
     const [extrudeDistance, setExtrudeDistance] = useState(10);
@@ -93,6 +100,10 @@ export function ControlsPanel({
     });
     const [arrayDirection, setArrayDirection] = useState({ x: 10, y: 0 });
     const [arrayCount, setArrayCount] = useState(3);
+    
+    // Arc sub-tool state
+    const [selectedArcType, setSelectedArcType] = useState<ArcType>('endpoints_radius');
+    const [showArcSubTools, setShowArcSubTools] = useState(false);
 
     const createSketchPlane = useCallback(async () => {
         if (!client) return;
@@ -163,17 +174,12 @@ export function ControlsPanel({
                     rectangleParams.height
                 );
             } else if (elementType === 'arc') {
-                response = await client.addArcToSketch(selectedSketch, {
-                    type: arcParams.type,
-                    center: arcParams.center,
-                    radius: arcParams.radius,
-                    start_angle: arcParams.startAngle * Math.PI / 180, // Convert to radians
-                    end_angle: arcParams.endAngle * Math.PI / 180
-                });
+                response = await client.addArcToSketch(selectedSketch, arcParams);
             } else if (elementType === 'polygon') {
                 response = await client.addPolygonToSketch(
                     selectedSketch,
-                    polygonParams.center,
+                    polygonParams.center[0],
+                    polygonParams.center[1],
                     polygonParams.sides,
                     polygonParams.radius
                 );
@@ -555,14 +561,21 @@ export function ControlsPanel({
                                 📐 Rectangle
                             </button>
                             <button
-                                onClick={() => onSetDrawingTool?.('arc')}
+                                onClick={() => {
+                                    if (currentDrawingTool === 'arc') {
+                                        setShowArcSubTools(!showArcSubTools);
+                                    } else {
+                                        onSetDrawingTool?.('arc');
+                                        setShowArcSubTools(true);
+                                    }
+                                }}
                                 className={`px-2 py-1 text-xs rounded ${
                                     currentDrawingTool === 'arc' 
                                     ? 'bg-orange-600 text-white' 
                                     : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
                                 }`}
                             >
-                                🌙 Arc
+                                🌙 Arc {currentDrawingTool === 'arc' && showArcSubTools ? '▼' : '▶'}
                             </button>
                             <button
                                 onClick={() => onSetDrawingTool?.('polygon')}
@@ -575,6 +588,49 @@ export function ControlsPanel({
                                 ⬡ Polygon
                             </button>
                         </div>
+                        
+                        {/* Arc Sub-Tools */}
+                        {currentDrawingTool === 'arc' && showArcSubTools && (
+                            <div className="mt-2 p-2 bg-orange-50 border border-orange-200 rounded">
+                                <div className="text-xs text-orange-800 mb-2 font-medium">Arc Creation Method:</div>
+                                <div className="grid grid-cols-1 gap-2">
+                                    <button
+                                        onClick={() => {
+                                            setSelectedArcType('three_points');
+                                            onSetArcType?.('three_points');
+                                            setShowArcSubTools(false);
+                                        }}
+                                        className={`px-2 py-1 text-xs rounded ${
+                                            currentArcType === 'three_points'
+                                            ? 'bg-orange-600 text-white'
+                                            : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                                        }`}
+                                    >
+                                        📍 Three Points Arc
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setSelectedArcType('endpoints_radius');
+                                            onSetArcType?.('endpoints_radius');
+                                            setShowArcSubTools(false);
+                                        }}
+                                        className={`px-2 py-1 text-xs rounded ${
+                                            currentArcType === 'endpoints_radius'
+                                            ? 'bg-orange-600 text-white'
+                                            : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                                        }`}
+                                    >
+                                        📏 Endpoints + Radius Arc
+                                    </button>
+                                </div>
+                                <div className="text-xs text-orange-600 mt-2">
+                                    {currentArcType === 'three_points' 
+                                        ? '💡 Click three points: start, middle, end'
+                                        : '💡 Click two endpoints, then enter radius'
+                                    }
+                                </div>
+                            </div>
+                        )}
                         
                         <div className="text-xs text-gray-600 mt-3 mb-2">
                             Modification Tools:

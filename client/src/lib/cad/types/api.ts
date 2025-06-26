@@ -100,14 +100,10 @@ export interface AddSketchElementRequest {
         height?: number;
         
         // For arcs
-        center?: [number, number];
-        start_angle?: number;
-        end_angle?: number;
-        start?: [number, number];
-        end?: [number, number];
-        point1?: [number, number];
-        point2?: [number, number];
-        point3?: [number, number];
+        arc_type?: 'three_points' | 'endpoints_radius';
+        x_mid?: number;
+        y_mid?: number;
+        large_arc?: boolean;
         
         // For polygons
         sides?: number;

@@ -21,7 +21,7 @@ export class CADRenderer {
     private pointerDownPos = new THREE.Vector2();
     private selectionBox: THREE.BoxHelper | null = null;
     public onObjectSelected: ((id: string | null, type: string | null) => void) | null = null;
-    public onDrawingComplete: ((tool: DrawingTool, points: THREE.Vector2[]) => void) | null = null;
+    public onDrawingComplete: ((tool: DrawingTool, points: THREE.Vector2[], arcType?: 'three_points' | 'endpoints_radius') => void) | null = null;
     
     // Current active sketch plane for drawing
     private activeSketchPlane: {
@@ -90,9 +90,9 @@ export class CADRenderer {
         this.controls = new CADControls(this.camera, this.renderer.domElement, this.scene);
         
         // Set up drawing callbacks
-        this.controls.onDrawingComplete = (tool: DrawingTool, points: THREE.Vector2[]) => {
+        this.controls.onDrawingComplete = (tool: DrawingTool, points: THREE.Vector2[], arcType?: 'three_points' | 'endpoints_radius') => {
             if (this.onDrawingComplete) {
-                this.onDrawingComplete(tool, points);
+                this.onDrawingComplete(tool, points, arcType);
             }
         };
         
@@ -316,6 +316,10 @@ export class CADRenderer {
     // Interactive drawing methods
     public setDrawingTool(tool: DrawingTool): void {
         this.controls.setDrawingTool(tool);
+    }
+    
+    public setArcType(arcType: 'three_points' | 'endpoints_radius'): void {
+        this.controls.setArcType(arcType);
     }
     
     public setActiveSketchPlane(sketch_id: string, data: SketchVisualizationData): void {

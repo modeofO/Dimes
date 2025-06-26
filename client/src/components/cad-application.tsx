@@ -56,6 +56,7 @@ export function CADApplication() {
     const [chatMessages, setChatMessages] = useState<Array<{ sender: 'user' | 'agent'; text: string }>>([]);
     const [currentDrawingTool, setCurrentDrawingTool] = useState<DrawingTool>('select');
     const [activeSketchId, setActiveSketchId] = useState<string | null>(null);
+    const [currentArcType, setCurrentArcType] = useState<'three_points' | 'endpoints_radius'>('endpoints_radius');
 
     // Debug: Track activeSketchId changes
     useEffect(() => {
@@ -100,9 +101,13 @@ export function CADApplication() {
         setCurrentDrawingTool(tool);
         if (rendererRef.current) {
             rendererRef.current.setDrawingTool(tool);
+            // For arc tool, also set the current arc type
+            if (tool === 'arc') {
+                rendererRef.current.setArcType(currentArcType);
+            }
         }
         updateStatus(`Selected tool: ${tool}`, 'info');
-    }, [updateStatus]);
+    }, [updateStatus, currentArcType]);
 
     const handleSetActiveSketch = useCallback((sketchId: string) => {
         console.log('🎯 handleSetActiveSketch called with:', sketchId);
@@ -120,23 +125,43 @@ export function CADApplication() {
         }
     }, [createdSketches, updateStatus]);
 
-    const handleInteractiveDrawing = useCallback(async (tool: DrawingTool, points: THREE.Vector2[]) => {
+    const handleSetArcType = useCallback((arcType: 'three_points' | 'endpoints_radius') => {
+        setCurrentArcType(arcType);
+        if (rendererRef.current) {
+            rendererRef.current.setArcType(arcType);
+        }
+        updateStatus(`Set arc type: ${arcType}`, 'info');
+    }, [updateStatus]);
+
+    const handleInteractiveDrawing = useCallback(async (tool: DrawingTool, points: THREE.Vector2[], arcType?: 'three_points' | 'endpoints_radius') => {
         // Get the current activeSketchId from state at call time (not closure time)
         const currentActiveSketchId = activeSketchId;
         
         console.log('🎯 handleInteractiveDrawing called:', {
             tool,
             points,
+            arcType,
             currentActiveSketchId,
             clientExists: !!clientRef.current,
-            pointsLength: points.length
+            pointsLength: points.length,
+            expectedArcType: currentArcType
         });
         
-        if (!clientRef.current || !currentActiveSketchId || points.length < 2) {
+        if (!clientRef.current || !currentActiveSketchId) {
             console.log('❌ handleInteractiveDrawing: Missing requirements', {
                 client: !!clientRef.current,
                 currentActiveSketchId,
                 pointsLength: points.length
+            });
+            return;
+        }
+        
+        // Validate points based on tool and arc type
+        const requiredPoints = (tool === 'arc' && arcType === 'three_points') ? 3 : 2;
+        if (points.length < requiredPoints) {
+            console.log('❌ handleInteractiveDrawing: Insufficient points', {
+                required: requiredPoints,
+                actual: points.length
             });
             return;
         }
@@ -167,6 +192,58 @@ export function CADApplication() {
                     console.log('📐 Creating rectangle via API:', { width, height });
                     response = await clientRef.current.addRectangleToSketch(
                         currentActiveSketchId, [Math.min(start.x, end.x), Math.min(start.y, end.y)], width, height
+                    );
+                    break;
+                case 'arc':
+                    if (arcType === 'three_points') {
+                        if (points.length >= 3) {
+                            const [p1, p2, p3] = points;
+                            console.log('🌙 Creating three-point arc via API');
+                            response = await clientRef.current.addArcToSketch(
+                                currentActiveSketchId, {
+                                    arc_type: 'three_points',
+                                    x1: p1.x,
+                                    y1: p1.y,
+                                    x_mid: p2.x,
+                                    y_mid: p2.y,
+                                    x2: p3.x,
+                                    y2: p3.y
+                                }
+                            );
+                        } else {
+                            console.log('❌ Three-point arc requires 3 points, got:', points.length);
+                            return;
+                        }
+                    } else if (arcType === 'endpoints_radius') {
+                        if (points.length >= 2) {
+                            // endpoints_radius arc - prompt for radius
+                            const radius = parseFloat(prompt('Enter arc radius:') || '5');
+                            console.log('🌙 Creating endpoints-radius arc via API with radius:', radius);
+                            response = await clientRef.current.addArcToSketch(
+                                currentActiveSketchId, {
+                                    arc_type: 'endpoints_radius',
+                                    x1: points[0].x,
+                                    y1: points[0].y,
+                                    x2: points[1].x,
+                                    y2: points[1].y,
+                                    radius: radius
+                                }
+                            );
+                        } else {
+                            console.log('❌ Endpoints-radius arc requires 2 points, got:', points.length);
+                            return;
+                        }
+                    } else {
+                        console.log('❌ Unknown arc type:', arcType);
+                        return;
+                    }
+                    break;
+                case 'polygon':
+                    const polygonRadius = start.distanceTo(end);
+                    const sides = 6; // Default hexagon
+                    console.log('⬡ Creating polygon via API:', { center_x: start.x, center_y: start.y, sides, radius: polygonRadius });
+                    response = await clientRef.current.addPolygonToSketch(
+                        currentActiveSketchId, start.x, start.y, sides, polygonRadius
                     );
                     break;
                 default:
@@ -434,8 +511,10 @@ export function CADApplication() {
                     onClearRenderer={clearRenderer}
                     onSetDrawingTool={handleSetDrawingTool}
                     onSetActiveSketch={handleSetActiveSketch}
+                    onSetArcType={handleSetArcType}
                     currentDrawingTool={currentDrawingTool}
                     activeSketchId={activeSketchId}
+                    currentArcType={currentArcType}
                 />
             </div>
 

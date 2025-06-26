@@ -222,16 +222,17 @@ export class CADClient {
     // ==================== NEW 2D TOOLS ====================
     
     public async addArcToSketch(sketchId: string, arcParams: {
-        type: 'center_radius' | 'three_points' | 'endpoints_radius';
-        center?: [number, number];
+        arc_type: 'three_points' | 'endpoints_radius';
+        // For three_points
+        x1?: number;
+        y1?: number;
+        x_mid?: number;
+        y_mid?: number;
+        x2?: number;
+        y2?: number;
+        // For endpoints_radius
         radius?: number;
-        start_angle?: number;
-        end_angle?: number;
-        start_point?: [number, number];
-        end_point?: [number, number];
-        point1?: [number, number];
-        point2?: [number, number];
-        point3?: [number, number];
+        large_arc?: boolean;
     }): Promise<AddSketchElementResponse> {
         const request: AddSketchElementRequest = {
             sketch_id: sketchId,
@@ -252,12 +253,13 @@ export class CADClient {
         return response;
     }
     
-    public async addPolygonToSketch(sketchId: string, center: [number, number], sides: number, radius: number): Promise<AddSketchElementResponse> {
+    public async addPolygonToSketch(sketchId: string, center_x: number, center_y: number, sides: number, radius: number): Promise<AddSketchElementResponse> {
         const request: AddSketchElementRequest = {
             sketch_id: sketchId,
             element_type: 'polygon',
             parameters: {
-                center,
+                center_x,
+                center_y,
                 sides,
                 radius
             }

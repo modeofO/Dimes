@@ -17,12 +17,16 @@ export type DrawingTool =
     | 'copy'
     | 'move';
 
+export type ArcType = 'three_points' | 'endpoints_radius';
+
 export interface DrawingState {
     tool: DrawingTool;
     isDrawing: boolean;
     startPoint?: THREE.Vector3;
     currentPoint?: THREE.Vector3;
+    points?: THREE.Vector3[]; // For multi-point tools like three-point arc
     previewGeometry?: THREE.Object3D;
+    arcType?: ArcType; // Selected arc type when tool is 'arc'
     activeSketchPlane?: {
         sketch_id: string;
         origin: THREE.Vector3;
@@ -40,9 +44,10 @@ export class CADControls extends OrbitControls {
     private scene: THREE.Scene;
     
     // Callbacks
-    public onDrawingComplete?: (tool: DrawingTool, points: THREE.Vector2[]) => void;
+    public onDrawingComplete?: (tool: DrawingTool, points: THREE.Vector2[], arcType?: ArcType) => void;
     public onDrawingPreview?: (tool: DrawingTool, points: THREE.Vector2[], previewGeometry: THREE.Object3D) => void;
     public onToolChanged?: (tool: DrawingTool) => void;
+    public onArcTypeChanged?: (arcType: ArcType) => void;
 
     constructor(camera: THREE.Camera, domElement: HTMLElement, scene: THREE.Scene) {
         super(camera, domElement);
@@ -80,6 +85,11 @@ export class CADControls extends OrbitControls {
         
         this.drawingState.tool = tool;
         
+        // Set default arc type for arc tool
+        if (tool === 'arc' && !this.drawingState.arcType) {
+            this.drawingState.arcType = 'endpoints_radius';
+        }
+        
         // Disable/enable orbit controls based on tool
         const isInteractiveTool = tool !== 'select';
         this.enablePan = !isInteractiveTool;
@@ -91,6 +101,19 @@ export class CADControls extends OrbitControls {
         }
         
         console.log(`Selected drawing tool: ${tool}`);
+    }
+    
+    public setArcType(arcType: ArcType): void {
+        this.drawingState.arcType = arcType;
+        
+        // Clear any existing drawing state when changing arc type
+        this.cancelDrawing();
+        
+        if (this.onArcTypeChanged) {
+            this.onArcTypeChanged(arcType);
+        }
+        
+        console.log(`Set arc type: ${arcType}`);
     }
     
     public setActiveSketchPlane(sketch_id: string, origin: THREE.Vector3, normal: THREE.Vector3, u_axis: THREE.Vector3, v_axis: THREE.Vector3): void {
@@ -120,11 +143,43 @@ export class CADControls extends OrbitControls {
         const worldPoint = this.getWorldPointOnSketchPlane(event);
         if (!worldPoint) return;
         
-        this.drawingState.isDrawing = true;
-        this.drawingState.startPoint = worldPoint;
-        this.drawingState.currentPoint = worldPoint;
-        
-        console.log(`Started drawing ${this.drawingState.tool} at:`, worldPoint);
+        // Handle multi-point tools (three-point arc and endpoints+radius arc)
+        if (this.drawingState.tool === 'arc' && (this.drawingState.arcType === 'three_points' || this.drawingState.arcType === 'endpoints_radius')) {
+            if (!this.drawingState.points) {
+                this.drawingState.points = [];
+            }
+            
+            this.drawingState.points.push(worldPoint.clone());
+            this.drawingState.currentPoint = worldPoint;
+            
+            if (this.drawingState.arcType === 'three_points') {
+                if (this.drawingState.points.length === 1) {
+                    this.drawingState.isDrawing = true;
+                    console.log(`Started three-point arc at point 1:`, worldPoint);
+                } else if (this.drawingState.points.length === 2) {
+                    console.log(`Added point 2 for three-point arc:`, worldPoint);
+                } else if (this.drawingState.points.length === 3) {
+                    console.log(`Completed three-point arc with point 3:`, worldPoint);
+                    this.completeThreePointArc();
+                    return;
+                }
+            } else if (this.drawingState.arcType === 'endpoints_radius') {
+                if (this.drawingState.points.length === 1) {
+                    this.drawingState.isDrawing = true;
+                    console.log(`Started endpoints+radius arc at point 1:`, worldPoint);
+                } else if (this.drawingState.points.length === 2) {
+                    console.log(`Completed endpoints+radius arc with point 2:`, worldPoint);
+                    this.completeEndpointsRadiusArc();
+                    return;
+                }
+            }
+        } else {
+            // Standard two-point drawing
+            this.drawingState.isDrawing = true;
+            this.drawingState.startPoint = worldPoint;
+            this.drawingState.currentPoint = worldPoint;
+            console.log(`Started drawing ${this.drawingState.tool} at:`, worldPoint);
+        }
     }
     
     private onPointerMove(event: PointerEvent): void {
@@ -143,6 +198,11 @@ export class CADControls extends OrbitControls {
     }
     
     private onPointerUp(event: PointerEvent): void {
+        // Skip for multi-point arcs (handled in onPointerDown)
+        if (this.drawingState.tool === 'arc' && (this.drawingState.arcType === 'three_points' || this.drawingState.arcType === 'endpoints_radius')) {
+            return;
+        }
+        
         if (!this.drawingState.isDrawing || !this.drawingState.startPoint || !this.drawingState.currentPoint || !this.drawingState.activeSketchPlane) {
             console.log('❌ onPointerUp: Missing required drawing state');
             return;
@@ -151,7 +211,7 @@ export class CADControls extends OrbitControls {
         event.preventDefault();
         event.stopPropagation();
         
-        // Convert world points to 2D sketch coordinates
+        // Standard two-point completion
         const start2D = this.worldToSketch2D(this.drawingState.startPoint);
         const end2D = this.worldToSketch2D(this.drawingState.currentPoint);
         
@@ -175,6 +235,64 @@ export class CADControls extends OrbitControls {
             }
         } else {
             console.log('❌ Failed to convert world coordinates to 2D sketch coordinates');
+        }
+        
+        this.finishDrawing();
+    }
+    
+    private completeThreePointArc(): void {
+        console.log('🔧 completeThreePointArc called:', {
+            pointsLength: this.drawingState.points?.length,
+            arcType: this.drawingState.arcType,
+            hasCallback: !!this.onDrawingComplete
+        });
+        
+        if (!this.drawingState.points || this.drawingState.points.length !== 3) {
+            console.log('❌ Invalid three-point arc state');
+            return;
+        }
+        
+        // Convert all three points to 2D
+        const points2D: THREE.Vector2[] = [];
+        for (const worldPoint of this.drawingState.points) {
+            const point2D = this.worldToSketch2D(worldPoint);
+            if (point2D) {
+                points2D.push(point2D);
+            }
+        }
+        
+        if (points2D.length === 3 && this.onDrawingComplete) {
+            console.log('🎯 Completing three-point arc with points:', points2D, 'arcType:', this.drawingState.arcType);
+            this.onDrawingComplete(this.drawingState.tool, points2D, this.drawingState.arcType);
+        }
+        
+        this.finishDrawing();
+    }
+    
+    private completeEndpointsRadiusArc(): void {
+        console.log('🔧 completeEndpointsRadiusArc called:', {
+            pointsLength: this.drawingState.points?.length,
+            arcType: this.drawingState.arcType,
+            hasCallback: !!this.onDrawingComplete
+        });
+        
+        if (!this.drawingState.points || this.drawingState.points.length !== 2) {
+            console.log('❌ Invalid endpoints-radius arc state - need exactly 2 points');
+            return;
+        }
+        
+        // Convert both points to 2D
+        const points2D: THREE.Vector2[] = [];
+        for (const worldPoint of this.drawingState.points) {
+            const point2D = this.worldToSketch2D(worldPoint);
+            if (point2D) {
+                points2D.push(point2D);
+            }
+        }
+        
+        if (points2D.length === 2 && this.onDrawingComplete) {
+            console.log('🎯 Completing endpoints-radius arc with points:', points2D, 'arcType:', this.drawingState.arcType);
+            this.onDrawingComplete(this.drawingState.tool, points2D, this.drawingState.arcType);
         }
         
         this.finishDrawing();
@@ -269,6 +387,10 @@ export class CADControls extends OrbitControls {
                 return this.createRectanglePreview(start, end);
             case 'circle':
                 return this.createCirclePreview(start, end);
+            case 'arc':
+                return this.createArcPreview(start, end);
+            case 'polygon':
+                return this.createPolygonPreview(start, end);
             default:
                 return this.createLinePreview(start, end); // Default to line preview
         }
@@ -348,16 +470,89 @@ export class CADControls extends OrbitControls {
         return new THREE.LineLoop(geometry, material);
     }
     
-    private finishDrawing(): void {
+    private createArcPreview(start: THREE.Vector3, end: THREE.Vector3): THREE.Object3D {
+        const radius = start.distanceTo(end);
+        const segments = 16;
+        
+        if (!this.drawingState.activeSketchPlane) return this.createLinePreview(start, end);
+        
+        const { u_axis, v_axis } = this.drawingState.activeSketchPlane;
+        
+        // Convert end point to 2D to determine angle
+        const start2D = this.worldToSketch2D(start);
+        const end2D = this.worldToSketch2D(end);
+        
+        if (!start2D || !end2D) return this.createLinePreview(start, end);
+        
+        // Calculate angle from start to end point
+        const angle = Math.atan2(end2D.y - start2D.y, end2D.x - start2D.x);
+        const arcAngle = Math.PI / 2; // 90 degree arc for preview
+        
+        const points: THREE.Vector3[] = [];
+        
+        for (let i = 0; i <= segments; i++) {
+            const t = i / segments;
+            const currentAngle = angle - arcAngle/2 + t * arcAngle;
+            const x = Math.cos(currentAngle) * radius;
+            const y = Math.sin(currentAngle) * radius;
+            
+            const point = start.clone()
+                .add(u_axis.clone().multiplyScalar(x))
+                .add(v_axis.clone().multiplyScalar(y));
+            points.push(point);
+        }
+        
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const material = new THREE.LineBasicMaterial({ 
+            color: 0xffa500, 
+            transparent: true, 
+            opacity: 0.7,
+            linewidth: 2
+        });
+        return new THREE.Line(geometry, material);
+    }
+    
+    private createPolygonPreview(start: THREE.Vector3, end: THREE.Vector3): THREE.Object3D {
+        const radius = start.distanceTo(end);
+        const sides = 6; // Default hexagon for preview
+        
+        if (!this.drawingState.activeSketchPlane) return this.createLinePreview(start, end);
+        
+        const { u_axis, v_axis } = this.drawingState.activeSketchPlane;
+        const points: THREE.Vector3[] = [];
+        
+        for (let i = 0; i <= sides; i++) {
+            const angle = (i / sides) * Math.PI * 2;
+            const x = Math.cos(angle) * radius;
+            const y = Math.sin(angle) * radius;
+            
+            const point = start.clone()
+                .add(u_axis.clone().multiplyScalar(x))
+                .add(v_axis.clone().multiplyScalar(y));
+            points.push(point);
+        }
+        
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const material = new THREE.LineBasicMaterial({ 
+            color: 0x800080, 
+            transparent: true, 
+            opacity: 0.7,
+            linewidth: 2
+        });
+        return new THREE.LineLoop(geometry, material);
+    }
+    
+        private finishDrawing(): void {
         // Clean up preview geometry
         if (this.drawingState.previewGeometry) {
             this.scene.remove(this.drawingState.previewGeometry);
             this.drawingState.previewGeometry = undefined;
         }
-        
+    
         this.drawingState.isDrawing = false;
         this.drawingState.startPoint = undefined;
         this.drawingState.currentPoint = undefined;
+        this.drawingState.points = undefined;
         
         console.log(`Finished drawing ${this.drawingState.tool}`);
     }
