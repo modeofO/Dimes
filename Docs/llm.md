@@ -133,7 +133,7 @@ Create a file named `agent.ts`:
 import { createDreams, context, input, output } from "@daydreamsai/core";
 import { cliExtension } from "@daydreamsai/cli";
 import { openai } from "@ai-sdk/openai";
-import { z } from "zod";
+import * as z from "zod/v4";
 
 // 1. Define the main context for our agent
 const echoContext = context({
@@ -550,7 +550,7 @@ import {
   validateEnv,
 } from "@daydreamsai/core";
 import { cliExtension } from "@daydreamsai/cli";
-import { z } from "zod";
+import * as z from "zod/v4";
 
 // Validate environment variables
 const env = validateEnv(
@@ -622,6 +622,4158 @@ main();
   and act
 * **[Memory Systems](/docs/core/concepts/memory)** - Persistent and working
   memory
+
+
+file: ./content/docs/core/concepts/actions.mdx
+meta: {
+  "title": "Actions",
+  "description": "Define capabilities and interactions for your Daydreams agent."
+}
+        
+## What is an Action?
+
+An action is something your agent can **do** - like calling an API, saving data,
+or performing calculations. Think of actions as giving your agent superpowers.
+
+## Real Examples
+
+Here are actions that make agents useful:
+
+### Weather Action
+
+```typescript title="weather-action.ts"
+// Agent can check weather
+const getWeather = action({
+  name: "get-weather",
+  description: "Gets current weather for a city",
+  schema: z.object({
+    city: z.string(),
+  }),
+  handler: async ({ city }) => {
+    const response = await fetch(`https://api.weather.com/${city}`);
+    return await response.json(); // { temperature: "72°F", condition: "sunny" }
+  },
+});
+```
+
+### Database Action
+
+```typescript title="database-action.ts"
+// Agent can save user preferences
+const savePreference = action({
+  name: "save-preference",
+  description: "Saves a user preference",
+  schema: z.object({
+    userId: z.string(),
+    key: z.string(),
+    value: z.string(),
+  }),
+  handler: async ({ userId, key, value }) => {
+    await database.save(userId, key, value);
+    return { success: true, message: "Preference saved!" };
+  },
+});
+```
+
+### Email Action
+
+```typescript title="email-action.ts"
+// Agent can send emails
+const sendEmail = action({
+  name: "send-email",
+  description: "Sends an email to a user",
+  schema: z.object({
+    to: z.string(),
+    subject: z.string(),
+    body: z.string(),
+  }),
+  handler: async ({ to, subject, body }) => {
+    await emailService.send({ to, subject, body });
+    return { sent: true, timestamp: new Date().toISOString() };
+  },
+});
+```
+
+## The Problem Without Actions
+
+Without actions, your agent can only **talk**:
+
+```text title="limited-agent.txt"
+User: "What's the weather in Boston?"
+Agent: "I don't have access to weather data, but I imagine it might be nice!"
+// ❌ Can't actually check weather
+// ❌ Just makes stuff up
+// ❌ Not helpful
+```
+
+## The Solution: Actions Give Agents Capabilities
+
+With actions, your agent can **do things**:
+
+```text title="capable-agent.txt"
+User: "What's the weather in Boston?"
+Agent: *calls getWeather action*
+Agent: "It's 65°F and cloudy in Boston right now!"
+// ✅ Actually checks real weather API
+// ✅ Provides accurate information
+// ✅ Actually useful
+```
+
+## How Actions Work in Your Agent
+
+### 1. You Define What the Agent Can Do
+
+```typescript title="define-actions.ts"
+const agent = createDreams({
+  model: openai("gpt-4o"),
+  actions: [
+    getWeather, // Agent can check weather
+    savePreference, // Agent can save user data
+    sendEmail, // Agent can send emails
+  ],
+});
+```
+
+### 2. The LLM Decides When to Use Them
+
+When the agent thinks, it sees:
+
+```text title="llm-prompt.txt"
+Available actions:
+- get-weather: Gets current weather for a city
+- save-preference: Saves a user preference
+- send-email: Sends an email to a user
+
+User message: "Check weather in NYC and email it to john@example.com"
+```
+
+### 3. The LLM Calls Actions
+
+The LLM responds with structured calls:
+
+```xml title="llm-response.xml"
+<response>
+  <reasoning>I need to check weather first, then email the results</reasoning>
+
+  <action_call name="get-weather">{"city": "NYC"}</action_call>
+  <action_call name="send-email">{
+    "to": "john@example.com",
+    "subject": "NYC Weather",
+    "body": "Current weather: {{calls[0].temperature}}, {{calls[0].condition}}"
+  }</action_call>
+</response>
+```
+
+### 4. Daydreams Executes Your Code
+
+Daydreams automatically:
+
+* Validates the arguments against your schema
+* Runs your handler function
+* Returns results to the LLM
+* Handles errors gracefully
+
+## Creating Your First Action
+
+Here's a simple action that adds two numbers:
+
+```typescript title="calculator-action.ts"
+import { action } from "@daydreamsai/core";
+import * as z from "zod/v4";
+
+export const addNumbers = action({
+  // Name the LLM uses to call this action
+  name: "add-numbers",
+
+  // Description helps LLM know when to use it
+  description: "Adds two numbers together",
+
+  // Schema defines what arguments are required
+  schema: z.object({
+    a: z.number().describe("First number"),
+    b: z.number().describe("Second number"),
+  }),
+
+  // Handler is your actual code that runs
+  handler: async ({ a, b }) => {
+    const result = a + b;
+    return {
+      sum: result,
+      message: `${a} + ${b} = ${result}`,
+    };
+  },
+});
+```
+
+Use it in your agent:
+
+```typescript title="agent-with-calculator.ts"
+const agent = createDreams({
+  model: openai("gpt-4o"),
+  actions: [addNumbers],
+});
+
+// Now when user asks "What's 5 + 3?", the agent will:
+// 1. Call addNumbers action with {a: 5, b: 3}
+// 2. Get back {sum: 8, message: "5 + 3 = 8"}
+// 3. Respond: "5 + 3 = 8"
+```
+
+## Working with State and Memory
+
+Actions can read and modify your agent's memory:
+
+```typescript title="todo-actions.ts"
+// Define what your context remembers
+interface TodoMemory {
+  tasks: { id: string; title: string; done: boolean }[];
+}
+
+const addTask = action({
+  name: "add-task",
+  description: "Adds a new task to the todo list",
+  schema: z.object({
+    title: z.string().describe("What the task is"),
+  }),
+  handler: async ({ title }, ctx) => {
+    // Access context memory (automatically typed!)
+    const memory = ctx.memory as TodoMemory;
+
+    // Initialize if needed
+    if (!memory.tasks) {
+      memory.tasks = [];
+    }
+
+    // Add new task
+    const newTask = {
+      id: crypto.randomUUID(),
+      title,
+      done: false,
+    };
+
+    memory.tasks.push(newTask);
+
+    // Changes are automatically saved
+    return {
+      success: true,
+      taskId: newTask.id,
+      message: `Added "${title}" to your todo list`,
+    };
+  },
+});
+
+const completeTask = action({
+  name: "complete-task",
+  description: "Marks a task as completed",
+  schema: z.object({
+    taskId: z.string().describe("ID of task to complete"),
+  }),
+  handler: async ({ taskId }, ctx) => {
+    const memory = ctx.memory as TodoMemory;
+
+    const task = memory.tasks?.find((t) => t.id === taskId);
+    if (!task) {
+      return { success: false, message: "Task not found" };
+    }
+
+    task.done = true;
+
+    return {
+      success: true,
+      message: `Completed "${task.title}"`,
+    };
+  },
+});
+```
+
+Now your agent can manage todo lists across conversations!
+
+## External API Integration
+
+Actions are perfect for calling external APIs:
+
+```typescript title="external-api-action.ts"
+const searchWikipedia = action({
+  name: "search-wikipedia",
+  description: "Searches Wikipedia for information",
+  schema: z.object({
+    query: z.string().describe("What to search for"),
+    limit: z.number().optional().default(3).describe("Max results"),
+  }),
+  handler: async ({ query, limit }) => {
+    try {
+      const response = await fetch(
+        `https://en.wikipedia.org/api/rest_v1/page/search?q=${encodeURIComponent(
+          query
+        )}&limit=${limit}`
+      );
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      return {
+        success: true,
+        results: data.pages.map((page) => ({
+          title: page.title,
+          description: page.description,
+          url: `https://en.wikipedia.org/wiki/${page.key}`,
+        })),
+        message: `Found ${data.pages.length} results for "${query}"`,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+        message: `Failed to search Wikipedia for "${query}"`,
+      };
+    }
+  },
+});
+```
+
+## Best Practices
+
+### 1. Use Clear Names and Descriptions
+
+```typescript title="good-naming.ts"
+// ✅ Good - clear what it does
+const getUserProfile = action({
+  name: "get-user-profile",
+  description: "Gets detailed profile information for a user by their ID",
+  // ...
+});
+
+// ❌ Bad - unclear purpose
+const doStuff = action({
+  name: "do-stuff",
+  description: "Does some user stuff",
+  // ...
+});
+```
+
+### 2. Validate Input with Schemas
+
+```typescript title="good-validation.ts"
+// ✅ Good - specific validation
+schema: z.object({
+  email: z.string().email().describe("User's email address"),
+  age: z.number().min(0).max(150).describe("User's age in years"),
+  preferences: z
+    .array(z.string())
+    .optional()
+    .describe("List of user preferences"),
+});
+
+// ❌ Bad - too loose
+schema: z.object({
+  data: z.any(),
+});
+```
+
+### 3. Handle Errors Gracefully
+
+```typescript title="error-handling.ts"
+handler: async ({ userId }) => {
+  try {
+    const user = await database.getUser(userId);
+    return { success: true, user };
+  } catch (error) {
+    // Log the error for debugging
+    console.error("Failed to get user:", error);
+
+    // Return structured error for the LLM
+    return {
+      success: false,
+      error: "User not found",
+      message: `Could not find user with ID ${userId}`,
+    };
+  }
+};
+```
+
+### 4. Use async/await for I/O Operations
+
+```typescript title="async-best-practice.ts"
+// ✅ Good - properly handles async
+handler: async ({ url }) => {
+  const response = await fetch(url);
+  const data = await response.json();
+  return { data };
+};
+
+// ❌ Bad - doesn't wait for async operations
+handler: ({ url }) => {
+  fetch(url); // This returns a Promise that's ignored!
+  return { status: "done" }; // Completes before fetch finishes
+};
+```
+
+### 5. Check for Cancellation in Long Operations
+
+```typescript title="cancellation-handling.ts"
+handler: async ({ items }, ctx) => {
+  for (let i = 0; i < items.length; i++) {
+    // Check if the agent wants to cancel
+    if (ctx.abortSignal?.aborted) {
+      throw new Error("Operation cancelled");
+    }
+
+    await processItem(items[i]);
+  }
+
+  return { processed: items.length };
+};
+```
+
+## Advanced: Context-Specific Actions
+
+You can attach actions to specific contexts so they're only available in certain
+situations:
+
+```typescript title="context-specific.ts"
+const chatContext = context({
+  type: "chat",
+  schema: z.object({ userId: z.string() }),
+  create: () => ({ messages: [] }),
+}).setActions([
+  // These actions only available during chat
+  action({
+    name: "save-chat-preference",
+    description: "Saves a preference for this chat user",
+    schema: z.object({
+      key: z.string(),
+      value: z.string(),
+    }),
+    handler: async ({ key, value }, ctx) => {
+      // ctx.memory is automatically typed as chat memory
+      if (!ctx.memory.userPreferences) {
+        ctx.memory.userPreferences = {};
+      }
+      ctx.memory.userPreferences[key] = value;
+      return { saved: true };
+    },
+  }),
+]);
+```
+
+## Key Takeaways
+
+* **Actions give agents capabilities** - They can do things, not just talk
+* **LLM chooses when to use them** - Based on names and descriptions you provide
+* **Arguments are validated** - Zod schemas ensure type safety
+* **State persists automatically** - Changes to memory are saved
+* **Error handling is crucial** - Return structured success/error responses
+* **async/await required** - For any I/O operations like API calls
+
+Actions transform your agent from a chatbot into a capable assistant that can
+actually get things done.
+
+
+file: ./content/docs/core/concepts/agent-lifecycle.mdx
+meta: {
+  "title": "Agent Lifecycle",
+  "description": "How Daydreams agents process information and execute tasks."
+}
+        
+## Simple Overview
+
+Think of an agent as following a simple loop:
+
+1. **Something happens** (input arrives)
+2. **Agent thinks** (uses LLM to decide what to do)
+3. **Agent acts** (performs actions or sends responses)
+4. **Agent remembers** (saves what happened)
+5. **Repeat**
+
+This loop continues as long as the agent is running, handling new inputs and
+responding intelligently based on its context and memory.
+
+## The Basic Flow
+
+Here's what happens when your agent receives a Discord message:
+
+```
+Discord Message Arrives
+         ↓
+Agent loads chat context & memory
+         ↓
+Agent thinks: "What should I do?"
+         ↓
+Agent decides: "I'll check the weather and respond"
+         ↓
+Agent calls weather API (action)
+         ↓
+Agent sends Discord reply (output)
+         ↓
+Agent saves conversation to memory
+```
+
+***
+
+## Detailed Technical Explanation
+
+The core of the Daydreams framework is the agent's execution lifecycle. This
+loop manages how an agent receives input, reasons with an LLM, performs actions,
+and handles results. Understanding this flow is crucial for building and
+debugging agents.
+
+Let's trace the lifecycle of a typical request:
+
+## 1. Input Reception
+
+* **Source:** An external system (like Discord, Telegram, CLI, or an API) sends
+  information to the agent. This is usually configured via an `extension`.
+* **Listener:** An `input` definition within the agent or an extension listens
+  for these events (e.g., a new message arrives).
+* **Trigger:** When the external event occurs, the input listener is triggered.
+* **Invocation:** The listener typically calls `agent.send(...)`, providing:
+  * The target `context` definition (which part of the agent should handle
+    this?).
+  * `args` to identify the specific context instance (e.g., which chat
+    session?).
+  * The input `data` itself (e.g., the message content).
+
+## 2. `agent.send` - Starting the Process
+
+* **Log Input:** The framework logs the incoming information as an `InputRef` (a
+  record of the input).
+* **Initiate Run:** It then calls the internal `agent.run` method to start or
+  continue the processing cycle for the specified context instance, passing the
+  new `InputRef` along.
+
+## 3. `agent.run` - Managing the Execution Cycle
+
+* **Load/Create Context:** The framework finds the specific `ContextState` for
+  the target instance (e.g., the state for chat session #123). If it's the first
+  time interacting with this instance, it creates the state and its associated
+  persistent memory (`ContextState.memory`). It also retrieves or creates the
+  temporary `WorkingMemory` for this specific run.
+* **Handle Concurrency:** It checks if this context instance is already
+  processing another request. If so, the new input is usually added to the
+  ongoing run. If not, it sets up a new run.
+* **Setup Run Environment:** It prepares the environment for the LLM
+  interaction, gathering all available `actions`, `outputs`, and relevant
+  context information.
+* **Start Step Loop:** It begins the main processing loop, which iterates
+  through one or more reasoning steps until the interaction is complete.
+
+## 4. Inside the Step Loop - Perception, Reasoning, Action
+
+Each iteration (step) within the `agent.run` loop represents one turn of the
+agent's core reasoning cycle:
+
+* **Prepare State:** The agent gathers the latest information, including:
+  * The current persistent state of the active `Context`(s) (via their `render`
+    functions).
+  * The history of the current interaction from `WorkingMemory` (processed
+    inputs, outputs, action results from previous steps).
+  - Any *new* unprocessed information (like the initial `InputRef` or results
+    from actions completed in the previous step).
+  - The list of currently available `actions` and `outputs`.
+* **Generate Prompt:** This information is formatted into a structured prompt
+  (using XML) for the LLM. The prompt clearly tells the LLM its instructions,
+  what tools (actions/outputs) it has, the current state, and what new
+  information needs attention. (See [Prompting](/docs/core/concepts/prompting)).
+* **LLM Call:** The agent sends the complete prompt to the configured LLM.
+* **Process LLM Response Stream:** As the LLM generates its response token by
+  token:
+  * The framework **streams** the response.
+  * It **parses** the stream, looking for specific XML tags defined in the
+    expected response structure (`<reasoning>`, `<action_call>`, `<output>`).
+  * The LLM's thought process is extracted from `<reasoning>` tags and logged.
+  * Instructions to perform actions (`<action_call>`) or send outputs
+    (`<output>`) are identified.
+* **Execute Actions & Outputs:**
+  * For each identified `<action_call>`, the framework validates the arguments
+    against the action's schema and schedules the action's `handler` function to
+    run via the `TaskRunner`. (See [Actions](/docs/core/concepts/actions) and
+    [Tasks](/docs/core/concepts/tasks)).
+  - For each identified `<output>`, the framework validates the
+    content/attributes and runs the output's `handler` function to send the
+    information externally (e.g., post a message). (See
+    [Outputs](/docs/core/concepts/outputs)).
+* **Wait for Actions:** The agent waits for any critical asynchronous actions
+  scheduled in this step to complete. Their results (`ActionResult`) are logged
+  to `WorkingMemory`.
+* **Check Completion:** The agent determines if the interaction is complete or
+  if another reasoning step (another loop iteration) is needed based on defined
+  conditions (`shouldContinue` hooks or remaining unprocessed logs).
+
+## 5. Run Completion
+
+* **Exit Loop:** Once the loop condition determines no further steps are needed,
+  the loop exits.
+* **Final Tasks:** Any final cleanup logic or `onRun` hooks defined in the
+  context are executed.
+* **Save State:** The final persistent state (`ContextState.memory`) of all
+  involved contexts is saved to the `MemoryStore`.
+* **Return Results:** The framework resolves the promise originally returned by
+  `agent.send` or `agent.run`, providing the complete log (`chain`) of the
+  interaction.
+
+This detailed cycle illustrates how Daydreams agents iteratively perceive
+(inputs, results), reason (LLM prompt/response), and act (outputs, actions),
+using streaming and asynchronous task management to handle potentially complex
+interactions efficiently.
+
+
+file: ./content/docs/core/concepts/building-blocks.mdx
+meta: {
+  "title": "Building Blocks",
+  "description": "The core components that make up a Daydreams agent."
+}
+        
+Every Daydreams agent is built from four main building blocks. Think of them as
+the essential parts that work together to create intelligent behavior.
+
+## The Four Building Blocks
+
+### 1. Inputs - How Your Agent Listens
+
+Inputs are how your agent receives information from the outside world.
+
+```typescript title="input-example.ts"
+// Listen for Discord messages
+const discordMessage = input({
+  name: "discord-message",
+  description: "Receives messages from Discord",
+  // When a message arrives, this triggers the agent
+});
+```
+
+**Examples:**
+
+* A Discord message arrives
+* A user types in the CLI
+* An API webhook gets called
+* A timer goes off
+
+### 2. Outputs - How Your Agent Speaks
+
+Outputs are how your agent sends information back to the world.
+
+```typescript title="output-example.ts"
+// Send a Discord message
+const discordReply = output({
+  name: "discord-reply",
+  description: "Sends a message to Discord",
+  // The agent can call this to respond
+});
+```
+
+**Examples:**
+
+* Posting a message to Discord
+* Printing to the console
+* Sending an email
+* Making an API call
+
+### 3. Actions - What Your Agent Can Do
+
+Actions are tasks your agent can perform to interact with systems or gather
+information.
+
+```typescript title="action-example.ts"
+// Check the weather
+const getWeather = action({
+  name: "get-weather",
+  description: "Gets current weather for a location",
+  schema: z.object({
+    location: z.string(),
+  }),
+  handler: async ({ location }) => {
+    // Call weather API and return result
+    return { temperature: "72°F", condition: "sunny" };
+  },
+});
+```
+
+**Examples:**
+
+* Calling a weather API
+* Reading from a database
+* Processing a file
+* Making calculations
+
+### 4. Contexts - Your Agent's Workspace
+
+Contexts define different "workspaces" or "modes" for your agent. Each context
+has its own memory and behavior.
+
+```typescript title="context-example.ts"
+// A chat session context
+const chatContext = context({
+  type: "chat",
+  schema: z.object({
+    userId: z.string(),
+  }),
+  // This context remembers chat history
+  create: () => ({
+    messages: [],
+    userPreferences: {},
+  }),
+});
+```
+
+**Examples:**
+
+* A chat session with a specific user
+* Playing a specific game
+* Processing a specific document
+* Managing a specific project
+
+## How They Work Together
+
+Here's a simple flow showing how these building blocks connect:
+
+1. **Input arrives** → "New Discord message from user123"
+2. **Agent thinks** → "I should respond helpfully in this chat context"
+3. **Agent acts** → Calls the `getWeather` action if needed
+4. **Agent responds** → Uses an output to send a reply
+5. **Context remembers** → Saves the conversation in chat context memory
+
+## The React Mental Model
+
+If you know React, think of it this way:
+
+* **Contexts** = React components (manage state and behavior)
+* **Actions** = Event handlers (respond to interactions)
+* **Inputs/Outputs** = Props/callbacks (data in and out)
+* **Agent** = React app (orchestrates everything)
+
+## Next Steps
+
+Now that you understand the building blocks, you can dive deeper into each one:
+
+* **[Contexts](/docs/core/concepts/contexts)** - Learn how to manage state and
+  memory
+* **[Inputs](/docs/core/concepts/inputs)** - Set up ways for your agent to
+  receive information
+* **[Outputs](/docs/core/concepts/outputs)** - Configure how your agent responds
+* **[Actions](/docs/core/concepts/actions)** - Define what your agent can do
+* **[Agent Lifecycle](/docs/core/concepts/agent-lifecycle)** - Understand the
+  complete execution flow
+
+
+file: ./content/docs/core/concepts/contexts.mdx
+meta: {
+  "title": "Contexts",
+  "description": "Managing state, memory, and behavior for agent interactions."
+}
+        
+## What is a Context?
+
+A context is like a **separate workspace** for your agent. Think of it like
+having different tabs open in your browser - each tab has its own state and
+remembers different things.
+
+## Real Examples
+
+Here are contexts that make agents stateful:
+
+### Chat Context
+
+```typescript title="chat-context.ts"
+// Each user gets their own chat workspace
+const chatContext = context({
+  type: "chat",
+  schema: z.object({
+    userId: z.string(),
+  }),
+  create: () => ({
+    messages: [],
+    userPreferences: {},
+    lastSeen: null,
+  }),
+  render: (state) => `
+    Chat with ${state.args.userId}
+    Recent messages: ${state.memory.messages.slice(-3).join("\n")}
+  `,
+});
+```
+
+### Game Context
+
+```typescript title="game-context.ts"
+// Each game session has its own state
+const gameContext = context({
+  type: "game",
+  schema: z.object({
+    gameId: z.string(),
+  }),
+  create: () => ({
+    playerHealth: 100,
+    level: 1,
+    inventory: [],
+    currentRoom: "start",
+  }),
+  render: (state) => `
+    Game: ${state.args.gameId}
+    Health: ${state.memory.playerHealth}
+    Level: ${state.memory.level}
+    Room: ${state.memory.currentRoom}
+  `,
+});
+```
+
+### Project Context
+
+```typescript title="project-context.ts"
+// Each project tracks its own progress
+const projectContext = context({
+  type: "project",
+  schema: z.object({
+    projectId: z.string(),
+  }),
+  create: () => ({
+    tasks: [],
+    status: "planning",
+    teamMembers: [],
+    deadlines: [],
+  }),
+  render: (state) => `
+    Project: ${state.args.projectId}
+    Status: ${state.memory.status}
+    Tasks: ${state.memory.tasks.length} total
+  `,
+});
+```
+
+## The Problem: Agents Need to Remember Different Things
+
+Without contexts, your agent mixes everything together:
+
+```text title="confused-agent.txt"
+User Alice: "My favorite color is blue"
+User Bob: "What's Alice's favorite color?"
+Agent: "Alice's favorite color is blue"
+// ❌ Bob shouldn't see Alice's private info!
+
+User in Game A: "Go north"
+User in Game B: "What room am I in?"
+Agent: "You went north" (from Game A!)
+// ❌ Wrong game state mixed up!
+
+Project Alpha discussion mixed with Project Beta tasks
+// ❌ Complete chaos!
+```
+
+## The Solution: Contexts Separate Everything
+
+With contexts, each conversation/session/game stays separate:
+
+```text title="organized-agent.txt"
+Alice's Chat Context:
+- Alice: "My favorite color is blue"
+- Agent remembers: Alice likes blue
+
+Bob's Chat Context:
+- Bob: "What's Alice's favorite color?"
+- Agent: "I don't have information about Alice"
+// ✅ Privacy maintained!
+
+Game A Context:
+- Player went north → remembers current room
+
+Game B Context:
+- Separate game state → different room
+// ✅ No mixing of game states!
+```
+
+## How Contexts Work in Your Agent
+
+### 1. You Define Different Context Types
+
+```typescript title="define-contexts.ts"
+const agent = createDreams({
+  model: openai("gpt-4o"),
+  contexts: [
+    chatContext, // For user conversations
+    gameContext, // For game sessions
+    projectContext, // For project management
+  ],
+});
+```
+
+### 2. Inputs Route to Specific Context Instances
+
+```typescript title="context-routing.ts"
+// Discord input routes to chat contexts
+discordInput.subscribe((send, agent) => {
+  discord.on("message", (msg) => {
+    // Each user gets their own chat context instance
+    send(
+      chatContext,
+      { userId: msg.author.id },
+      {
+        content: msg.content,
+      }
+    );
+  });
+});
+
+// Game input routes to game contexts
+gameInput.subscribe((send, agent) => {
+  gameServer.on("move", (event) => {
+    // Each game gets its own context instance
+    send(
+      gameContext,
+      { gameId: event.gameId },
+      {
+        action: event.action,
+      }
+    );
+  });
+});
+```
+
+### 3. Agent Maintains Separate Memory
+
+```text title="context-instances.txt"
+Chat Context Instances:
+- chat:alice → { messages: [...], preferences: {...} }
+- chat:bob   → { messages: [...], preferences: {...} }
+- chat:carol → { messages: [...], preferences: {...} }
+
+Game Context Instances:
+- game:session1 → { health: 80, level: 3, room: "forest" }
+- game:session2 → { health: 100, level: 1, room: "start" }
+- game:session3 → { health: 45, level: 7, room: "dungeon" }
+
+All completely separate!
+```
+
+## Creating Your First Context
+
+Here's a simple todo list context:
+
+```typescript title="todo-context.ts"
+import { context } from "@daydreamsai/core";
+import * as z from "zod/v4";
+
+// Define what this context remembers
+interface TodoMemory {
+  tasks: { id: string; title: string; done: boolean }[];
+  createdAt: string;
+}
+
+export const todoContext = context<TodoMemory>({
+  // Type identifies this kind of context
+  type: "todo",
+
+  // Schema defines how to identify specific instances
+  schema: z.object({
+    listId: z.string().describe("Unique ID for this todo list"),
+  }),
+
+  // Create initial memory when first accessed
+  create: () => ({
+    tasks: [],
+    createdAt: new Date().toISOString(),
+  }),
+
+  // How this context appears to the LLM
+  render: (state) => {
+    const { tasks } = state.memory;
+    const pending = tasks.filter((t) => !t.done).length;
+    const completed = tasks.filter((t) => t.done).length;
+
+    return `
+Todo List: ${state.args.listId}
+Tasks: ${pending} pending, ${completed} completed
+
+Recent tasks:
+${tasks
+  .slice(-5)
+  .map((t) => `${t.done ? "✅" : "⏳"} ${t.title}`)
+  .join("\n")}
+    `;
+  },
+
+  // Instructions for the LLM when this context is active
+  instructions:
+    "Help the user manage their todo list. You can add, complete, and list tasks.",
+});
+```
+
+Use it in your agent:
+
+```typescript title="agent-with-todo.ts"
+const agent = createDreams({
+  model: openai("gpt-4o"),
+  contexts: [todoContext],
+});
+
+// Now users can have separate todo lists:
+// todo:work → Work tasks
+// todo:personal → Personal tasks
+// todo:shopping → Shopping list
+// Each maintains separate state!
+```
+
+## Context Memory: What Gets Remembered
+
+Context memory persists between conversations:
+
+```typescript title="memory-example.ts"
+// First conversation
+User: "Add 'buy milk' to my shopping list"
+Agent: → todoContext(listId: "shopping")
+       → memory.tasks.push({id: "1", title: "buy milk", done: false})
+       → "Added 'buy milk' to your shopping list"
+
+// Later conversation (hours/days later)
+User: "What's on my shopping list?"
+Agent: → todoContext(listId: "shopping")
+       → Loads saved memory: {tasks: [{title: "buy milk", done: false}]}
+       → "You have 'buy milk' on your shopping list"
+
+// ✅ Context remembered the task across conversations!
+```
+
+## Multiple Contexts in One Agent
+
+Your agent can switch between different contexts:
+
+```xml title="context-switching.xml"
+<!-- User starts in chat context -->
+<input type="discord:message" userId="alice">
+  "Add 'finish project' to my work todo list"
+</input>
+
+<!-- Agent recognizes this needs todo context -->
+<response>
+  <reasoning>User wants to add a task to their work todo list. I should use the todo context.</reasoning>
+
+  <!-- Switch to todo context -->
+  <action_call name="add-task" context="todo" args='{"listId": "work"}'>
+    {"title": "finish project"}
+  </action_call>
+
+  <!-- Respond back in chat context -->
+  <output type="discord:message" channelId="123">
+    Added "finish project" to your work todo list!
+  </output>
+</response>
+```
+
+## Advanced: Context-Specific Actions
+
+You can attach actions that only work in certain contexts:
+
+```typescript title="context-specific-actions.ts"
+const todoContextWithActions = todoContext.setActions([
+  action({
+    name: "add-task",
+    description: "Adds a new task to the todo list",
+    schema: z.object({
+      title: z.string(),
+    }),
+    handler: async ({ title }, ctx) => {
+      // ctx.memory is automatically typed as TodoMemory!
+      const newTask = {
+        id: crypto.randomUUID(),
+        title,
+        done: false,
+      };
+
+      ctx.memory.tasks.push(newTask);
+
+      return {
+        success: true,
+        taskId: newTask.id,
+        message: `Added "${title}" to the list`,
+      };
+    },
+  }),
+
+  action({
+    name: "complete-task",
+    description: "Marks a task as completed",
+    schema: z.object({
+      taskId: z.string(),
+    }),
+    handler: async ({ taskId }, ctx) => {
+      const task = ctx.memory.tasks.find((t) => t.id === taskId);
+      if (!task) {
+        return { success: false, message: "Task not found" };
+      }
+
+      task.done = true;
+
+      return {
+        success: true,
+        message: `Completed "${task.title}"`,
+      };
+    },
+  }),
+]);
+```
+
+Now these actions only appear when the todo context is active!
+
+## Context Lifecycle
+
+Contexts have hooks for different stages:
+
+```typescript title="context-lifecycle.ts"
+const advancedContext = context({
+  type: "advanced",
+  schema: z.object({ sessionId: z.string() }),
+
+  // Called when context instance is first created
+  create: (state, agent) => {
+    agent.logger.info(`Creating new session: ${state.key}`);
+    return {
+      startTime: Date.now(),
+      interactions: 0,
+    };
+  },
+
+  // Called before each LLM interaction
+  onStep: async (ctx, agent) => {
+    ctx.memory.interactions++;
+  },
+
+  // Called when a conversation/run completes
+  onRun: async (ctx, agent) => {
+    const duration = Date.now() - ctx.memory.startTime;
+    agent.logger.info(`Session ${ctx.key} lasted ${duration}ms`);
+  },
+
+  // Called if there's an error
+  onError: async (error, ctx, agent) => {
+    agent.logger.error(`Error in session ${ctx.key}:`, error);
+  },
+});
+```
+
+## Best Practices
+
+### 1. Design Clear Boundaries
+
+```typescript title="good-context-design.ts"
+// ✅ Good - clear, specific purpose
+const userProfileContext = context({
+  type: "user-profile",
+  schema: z.object({ userId: z.string() }),
+  // Manages user preferences, settings, history
+});
+
+const orderContext = context({
+  type: "order",
+  schema: z.object({ orderId: z.string() }),
+  // Manages specific order state, items, shipping
+});
+
+// ❌ Bad - too broad, unclear purpose
+const stuffContext = context({
+  type: "stuff",
+  schema: z.object({ id: z.string() }),
+  // What does this manage? Everything? Nothing clear.
+});
+```
+
+### 2. Keep Memory Structures Simple
+
+```typescript title="good-memory-structure.ts"
+// ✅ Good - clear, simple structure
+interface ChatMemory {
+  messages: Array<{
+    sender: "user" | "agent";
+    content: string;
+    timestamp: number;
+  }>;
+  userPreferences: {
+    language?: string;
+    timezone?: string;
+  };
+}
+
+// ❌ Bad - overly complex, nested
+interface OverComplexMemory {
+  data: {
+    nested: {
+      deeply: {
+        structured: {
+          confusing: {
+            memory: any;
+          };
+        };
+      };
+    };
+  };
+}
+```
+
+### 3. Write Helpful Render Functions
+
+```typescript title="good-render-function.ts"
+// ✅ Good - concise, relevant information
+render: (state) => `
+  Shopping Cart: ${state.args.cartId}
+  Items: ${state.memory.items.length}
+  Total: $${state.memory.total.toFixed(2)}
+  
+  Recent items:
+  ${state.memory.items
+    .slice(-3)
+    .map((item) => `- ${item.name} ($${item.price})`)
+    .join("\n")}
+`;
+
+// ❌ Bad - too much information, overwhelming
+render: (state) => JSON.stringify(state.memory, null, 2); // Dumps everything!
+```
+
+### 4. Use Descriptive Schema
+
+```typescript title="good-schema.ts"
+// ✅ Good - clear descriptions
+schema: z.object({
+  userId: z.string().uuid().describe("Unique identifier for the user"),
+  sessionType: z
+    .enum(["support", "sales", "general"])
+    .describe("Type of support session"),
+});
+
+// ❌ Bad - no descriptions, unclear
+schema: z.object({
+  id: z.string(),
+  type: z.string(),
+});
+```
+
+## Key Takeaways
+
+* **Contexts separate state** - Each conversation/session/game gets its own
+  memory
+* **Instance-based** - Same context type, different instances for different
+  users/sessions
+* **Memory persists** - State is saved between conversations automatically
+* **LLM sees context** - Render function shows current state to the AI
+* **Context-specific actions** - Attach actions that only work in certain
+  contexts
+* **Clear boundaries** - Design contexts around specific tasks or domains
+
+Contexts are what make your agent stateful and able to maintain separate
+conversations and tasks without mixing things up. They're the foundation for
+building agents that can remember and manage complex, ongoing interactions.
+
+
+file: ./content/docs/core/concepts/core.mdx
+meta: {
+  "title": "Introduction",
+  "description": "Understand the fundamental building blocks of the Daydreams framework."
+}
+        
+The Daydreams framework is designed around a set of core concepts that work
+together to enable autonomous agent behavior. Understanding these concepts is
+key to effectively building and customizing agents.
+
+## Getting Started
+
+If you're new to agent frameworks, start here:
+
+1. **[Building Blocks](/docs/core/concepts/building-blocks)** - Learn the four
+   main components (inputs, outputs, actions, contexts) with simple examples
+2. **[Agent Lifecycle](/docs/core/concepts/agent-lifecycle)** - Understand how
+   agents process information in a continuous loop
+
+Once you understand the basics, dive deeper into each component:
+
+## Core Architecture
+
+A Daydreams agent consists of several key components:
+
+### Contexts
+
+Contexts are the foundation of a Daydreams agent. Similar to React components,
+contexts manage state and rendering for your agent. Each context:
+
+* Has a defined schema for initialization
+* Maintains its own memory state
+* Provides a rendering function that formats its state for the LLM
+
+```ts title="context.ts"
+const myContext = context({
+  // Unique identifier for this context type
+  type: "my-context",
+
+  // Schema defining the arguments needed to initialize this context
+  schema: z.object({
+    id: z.string(),
+  }),
+
+  // Function to generate a unique key for this context instance
+  key({ id }) {
+    return id;
+  },
+
+  // Initialize the context's memory state
+  create(state) {
+    return {
+      items: [],
+      currentItem: null,
+    };
+  },
+
+  // Format the context for the LLM
+  render({ memory }) {
+    return `
+      Current Items: ${memory.items.join(", ")}
+      Active Item: ${memory.currentItem || "None"}
+    `;
+  },
+});
+```
+
+### Actions
+
+Actions are functions that your agent can call to interact with its environment
+or modify its state. They're similar to event handlers in React:
+
+```ts title="action.ts"
+action({
+  name: "addItem",
+  description: "Add a new item to the list",
+  schema: z.object({
+    item: z.string().describe("The item to add"),
+  }),
+  handler(call, ctx, agent) {
+    // Access the context memory
+    const contextMemory = ctx.agentMemory;
+
+    // Update the state
+    contextMemory.items.push(call.data.item);
+
+    // Return a response
+    return {
+      message: `Added ${call.data.item} to the list`,
+      items: contextMemory.items,
+    };
+  },
+});
+```
+
+### Extensions
+
+Extensions are pre-packaged bundles of inputs, outputs, and actions that add
+specific capabilities to your agent. For example, the `cli` extension adds
+terminal input/output capabilities.
+
+## The React-like Mental Model
+
+If you're familiar with React, you can think of Daydreams in similar terms:
+
+* **Contexts** are like React components, managing state and rendering
+* **Actions** are like event handlers, responding to inputs and updating state
+* **Extensions** are like pre-built component libraries
+* The agent itself is like a React application, orchestrating everything
+
+This mental model makes it easy to reason about how your agent works and how to
+structure complex behaviors.
+
+***
+
+## Detailed Component Documentation
+
+This section provides a detailed explanation of each fundamental component:
+
+* **[Building Blocks](/docs/core/concepts/building-blocks):** Simple
+  introduction to the four main components with examples
+* **[Agent Lifecycle](/docs/core/concepts/agent-lifecycle):** How an agent
+  processes information, makes decisions, and executes tasks in a continuous
+  loop.
+* **[Contexts](/docs/core/concepts/contexts):** The mechanism for managing
+  state, memory, and behavior for specific tasks or interactions.
+* **[Actions](/docs/core/concepts/actions):** Definable tasks or capabilities
+  that an agent can perform.
+* **[Inputs](/docs/core/concepts/inputs):** How agents receive data and trigger
+  processing cycles.
+* **[Outputs](/docs/core/concepts/outputs):** How agents communicate results or
+  send information to external systems.
+* **[Memory](/docs/core/concepts/memory):** The different ways agents store,
+  retrieve, and utilize information (Working, Episodic, Vector).
+* **[Prompting](/docs/core/concepts/prompting):** How instructions and context
+  are formatted for the LLM to guide its reasoning.
+* **[Tasks](/docs/core/concepts/tasks):** The system for managing asynchronous
+  operations and background tasks.
+* **[Services & Extensions](/docs/core/advanced):** How to integrate external
+  services and extend the framework's capabilities.
+
+For beginners, start with [Building Blocks](/docs/core/concepts/building-blocks)
+to understand the mental model, then explore these detailed pages as needed.
+
+
+file: ./content/docs/core/concepts/inputs.mdx
+meta: {
+  "title": "Inputs",
+  "description": "How Daydreams agents receive information and trigger processing."
+}
+        
+## What is an Input?
+
+An input is how your agent **listens** to the outside world. If outputs are how
+your agent "speaks", inputs are how your agent "hears" things happening.
+
+## Real Examples
+
+Here are inputs that make agents responsive:
+
+### Discord Messages
+
+```typescript title="discord-input.ts"
+// Agent listens for Discord messages
+const discordMessage = input({
+  type: "discord:message",
+  schema: z.object({
+    content: z.string(),
+    userId: z.string(),
+    channelId: z.string(),
+  }),
+  subscribe: (send, agent) => {
+    discord.on("messageCreate", (message) => {
+      send(
+        chatContext,
+        { channelId: message.channel.id },
+        {
+          content: message.content,
+          userId: message.author.id,
+          channelId: message.channel.id,
+        }
+      );
+    });
+
+    return () => discord.removeAllListeners("messageCreate");
+  },
+});
+```
+
+### CLI Commands
+
+```typescript title="cli-input.ts"
+// Agent listens for terminal input
+const cliInput = input({
+  type: "cli:input",
+  schema: z.string(),
+  subscribe: (send, agent) => {
+    const readline = require("readline").createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    readline.on("line", (input) => {
+      send(cliContext, { sessionId: "cli" }, input);
+    });
+
+    return () => readline.close();
+  },
+});
+```
+
+### API Webhooks
+
+```typescript title="webhook-input.ts"
+// Agent listens for API webhooks
+const webhookInput = input({
+  type: "api:webhook",
+  schema: z.object({
+    event: z.string(),
+    data: z.any(),
+  }),
+  subscribe: (send, agent) => {
+    const server = express();
+
+    server.post("/webhook", (req, res) => {
+      send(
+        webhookContext,
+        { eventId: req.body.id },
+        {
+          event: req.body.event,
+          data: req.body.data,
+        }
+      );
+      res.status(200).send("OK");
+    });
+
+    const serverInstance = server.listen(3000);
+    return () => serverInstance.close();
+  },
+});
+```
+
+## The Problem: Agents Need to Know When Things Happen
+
+Without inputs, your agent can't react to anything:
+
+```text title="deaf-agent.txt"
+User sends Discord message: "Hey agent, what's the weather?"
+Agent: *doesn't hear anything*
+Agent: *sits idle, does nothing*
+User: "Hello??"
+Agent: *still nothing*
+// ❌ Agent can't hear Discord messages
+// ❌ No way to trigger the agent
+// ❌ Completely unresponsive
+```
+
+## The Solution: Inputs Enable Listening
+
+With inputs, your agent can hear and respond:
+
+```text title="listening-agent.txt"
+User sends Discord message: "Hey agent, what's the weather?"
+Discord Input: *detects new message*
+Agent: *wakes up and processes the message*
+Agent: *calls weather API*
+Agent: *responds via Discord output*
+Discord: "It's 72°F and sunny in San Francisco!"
+// ✅ Agent hears the message
+// ✅ Automatically triggered to respond
+// ✅ Completes the conversation
+```
+
+## How Inputs Work in Your Agent
+
+### 1. You Define What the Agent Listens For
+
+```typescript title="define-inputs.ts"
+const agent = createDreams({
+  model: openai("gpt-4o"),
+  inputs: [
+    discordMessage, // Agent listens to Discord
+    cliInput, // Agent listens to terminal
+    webhookInput, // Agent listens to webhooks
+  ],
+});
+```
+
+### 2. Inputs Watch for Events
+
+When you start your agent, inputs begin listening:
+
+```typescript title="listening-pattern.ts"
+// Discord input starts watching for messages
+discord.on("messageCreate", (message) => {
+  // When message arrives, input sends it to agent
+  send(chatContext, { channelId: message.channel.id }, messageData);
+});
+
+// CLI input starts watching for terminal input
+readline.on("line", (input) => {
+  // When user types, input sends it to agent
+  send(cliContext, { sessionId: "cli" }, input);
+});
+```
+
+### 3. Inputs Trigger the Agent
+
+When an input detects something, it "sends" the data to your agent:
+
+```text title="input-flow.txt"
+1. Discord message arrives: "What's the weather?"
+2. Discord input detects it
+3. Input calls: send(chatContext, {channelId: "123"}, {content: "What's the weather?"})
+4. Agent wakes up and starts thinking
+5. Agent sees the message and decides what to do
+6. Agent calls weather action and responds
+```
+
+## Creating Your First Input
+
+Here's a simple input that listens for file changes:
+
+```typescript title="file-watcher-input.ts"
+import { input } from "@daydreamsai/core";
+import * as z from "zod/v4";
+import fs from "fs";
+
+export const fileWatcher = input({
+  // Type the agent uses to identify this input
+  type: "file:watcher",
+
+  // Schema defines what data the input provides
+  schema: z.object({
+    filename: z.string(),
+    content: z.string(),
+    event: z.enum(["created", "modified", "deleted"]),
+  }),
+
+  // Subscribe function starts listening
+  subscribe: (send, agent) => {
+    const watchDir = "./watched-files";
+
+    // Watch for file changes
+    const watcher = fs.watch(watchDir, (eventType, filename) => {
+      if (filename) {
+        const filepath = `${watchDir}/${filename}`;
+
+        try {
+          const content = fs.readFileSync(filepath, "utf8");
+
+          // Send the file change to the agent
+          send(
+            fileContext,
+            { filename },
+            {
+              filename,
+              content,
+              event: eventType === "rename" ? "created" : "modified",
+            }
+          );
+        } catch (error) {
+          // File might be deleted
+          send(
+            fileContext,
+            { filename },
+            {
+              filename,
+              content: "",
+              event: "deleted",
+            }
+          );
+        }
+      }
+    });
+
+    // Return cleanup function
+    return () => {
+      watcher.close();
+    };
+  },
+});
+```
+
+Use it in your agent:
+
+```typescript title="agent-with-file-watcher.ts"
+const agent = createDreams({
+  model: openai("gpt-4o"),
+  inputs: [fileWatcher],
+});
+
+// Now when files change in ./watched-files/:
+// 1. File watcher detects the change
+// 2. Input sends file data to agent
+// 3. Agent can process and respond to file changes
+```
+
+## Working with Context Targeting
+
+Inputs need to know which context should handle the incoming data:
+
+```typescript title="context-targeting.ts"
+const chatInput = input({
+  type: "chat:message",
+  schema: z.object({
+    message: z.string(),
+    userId: z.string(),
+  }),
+  subscribe: (send, agent) => {
+    chatService.on("message", (data) => {
+      // Target the specific chat context for this user
+      send(
+        chatContext,
+        { userId: data.userId },
+        {
+          message: data.message,
+          userId: data.userId,
+        }
+      );
+    });
+
+    return () => chatService.removeAllListeners("message");
+  },
+});
+```
+
+This creates separate context instances for each user:
+
+* User "alice" gets context instance `chat:alice`
+* User "bob" gets context instance `chat:bob`
+* Each maintains separate conversation memory
+
+## Real-Time vs Polling Inputs
+
+### Real-Time (Event-Driven)
+
+```typescript title="realtime-input.ts"
+// ✅ Good - responds immediately
+subscribe: (send, agent) => {
+  websocket.on("message", (data) => {
+    send(context, args, data);
+  });
+
+  return () => websocket.close();
+};
+```
+
+### Polling (Check Periodically)
+
+```typescript title="polling-input.ts"
+// Sometimes necessary for APIs without webhooks
+subscribe: (send, agent) => {
+  const checkForUpdates = async () => {
+    const newData = await api.getUpdates();
+    if (newData.length > 0) {
+      newData.forEach((item) => {
+        send(context, { id: item.id }, item);
+      });
+    }
+  };
+
+  const interval = setInterval(checkForUpdates, 5000); // Every 5 seconds
+
+  return () => clearInterval(interval);
+};
+```
+
+## Multiple Inputs Working Together
+
+Your agent can listen to multiple sources simultaneously:
+
+```typescript title="multiple-inputs.ts"
+const agent = createDreams({
+  model: openai("gpt-4o"),
+  inputs: [
+    discordMessage, // Discord messages
+    slackMessage, // Slack messages
+    emailReceived, // New emails
+    webhookReceived, // API webhooks
+    fileChanged, // File system changes
+    timerTick, // Scheduled events
+  ],
+});
+
+// Agent now responds to any of these inputs automatically
+```
+
+## Error Handling and Validation
+
+Always handle errors gracefully in your inputs:
+
+```typescript title="error-handling-input.ts"
+const robustInput = input({
+  type: "api:events",
+  schema: z.object({
+    eventId: z.string(),
+    data: z.any(),
+  }),
+  subscribe: (send, agent) => {
+    api.on("event", (rawData) => {
+      try {
+        // Validate the data first
+        const validData = {
+          eventId: rawData.id,
+          data: rawData.payload,
+        };
+
+        // Schema validation happens automatically
+        send(eventContext, { eventId: rawData.id }, validData);
+      } catch (error) {
+        agent.logger.error("api:events", "Invalid event data", {
+          rawData,
+          error: error.message,
+        });
+        // Don't crash - just log and continue
+      }
+    });
+
+    return () => api.removeAllListeners("event");
+  },
+});
+```
+
+## Best Practices
+
+### 1. Use Clear Types and Schemas
+
+```typescript title="good-input-definition.ts"
+// ✅ Good - clear purpose and validation
+const userMessage = input({
+  type: "user:message",
+  schema: z.object({
+    content: z.string().min(1).max(2000),
+    userId: z.string().uuid(),
+    timestamp: z.number(),
+  }),
+  // ...
+});
+
+// ❌ Bad - unclear and unvalidated
+const dataInput = input({
+  type: "data",
+  schema: z.any(),
+  // ...
+});
+```
+
+### 2. Always Return Cleanup Functions
+
+```typescript title="cleanup-function.ts"
+// ✅ Good - proper cleanup
+subscribe: (send, agent) => {
+  const listener = (data) => send(context, args, data);
+
+  eventSource.addEventListener("event", listener);
+
+  return () => {
+    eventSource.removeEventListener("event", listener);
+    eventSource.close();
+  };
+};
+
+// ❌ Bad - no cleanup (memory leaks!)
+subscribe: (send, agent) => {
+  eventSource.addEventListener("event", (data) => {
+    send(context, args, data);
+  });
+
+  return () => {}; // Nothing cleaned up!
+};
+```
+
+### 3. Handle Connection Failures
+
+```typescript title="reconnection-input.ts"
+subscribe: (send, agent) => {
+  let reconnectAttempts = 0;
+  const maxReconnects = 5;
+
+  const connect = () => {
+    try {
+      const connection = createConnection();
+
+      connection.on("data", (data) => {
+        reconnectAttempts = 0; // Reset on successful data
+        send(context, args, data);
+      });
+
+      connection.on("error", () => {
+        if (reconnectAttempts < maxReconnects) {
+          reconnectAttempts++;
+          setTimeout(connect, 1000 * reconnectAttempts);
+        }
+      });
+
+      return connection;
+    } catch (error) {
+      agent.logger.error("connection failed", error);
+    }
+  };
+
+  const connection = connect();
+
+  return () => connection?.close();
+};
+```
+
+### 4. Target the Right Context
+
+```typescript title="context-routing.ts"
+subscribe: (send, agent) => {
+  service.on("event", (event) => {
+    // Route to appropriate context based on event type
+    if (event.type === "user_message") {
+      send(chatContext, { userId: event.userId }, event.data);
+    } else if (event.type === "system_alert") {
+      send(alertContext, { alertId: event.id }, event.data);
+    } else if (event.type === "game_move") {
+      send(gameContext, { gameId: event.gameId }, event.data);
+    }
+  });
+
+  return () => service.removeAllListeners("event");
+};
+```
+
+## Key Takeaways
+
+* **Inputs enable responsiveness** - Without them, agents can't hear anything
+* **Subscribe pattern** - Watch external sources, call `send()` when data
+  arrives
+* **Context targeting** - Route inputs to appropriate context instances
+* **Always cleanup** - Return functions to disconnect when agent stops
+* **Validate data** - Use schemas to ensure incoming data is correct
+* **Handle errors gracefully** - Don't let bad input data crash your agent
+
+Inputs are what turn your agent from a one-time script into a responsive,
+always-listening assistant that can react to the world in real-time.
+
+
+file: ./content/docs/core/concepts/mcp.mdx
+meta: {
+  "title": "Model Context Protocol (MCP)",
+  "description": "Connect your agent to any MCP server for expanded capabilities and context."
+}
+        
+## What is MCP Integration?
+
+**Model Context Protocol (MCP)** lets your agent connect to external services
+and data sources through a standardized interface. Think of it like **adding
+superpowers from other applications** to your agent.
+
+Your agent becomes a **headless MCP client** that can:
+
+* **Connect** to any MCP server (local or remote)
+* **Access** their resources, tools, and prompts
+* **Use** these capabilities seamlessly alongside your other actions
+* **Scale** by connecting to multiple servers simultaneously
+
+## Real Examples
+
+Here's what MCP servers can provide to your agent:
+
+### Database Explorer
+
+```typescript title="sqlite-mcp-connection.ts"
+// MCP server provides database access
+// → Agent can query any SQLite database
+// → No need to write database connection code
+
+const result = await ctx.callAction("mcp.callTool", {
+  serverId: "sqlite-explorer",
+  name: "query",
+  arguments: {
+    sql: "SELECT * FROM users WHERE active = 1",
+  },
+});
+
+// Returns: User data from the database
+```
+
+### Web Search Service
+
+```typescript title="web-search-mcp.ts"
+// MCP server provides web search capabilities
+// → Agent can search the internet
+// → Get real-time information
+
+const result = await ctx.callAction("mcp.callTool", {
+  serverId: "web-search",
+  name: "search",
+  arguments: {
+    query: "latest OpenAI announcements",
+    maxResults: 5,
+  },
+});
+
+// Returns: Current search results
+```
+
+### File System Access
+
+```typescript title="filesystem-mcp.ts"
+// MCP server provides file system access
+// → Agent can read/write files
+// → Access local documents and data
+
+const content = await ctx.callAction("mcp.readResource", {
+  serverId: "filesystem",
+  uri: "file:///project/README.md",
+});
+
+// Returns: File contents
+```
+
+## The Problem: Isolated Agent Capabilities
+
+Without MCP, your agent is limited to what you explicitly code:
+
+```typescript title="limited-agent-capabilities.ts"
+// ❌ Without MCP - every capability needs custom implementation
+
+// Want database access? Write database code
+const db = new Database(connectionString);
+const users = await db.query("SELECT * FROM users");
+
+// Want web search? Build web scraping
+const response = await fetch(`https://api.search.com/q=${query}`);
+const results = await response.json();
+
+// Want file access? Handle file I/O
+const content = await fs.readFile(filepath, "utf-8");
+
+// Want weather data? Build weather client
+const weather = await fetch(`https://api.weather.com/${city}`);
+
+// Problems:
+// 🔧 Manual integration for every data source
+// 🐛 Custom error handling for each service
+// 📚 Learning different APIs for each capability
+// 🔄 Maintaining multiple integrations
+```
+
+## The Solution: MCP Provides Universal Access
+
+With MCP, your agent connects to any data source through one interface:
+
+```typescript title="mcp-universal-access.ts"
+// ✅ With MCP - universal interface for all capabilities
+
+// Database access through MCP
+const users = await ctx.callAction("mcp.callTool", {
+  serverId: "database",
+  name: "query",
+  arguments: { sql: "SELECT * FROM users" },
+});
+
+// Web search through MCP
+const searchResults = await ctx.callAction("mcp.callTool", {
+  serverId: "search",
+  name: "web-search",
+  arguments: { query: "OpenAI news" },
+});
+
+// File access through MCP
+const fileContent = await ctx.callAction("mcp.readResource", {
+  serverId: "filesystem",
+  uri: "file:///project/data.json",
+});
+
+// Weather data through MCP
+const weather = await ctx.callAction("mcp.callTool", {
+  serverId: "weather",
+  name: "current-conditions",
+  arguments: { city: "San Francisco" },
+});
+
+// Benefits:
+// 🎯 Same interface for all data sources
+// 🛡️ Consistent error handling
+// 📖 One API pattern to learn
+// ⚡ Pre-built server integrations
+```
+
+## How MCP Works with Daydreams
+
+MCP integration happens through the **extension system**:
+
+```typescript title="mcp-integration-flow.ts"
+// 1. Add MCP extension to your agent
+const agent = createDreams({
+  extensions: [
+    createMcpExtension([
+      {
+        id: "my-database",
+        name: "SQLite Explorer",
+        transport: {
+          type: "stdio",
+          command: "npx",
+          args: ["@modelcontextprotocol/server-sqlite", "path/to/database.db"],
+        },
+      },
+      {
+        id: "web-search",
+        name: "Search Service",
+        transport: {
+          type: "sse",
+          serverUrl: "http://localhost:3001",
+        },
+      },
+    ]),
+  ],
+});
+
+// 2. Agent automatically gets MCP actions:
+// - mcp.listServers
+// - mcp.listTools
+// - mcp.callTool
+// - mcp.listResources
+// - mcp.readResource
+// - mcp.listPrompts
+// - mcp.getPrompt
+
+// 3. Use MCP capabilities in any action
+const weatherAction = action({
+  name: "get-weather",
+  handler: async ({ city }, ctx) => {
+    // Call MCP weather server
+    const weather = await ctx.callAction("mcp.callTool", {
+      serverId: "weather-service",
+      name: "current",
+      arguments: { location: city },
+    });
+
+    return `Weather in ${city}: ${weather.result.description}`;
+  },
+});
+```
+
+## MCP Transport Types
+
+MCP supports two connection methods:
+
+### Local Servers (stdio)
+
+For servers running as separate processes:
+
+```typescript title="stdio-transport.ts"
+// Local MCP server via command line
+{
+  id: "sqlite-db",
+  name: "SQLite Database",
+  transport: {
+    type: "stdio",
+    command: "npx",
+    args: ["@modelcontextprotocol/server-sqlite", "./data.db"]
+  }
+}
+
+// Local Python MCP server
+{
+  id: "python-analysis",
+  name: "Data Analysis Server",
+  transport: {
+    type: "stdio",
+    command: "python",
+    args: ["analysis_server.py"]
+  }
+}
+
+// Local Node.js MCP server
+{
+  id: "file-system",
+  name: "File System Access",
+  transport: {
+    type: "stdio",
+    command: "node",
+    args: ["filesystem-server.js"]
+  }
+}
+```
+
+### Remote Servers (SSE)
+
+For servers running as web services:
+
+```typescript title="sse-transport.ts"
+// Remote MCP server via HTTP
+{
+  id: "cloud-search",
+  name: "Cloud Search Service",
+  transport: {
+    type: "sse",
+    serverUrl: "https://search-api.example.com"
+  }
+}
+
+// Local development server
+{
+  id: "dev-database",
+  name: "Development Database",
+  transport: {
+    type: "sse",
+    serverUrl: "http://localhost:3001",
+    sseEndpoint: "/events",      // Optional
+    messageEndpoint: "/messages" // Optional
+  }
+}
+```
+
+## Working with MCP Capabilities
+
+### Discover Available Tools
+
+```typescript title="discover-mcp-tools.ts"
+// List all connected MCP servers
+const servers = await ctx.callAction("mcp.listServers", {});
+console.log("Connected servers:", servers.servers);
+
+// Discover tools on a specific server
+const tools = await ctx.callAction("mcp.listTools", {
+  serverId: "database-server",
+});
+
+console.log("Available tools:", tools.tools);
+// Output: [
+//   { name: "query", description: "Execute SQL query" },
+//   { name: "schema", description: "Get table schema" },
+//   { name: "insert", description: "Insert new record" }
+// ]
+```
+
+### Use Server Tools
+
+```typescript title="use-mcp-tools.ts"
+// Execute a database query
+const queryResult = await ctx.callAction("mcp.callTool", {
+  serverId: "database-server",
+  name: "query",
+  arguments: {
+    sql: "SELECT name, email FROM users WHERE active = 1 LIMIT 10",
+  },
+});
+
+if (queryResult.error) {
+  console.error("Query failed:", queryResult.error);
+} else {
+  console.log("Query results:", queryResult.result);
+}
+
+// Call a web search tool
+const searchResult = await ctx.callAction("mcp.callTool", {
+  serverId: "search-server",
+  name: "web-search",
+  arguments: {
+    query: "Daydreams AI framework tutorial",
+    maxResults: 5,
+    safeSearch: true,
+  },
+});
+```
+
+### Access Server Resources
+
+```typescript title="access-mcp-resources.ts"
+// List available resources
+const resources = await ctx.callAction("mcp.listResources", {
+  serverId: "filesystem-server",
+});
+
+console.log("Available resources:", resources.resources);
+
+// Read a specific resource
+const fileContent = await ctx.callAction("mcp.readResource", {
+  serverId: "filesystem-server",
+  uri: "file:///project/config.json",
+});
+
+console.log("File content:", fileContent.resource.contents[0].text);
+
+// Read a database schema resource
+const schema = await ctx.callAction("mcp.readResource", {
+  serverId: "database-server",
+  uri: "schema://users",
+});
+```
+
+### Use Server Prompts
+
+```typescript title="use-mcp-prompts.ts"
+// List available prompts
+const prompts = await ctx.callAction("mcp.listPrompts", {
+  serverId: "analysis-server",
+});
+
+// Get a specific prompt with arguments
+const analysisPrompt = await ctx.callAction("mcp.getPrompt", {
+  serverId: "analysis-server",
+  name: "analyze-data",
+  arguments: {
+    dataType: "sales",
+    timeframe: "last-quarter",
+  },
+});
+
+// Use the prompt content with your LLM
+const llmResponse = await generateText({
+  model: openai("gpt-4"),
+  prompt: analysisPrompt.prompt.messages[0].content.text,
+});
+```
+
+## Real-World Examples
+
+### Customer Support Agent
+
+```typescript title="customer-support-with-mcp.ts"
+const customerSupportAgent = createDreams({
+  extensions: [
+    createMcpExtension([
+      {
+        id: "crm-database",
+        name: "Customer Database",
+        transport: {
+          type: "stdio",
+          command: "npx",
+          args: ["@company/crm-mcp-server"],
+        },
+      },
+      {
+        id: "knowledge-base",
+        name: "Support Knowledge Base",
+        transport: {
+          type: "sse",
+          serverUrl: "https://kb.company.com/mcp",
+        },
+      },
+    ]),
+  ],
+
+  actions: [
+    action({
+      name: "handle-support-ticket",
+      handler: async ({ ticketId, customerEmail }, ctx) => {
+        // Get customer history from CRM
+        const customerData = await ctx.callAction("mcp.callTool", {
+          serverId: "crm-database",
+          name: "get-customer",
+          arguments: { email: customerEmail },
+        });
+
+        // Search knowledge base for solutions
+        const solutions = await ctx.callAction("mcp.callTool", {
+          serverId: "knowledge-base",
+          name: "search-solutions",
+          arguments: {
+            query: customerData.result.lastIssueCategory,
+            limit: 3,
+          },
+        });
+
+        return {
+          customer: customerData.result,
+          suggestedSolutions: solutions.result,
+          escalate:
+            customerData.result.tier === "premium" &&
+            solutions.result.length === 0,
+        };
+      },
+    }),
+  ],
+});
+```
+
+### Trading Analytics Agent
+
+```typescript title="trading-agent-with-mcp.ts"
+const tradingAgent = createDreams({
+  extensions: [
+    createMcpExtension([
+      {
+        id: "market-data",
+        name: "Market Data Provider",
+        transport: {
+          type: "sse",
+          serverUrl: "wss://market-data.example.com/mcp",
+        },
+      },
+      {
+        id: "portfolio-db",
+        name: "Portfolio Database",
+        transport: {
+          type: "stdio",
+          command: "python",
+          args: ["portfolio_server.py"],
+        },
+      },
+    ]),
+  ],
+
+  actions: [
+    action({
+      name: "analyze-portfolio",
+      handler: async ({ portfolioId }, ctx) => {
+        // Get current portfolio positions
+        const positions = await ctx.callAction("mcp.callTool", {
+          serverId: "portfolio-db",
+          name: "get-positions",
+          arguments: { portfolioId },
+        });
+
+        // Get real-time market data for each position
+        const marketData = await Promise.all(
+          positions.result.map((position) =>
+            ctx.callAction("mcp.callTool", {
+              serverId: "market-data",
+              name: "get-quote",
+              arguments: { symbol: position.symbol },
+            })
+          )
+        );
+
+        // Calculate portfolio performance
+        const analysis = {
+          totalValue: 0,
+          dayChange: 0,
+          positions: positions.result.map((position, i) => ({
+            ...position,
+            currentPrice: marketData[i].result.price,
+            dayChange: marketData[i].result.change,
+          })),
+        };
+
+        return analysis;
+      },
+    }),
+  ],
+});
+```
+
+## Error Handling Best Practices
+
+### Graceful Fallbacks
+
+```typescript title="mcp-error-handling.ts"
+const robustAction = action({
+  name: "get-data-with-fallback",
+  handler: async ({ query }, ctx) => {
+    // Try primary MCP server first
+    let result = await ctx.callAction("mcp.callTool", {
+      serverId: "primary-search",
+      name: "search",
+      arguments: { query },
+    });
+
+    if (result.error) {
+      console.warn("Primary search failed, trying backup:", result.error);
+
+      // Fallback to secondary server
+      result = await ctx.callAction("mcp.callTool", {
+        serverId: "backup-search",
+        name: "search",
+        arguments: { query },
+      });
+    }
+
+    if (result.error) {
+      // Final fallback to local search
+      return {
+        results: [],
+        source: "local-cache",
+        message: "External search unavailable",
+      };
+    }
+
+    return {
+      results: result.result,
+      source: result.error ? "backup" : "primary",
+    };
+  },
+});
+```
+
+### Connection Monitoring
+
+```typescript title="mcp-connection-monitoring.ts"
+const monitorConnections = action({
+  name: "check-mcp-health",
+  handler: async (args, ctx) => {
+    const servers = await ctx.callAction("mcp.listServers", {});
+
+    const healthChecks = await Promise.all(
+      servers.servers.map(async (server) => {
+        try {
+          // Try to list tools as a health check
+          const tools = await ctx.callAction("mcp.listTools", {
+            serverId: server.id,
+          });
+
+          return {
+            serverId: server.id,
+            name: server.name,
+            status: tools.error ? "error" : "healthy",
+            error: tools.error,
+          };
+        } catch (error) {
+          return {
+            serverId: server.id,
+            name: server.name,
+            status: "disconnected",
+            error: error.message,
+          };
+        }
+      })
+    );
+
+    return {
+      timestamp: new Date().toISOString(),
+      servers: healthChecks,
+    };
+  },
+});
+```
+
+## Available MCP Servers
+
+The MCP ecosystem includes servers for common use cases:
+
+### Official Servers
+
+```typescript title="official-mcp-servers.ts"
+// SQLite database access
+{
+  id: "sqlite",
+  name: "SQLite Database",
+  transport: {
+    type: "stdio",
+    command: "npx",
+    args: ["@modelcontextprotocol/server-sqlite", "./database.db"]
+  }
+}
+
+// File system access
+{
+  id: "filesystem",
+  name: "File System",
+  transport: {
+    type: "stdio",
+    command: "npx",
+    args: ["@modelcontextprotocol/server-filesystem", "./data"]
+  }
+}
+
+// Git repository access
+{
+  id: "git",
+  name: "Git Repository",
+  transport: {
+    type: "stdio",
+    command: "npx",
+    args: ["@modelcontextprotocol/server-git", "./repo"]
+  }
+}
+```
+
+### Community Servers
+
+```typescript title="community-mcp-servers.ts"
+// Web search capabilities
+{
+  id: "web-search",
+  name: "Web Search",
+  transport: {
+    type: "stdio",
+    command: "python",
+    args: ["-m", "mcp_server_web_search"]
+  }
+}
+
+// AWS services access
+{
+  id: "aws",
+  name: "AWS Services",
+  transport: {
+    type: "stdio",
+    command: "node",
+    args: ["aws-mcp-server.js"]
+  }
+}
+```
+
+## Building Custom MCP Servers
+
+You can create custom MCP servers for your specific needs:
+
+```typescript title="custom-mcp-server.ts"
+// Simple MCP server example
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import * as z from "zod/v4";
+
+const server = new McpServer({
+  name: "Custom Business Server",
+  version: "1.0.0",
+});
+
+// Add a tool for business logic
+server.tool(
+  "calculate-roi",
+  {
+    investment: z.number(),
+    returns: z.number(),
+    timeframe: z.number(),
+  },
+  async ({ investment, returns, timeframe }) => {
+    const roi = ((returns - investment) / investment) * 100;
+    const annualizedRoi = roi / timeframe;
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            roi: roi.toFixed(2),
+            annualizedRoi: annualizedRoi.toFixed(2),
+            profitable: roi > 0,
+          }),
+        },
+      ],
+    };
+  }
+);
+
+// Add a resource for business data
+server.resource("business-metrics", async () => ({
+  contents: [
+    {
+      uri: "metrics://quarterly",
+      text: JSON.stringify({
+        revenue: 1000000,
+        expenses: 750000,
+        profit: 250000,
+        customers: 5000,
+      }),
+    },
+  ],
+}));
+
+// Start the server
+const transport = new StdioServerTransport();
+await server.connect(transport);
+```
+
+## Best Practices
+
+### 1. Server Organization
+
+```typescript title="organize-mcp-servers.ts"
+// ✅ Good - group related servers by purpose
+const databaseServers = [
+  {
+    id: "user-db",
+    name: "User Database",
+    transport: {
+      /* ... */
+    },
+  },
+  {
+    id: "analytics-db",
+    name: "Analytics Database",
+    transport: {
+      /* ... */
+    },
+  },
+];
+
+const externalServers = [
+  {
+    id: "web-search",
+    name: "Web Search",
+    transport: {
+      /* ... */
+    },
+  },
+  {
+    id: "weather",
+    name: "Weather API",
+    transport: {
+      /* ... */
+    },
+  },
+];
+
+createMcpExtension([...databaseServers, ...externalServers]);
+
+// ❌ Bad - unclear server purposes
+createMcpExtension([
+  {
+    id: "server1",
+    name: "Server",
+    transport: {
+      /* ... */
+    },
+  },
+  {
+    id: "server2",
+    name: "Other Server",
+    transport: {
+      /* ... */
+    },
+  },
+]);
+```
+
+### 2. Error Boundaries
+
+```typescript title="mcp-error-boundaries.ts"
+// ✅ Good - wrap MCP calls in try-catch
+const safeAction = action({
+  name: "safe-mcp-call",
+  handler: async ({ query }, ctx) => {
+    try {
+      const result = await ctx.callAction("mcp.callTool", {
+        serverId: "search-server",
+        name: "search",
+        arguments: { query },
+      });
+
+      if (result.error) {
+        return { error: `Search failed: ${result.error}` };
+      }
+
+      return { data: result.result };
+    } catch (error) {
+      return { error: `Connection failed: ${error.message}` };
+    }
+  },
+});
+```
+
+### 3. Resource Validation
+
+```typescript title="mcp-resource-validation.ts"
+// ✅ Good - validate MCP responses
+const validateResponse = (mcpResult: any) => {
+  if (mcpResult.error) {
+    throw new Error(`MCP Error: ${mcpResult.error}`);
+  }
+
+  if (!mcpResult.result) {
+    throw new Error("MCP returned no result");
+  }
+
+  return mcpResult.result;
+};
+
+const validatedAction = action({
+  name: "validated-mcp-call",
+  handler: async ({ id }, ctx) => {
+    const result = await ctx.callAction("mcp.callTool", {
+      serverId: "database",
+      name: "get-user",
+      arguments: { id },
+    });
+
+    const userData = validateResponse(result);
+
+    // Now safe to use userData
+    return { user: userData };
+  },
+});
+```
+
+## Next Steps
+
+* **[Extensions vs Services](/docs/core/advanced/extensions-vs-services)** -
+  When to use MCP vs other integration patterns
+* **[Custom Extensions](/docs/core/advanced/extensions)** - Build your own
+  integrations
+* **[Examples](/docs/tutorials/examples)** - See complete MCP implementations
+
+## Key Takeaways
+
+* **Universal interface** - One API pattern for all external capabilities
+* **Headless client** - Your agent connects to any MCP server seamlessly
+* **Seamless integration** - MCP actions work like any other agent action
+* **Multiple transports** - Support both local (stdio) and remote (SSE) servers
+* **Ecosystem ready** - Connect to existing MCP servers or build custom ones
+
+MCP transforms your agent from isolated code into a connected system that can
+access any data source or service through a standardized protocol.
+
+
+file: ./content/docs/core/concepts/memory.mdx
+meta: {
+  "title": "Memory",
+  "description": "How Daydreams agents store, recall, and learn from information."
+}
+        
+## What is Memory?
+
+Memory is how your agent **remembers** things between conversations. Just like
+you remember what you talked about yesterday, agents need memory to be helpful
+over time.
+
+## Real Examples
+
+Here are different types of memory your agent uses:
+
+### Short-Term Memory (This Conversation)
+
+```typescript title="short-term-memory.ts"
+// What happened in the current conversation
+const workingMemory = {
+  messages: [
+    { user: "What's the weather?" },
+    { agent: "Let me check..." },
+    { action: "getWeather", result: "72°F, sunny" },
+    { agent: "It's 72°F and sunny!" },
+  ],
+  // This gets cleared when conversation ends
+};
+```
+
+### Long-Term Memory (Persistent Data)
+
+```typescript title="long-term-memory.ts"
+// What the agent remembers about you
+const contextMemory = {
+  userId: "alice",
+  preferences: {
+    favoriteColor: "blue",
+    timezone: "America/New_York",
+    wantsDetailedWeather: true,
+  },
+  chatHistory: [
+    "Discussed weather preferences on 2024-01-15",
+    "Helped with todo list on 2024-01-16",
+  ],
+  // This persists forever
+};
+```
+
+### Experience Memory (Learning from Past)
+
+```typescript title="experience-memory.ts"
+// What the agent learned from previous interactions
+const episodicMemory = [
+  {
+    situation: "User asked about weather in winter",
+    action: "Provided temperature + suggested warm clothes",
+    result: "User was happy and thanked me",
+    lesson: "Winter weather queries benefit from clothing suggestions",
+  },
+  // Agent can recall and apply these lessons to new situations
+];
+```
+
+## The Problem: Agents Without Memory Are Useless
+
+Without memory, every conversation starts from scratch:
+
+```text title="forgetful-agent.txt"
+Day 1:
+User: "My name is Alice and I like detailed weather reports"
+Agent: "Nice to meet you Alice! I'll remember you like detailed weather."
+
+Day 2:
+User: "What's the weather?"
+Agent: "Hi! I'm not sure who you are. What kind of weather info do you want?"
+// ❌ Forgot everything about Alice
+// ❌ Has to ask the same questions again
+// ❌ Terrible user experience
+```
+
+## The Solution: Memory Makes Agents Smart
+
+With memory, agents get better over time:
+
+```text title="smart-agent.txt"
+Day 1:
+User: "My name is Alice and I like detailed weather reports"
+Agent: "Nice to meet you Alice! I'll remember you like detailed weather."
+→ Saves: { user: "Alice", preferences: { detailedWeather: true } }
+
+Day 2:
+User: "What's the weather?"
+Agent: → Loads: { user: "Alice", preferences: { detailedWeather: true } }
+Agent: "Hi Alice! It's 72°F and sunny with 15mph winds from the west,
+       humidity at 45%, and clear skies expected all day."
+// ✅ Remembered Alice and her preferences
+// ✅ Provided detailed weather automatically
+// ✅ Great user experience
+```
+
+## How Memory Works in Your Agent
+
+### 1. Agent Automatically Saves Important Information
+
+```typescript title="automatic-memory.ts"
+// Your agent's context automatically saves important info
+const chatContext = context({
+  type: "chat",
+  schema: z.object({ userId: z.string() }),
+
+  create: () => ({
+    preferences: {},
+    chatHistory: [],
+    firstMet: new Date().toISOString(),
+  }),
+
+  // This memory persists between conversations
+});
+
+// When user says: "I prefer metric units"
+// Agent automatically saves: preferences.units = "metric"
+// Next conversation: Agent uses metric units automatically
+```
+
+### 2. Different Types of Memory for Different Needs
+
+```typescript title="memory-types.ts"
+const agent = createDreams({
+  model: openai("gpt-4o"),
+
+  // Configure where memory gets saved
+  memory: createMemory(
+    // Long-term storage (user preferences, chat history)
+    await createMongoMemoryStore({ uri: "mongodb://localhost:27017" }),
+
+    // Experience storage (what worked well in the past)
+    createChromaVectorStore("agent-experiences")
+  ),
+
+  // Enable automatic learning from conversations
+  generateMemories: true,
+});
+```
+
+### 3. Agent Recalls Relevant Memories
+
+```text title="memory-recall.txt"
+New user question: "How do I cook pasta?"
+
+Agent thinks:
+1. Check if I know this user (loads context memory)
+2. Recall similar past conversations (searches experience memory)
+3. Found: "Previous users liked step-by-step cooking instructions"
+4. Respond with detailed cooking steps
+
+Result: Agent gives better answer based on past experience!
+```
+
+## Setting Up Memory in Your Agent
+
+Here's how to add memory to your agent:
+
+### Basic Memory (In-Memory)
+
+```typescript title="basic-memory.ts"
+import {
+  createDreams,
+  createMemory,
+  createMemoryStore,
+} from "@daydreamsai/core";
+
+const agent = createDreams({
+  model: openai("gpt-4o"),
+
+  // Basic memory - data lost when agent restarts
+  memory: createMemory(
+    createMemoryStore(), // Stores in RAM
+    createVectorStore() // No persistent experience storage
+  ),
+});
+```
+
+### Persistent Memory (Database)
+
+```typescript title="persistent-memory.ts"
+import { createMongoMemoryStore } from "@daydreamsai/mongo";
+import { createChromaVectorStore } from "@daydreamsai/chroma";
+
+const agent = createDreams({
+  model: openai("gpt-4o"),
+
+  // Persistent memory - data survives restarts
+  memory: createMemory(
+    // Save to MongoDB
+    await createMongoMemoryStore({
+      uri: "mongodb://localhost:27017",
+      dbName: "my-agent-memory",
+    }),
+
+    // Save experiences to ChromaDB for learning
+    createChromaVectorStore("my-agent-experiences")
+  ),
+
+  // Enable automatic learning
+  generateMemories: true,
+});
+```
+
+## Working with Context Memory
+
+Context memory is what your agent remembers about specific conversations:
+
+```typescript title="context-memory-usage.ts"
+const userProfileContext = context({
+  type: "user-profile",
+  schema: z.object({ userId: z.string() }),
+
+  // Define what to remember about each user
+  create: () => ({
+    name: null,
+    preferences: {
+      language: "en",
+      timezone: null,
+      communicationStyle: "friendly",
+    },
+    chatSummary: [],
+    lastSeen: null,
+  }),
+
+  // How this memory appears to the LLM
+  render: (state) => `
+User Profile: ${state.args.userId}
+Name: ${state.memory.name || "Unknown"}
+Preferences: ${JSON.stringify(state.memory.preferences)}
+Last interaction: ${state.memory.lastSeen || "First time"}
+
+Recent chat summary:
+${state.memory.chatSummary.slice(-3).join("\n")}
+  `,
+});
+```
+
+### Actions Can Update Memory
+
+```typescript title="memory-updating-action.ts"
+const updatePreferenceAction = action({
+  name: "update-user-preference",
+  description: "Updates a user's preference",
+  schema: z.object({
+    key: z.string(),
+    value: z.string(),
+  }),
+
+  handler: async ({ key, value }, ctx) => {
+    // Update the user's memory
+    ctx.memory.preferences[key] = value;
+    ctx.memory.lastSeen = new Date().toISOString();
+
+    // Memory automatically saves after this action
+    return {
+      success: true,
+      message: `Updated ${key} to ${value}`,
+    };
+  },
+});
+```
+
+## Experience Memory: Learning from the Past
+
+Your agent can learn from previous conversations:
+
+```typescript title="experience-learning.ts"
+// Enable automatic experience generation
+const agent = createDreams({
+  model: openai("gpt-4o"),
+  memory: createMemory(
+    await createMongoMemoryStore({ uri: "mongodb://localhost:27017" }),
+    createChromaVectorStore("experiences")
+  ),
+
+  // Agent automatically creates "episodes" from conversations
+  generateMemories: true,
+
+  // Optional: Export training data for fine-tuning
+  exportTrainingData: true,
+  trainingDataPath: "./agent-training.jsonl",
+});
+
+// Now when user asks: "How do I bake a cake?"
+// Agent recalls: "I helped someone bake a cake before. They liked step-by-step instructions with temperatures."
+// Agent provides: Detailed baking instructions with exact temperatures and times
+```
+
+## Memory in Action: Complete Example
+
+Here's how all the memory types work together:
+
+```typescript title="complete-memory-example.ts"
+// 1. User starts conversation
+User: "Hi, I'm Sarah. I'm learning to cook."
+
+// 2. Agent creates/loads context memory
+Context Memory: {
+  name: null,  // Will be updated
+  interests: [], // Will be updated
+  skillLevel: null // Will be updated
+}
+
+// 3. Agent processes and updates memory
+Action: updateUserProfile({
+  name: "Sarah",
+  interests: ["cooking"],
+  skillLevel: "beginner"
+})
+
+// 4. Later conversation
+User: "How do I make pasta?"
+
+// 5. Agent loads Sarah's memory
+Context Memory: {
+  name: "Sarah",
+  interests: ["cooking"],
+  skillLevel: "beginner"  // Agent knows she's a beginner!
+}
+
+// 6. Agent recalls similar past experiences
+Experience Memory: "When helping beginners with pasta, detailed steps work best"
+
+// 7. Agent responds appropriately
+Agent: "Hi Sarah! Since you're learning to cook, I'll give you detailed step-by-step pasta instructions..."
+
+// ✅ Personalized response based on memory!
+```
+
+## Best Practices
+
+### 1. Choose the Right Memory Storage
+
+```typescript title="memory-storage-choice.ts"
+// ✅ Good for development - simple setup
+memory: createMemory(
+  createMemoryStore(), // In-memory, lost on restart
+  createVectorStore() // No learning capabilities
+);
+
+// ✅ Good for production - data persists
+memory: createMemory(
+  await createMongoMemoryStore({ uri: process.env.MONGODB_URI }),
+  createChromaVectorStore("prod-experiences")
+);
+```
+
+### 2. Design Clear Memory Structures
+
+```typescript title="clear-memory-structure.ts"
+// ✅ Good - clear, organized structure
+interface UserMemory {
+  profile: {
+    name: string;
+    email: string;
+    joinDate: string;
+  };
+  preferences: {
+    language: string;
+    timezone: string;
+    notifications: boolean;
+  };
+  activityHistory: Array<{
+    action: string;
+    timestamp: string;
+    result: string;
+  }>;
+}
+
+// ❌ Bad - everything mixed together
+interface MessyMemory {
+  stuff: any;
+  data: any;
+  things: any;
+}
+```
+
+### 3. Don't Store Too Much
+
+```typescript title="memory-size-management.ts"
+// ✅ Good - keep recent, relevant data
+render: (state) => {
+  const recentChats = state.memory.chatHistory.slice(-5); // Last 5 only
+  const importantPrefs = {
+    language: state.memory.preferences.language,
+    timezone: state.memory.preferences.timezone,
+  };
+
+  return `Recent activity: ${recentChats.join("\n")}`;
+};
+
+// ❌ Bad - dump everything
+render: (state) => JSON.stringify(state.memory); // Overwhelming!
+```
+
+### 4. Handle Memory Gracefully
+
+```typescript title="graceful-memory-handling.ts"
+handler: async ({ userId }, ctx) => {
+  try {
+    // Try to load user memory
+    const userPrefs = ctx.memory.preferences || {};
+
+    // Provide defaults if memory is empty
+    const language = userPrefs.language || "en";
+    const timezone = userPrefs.timezone || "UTC";
+
+    return { language, timezone };
+  } catch (error) {
+    // Handle memory errors gracefully
+    console.error("Memory error:", error);
+    return { language: "en", timezone: "UTC" }; // Safe defaults
+  }
+};
+```
+
+## Memory Types Summary
+
+| Memory Type           | Purpose               | Lifetime            | Example                                |
+| --------------------- | --------------------- | ------------------- | -------------------------------------- |
+| **Working Memory**    | Current conversation  | Single conversation | "User just asked about weather"        |
+| **Context Memory**    | User/session data     | Persists forever    | "Alice prefers detailed weather"       |
+| **Action Memory**     | Action-specific state | Persists forever    | "Weather API called 47 times today"    |
+| **Experience Memory** | Learning from past    | Persists forever    | "Users like step-by-step cooking help" |
+
+## Key Takeaways
+
+* **Memory makes agents smart** - Without it, every conversation starts from
+  scratch
+* **Multiple memory types** - Short-term (conversation), long-term (user data),
+  experience (learning)
+* **Automatic persistence** - Agent saves important information without extra
+  code
+* **Experience learning** - Agent gets better over time by remembering what
+  works
+* **Choose storage wisely** - In-memory for development, database for production
+* **Keep it organized** - Clear memory structures make agents more reliable
+
+Memory transforms your agent from a stateless chatbot into an intelligent
+assistant that learns, remembers, and gets better with every interaction.
+
+
+file: ./content/docs/core/concepts/outputs.mdx
+meta: {
+  "title": "Outputs",
+  "description": "How Daydreams agents send information and responses."
+}
+        
+## What is an Output?
+
+An output is how your agent **sends** information to the outside world. If
+actions are what your agent can "do", outputs are how your agent "speaks" or
+"responds".
+
+## Real Examples
+
+Here are outputs that make agents useful:
+
+### Discord Message
+
+```typescript title="discord-output.ts"
+// Agent can send Discord messages
+const discordMessage = output({
+  type: "discord:message",
+  description: "Sends a message to Discord",
+  schema: z.string(),
+  attributes: z.object({
+    channelId: z.string(),
+  }),
+  handler: async (message, ctx) => {
+    await discord.send(ctx.outputRef.params.channelId, message);
+    return { sent: true };
+  },
+});
+```
+
+### Console Print
+
+```typescript title="console-output.ts"
+// Agent can print to console
+const consolePrint = output({
+  type: "console:print",
+  description: "Prints a message to the console",
+  schema: z.string(),
+  handler: async (message) => {
+    console.log(`Agent: ${message}`);
+    return { printed: true };
+  },
+});
+```
+
+### Email Notification
+
+```typescript title="email-output.ts"
+// Agent can send emails
+const emailOutput = output({
+  type: "email:send",
+  description: "Sends an email notification",
+  schema: z.string(),
+  attributes: z.object({
+    to: z.string(),
+    subject: z.string(),
+  }),
+  handler: async (body, ctx) => {
+    const { to, subject } = ctx.outputRef.params;
+    await emailService.send({ to, subject, body });
+    return { emailSent: true };
+  },
+});
+```
+
+## The Problem: Agents Need to Communicate
+
+Without outputs, your agent can think but can't communicate:
+
+```text title="silent-agent.txt"
+User: "Send me the weather report"
+Agent: *calls weather API internally*
+Agent: *knows it's 72°F and sunny*
+Agent: *...but can't tell you!*
+// ❌ Agent gets the data but you never see it
+// ❌ No way to respond or communicate
+// ❌ Useless to humans
+```
+
+## The Solution: Outputs Enable Communication
+
+With outputs, your agent can respond properly:
+
+```text title="communicating-agent.txt"
+User: "Send me the weather report"
+Agent: *calls weather API*
+Agent: *gets weather data*
+Agent: *uses discord:message output*
+Discord: "It's 72°F and sunny in San Francisco!"
+// ✅ Agent gets data AND tells you about it
+// ✅ Complete conversation loop
+// ✅ Actually useful
+```
+
+## How Outputs Work in Your Agent
+
+### 1. You Define How the Agent Can Respond
+
+```typescript title="define-outputs.ts"
+const agent = createDreams({
+  model: openai("gpt-4o"),
+  outputs: [
+    discordMessage, // Agent can send Discord messages
+    consolePrint, // Agent can print to console
+    emailOutput, // Agent can send emails
+  ],
+});
+```
+
+### 2. The LLM Decides When to Respond
+
+When the agent thinks, it sees:
+
+```text title="llm-sees-outputs.txt"
+Available outputs:
+- discord:message: Sends a message to Discord
+- console:print: Prints a message to the console
+- email:send: Sends an email notification
+
+User asked: "Check weather and let me know via Discord"
+```
+
+### 3. The LLM Uses Outputs to Respond
+
+The LLM responds with structured output calls:
+
+```xml title="llm-uses-outputs.xml"
+<response>
+  <reasoning>User wants weather info via Discord. I'll get weather then send message.</reasoning>
+
+  <action_call name="get-weather">{"city": "San Francisco"}</action_call>
+
+  <output type="discord:message" channelId="123456789">
+    Weather in San Francisco: {{calls[0].temperature}}, {{calls[0].condition}}
+  </output>
+</response>
+```
+
+### 4. Daydreams Sends the Output
+
+Daydreams automatically:
+
+* Validates the output format
+* Runs your handler function
+* Actually sends the Discord message
+* Logs the result
+
+## Creating Your First Output
+
+Here's a simple output that saves messages to a file:
+
+```typescript title="file-output.ts"
+import { output } from "@daydreamsai/core";
+import * as z from "zod/v4";
+import fs from "fs/promises";
+
+export const saveToFile = output({
+  // Type the LLM uses to call this output
+  type: "file:save",
+
+  // Description helps LLM know when to use it
+  description: "Saves a message to a text file",
+
+  // Schema defines what content is expected
+  schema: z.string().describe("The message to save"),
+
+  // Attributes define extra parameters on the output tag
+  attributes: z.object({
+    filename: z.string().describe("Name of the file to save to"),
+  }),
+
+  // Handler is your actual code that runs
+  handler: async (message, ctx) => {
+    const { filename } = ctx.outputRef.params;
+
+    await fs.writeFile(filename, message + "\n", { flag: "a" });
+
+    return {
+      saved: true,
+      filename,
+      message: `Saved message to ${filename}`,
+    };
+  },
+});
+```
+
+Use it in your agent:
+
+```typescript title="agent-with-file-output.ts"
+const agent = createDreams({
+  model: openai("gpt-4o"),
+  outputs: [saveToFile],
+});
+
+// Now when the LLM wants to save something:
+// <output type="file:save" filename="log.txt">This is my message</output>
+// The message gets saved to log.txt
+```
+
+## Working with Context Memory
+
+Outputs can read and update your agent's memory:
+
+```typescript title="notification-output.ts"
+// Define what your context remembers
+interface ChatMemory {
+  messagesSent: number;
+  lastNotification?: string;
+}
+
+const notificationOutput = output({
+  type: "notification:send",
+  description: "Sends a notification to the user",
+  schema: z.string(),
+  attributes: z.object({
+    priority: z.enum(["low", "medium", "high"]),
+  }),
+  handler: async (message, ctx) => {
+    // Access context memory (automatically typed!)
+    const memory = ctx.memory as ChatMemory;
+
+    // Update statistics
+    if (!memory.messagesSent) {
+      memory.messagesSent = 0;
+    }
+    memory.messagesSent++;
+    memory.lastNotification = message;
+
+    // Send the actual notification
+    const { priority } = ctx.outputRef.params;
+    await notificationService.send({
+      message,
+      priority,
+      userId: ctx.args.userId,
+    });
+
+    // Changes to memory are automatically saved
+    return {
+      sent: true,
+      totalSent: memory.messagesSent,
+      message: `Notification sent (total: ${memory.messagesSent})`,
+    };
+  },
+});
+```
+
+## Outputs vs Actions: When to Use Which?
+
+Understanding the difference is crucial:
+
+### Use **Outputs** When:
+
+* **Communicating results** to users or external systems
+* **You don't need a response** back for the LLM to continue
+* **Final step** in a conversation or workflow
+
+```typescript title="output-example.ts"
+// ✅ Good use of output - telling user the result
+<output type="discord:message" channelId="123">
+  Weather: 72°F, sunny. Have a great day!
+</output>
+```
+
+### Use **Actions** When:
+
+* **Getting data** the LLM needs for next steps
+* **You need the result** for further reasoning
+* **Middle step** in a complex workflow
+
+```typescript title="action-example.ts"
+// ✅ Good use of action - getting data for next step
+<action_call name="get-weather">{"city": "San Francisco"}</action_call>
+// LLM will use this result to decide what to tell the user
+```
+
+### Common Pattern: Actions → Outputs
+
+```xml title="action-then-output.xml"
+<response>
+  <reasoning>I'll get weather data, then tell the user about it</reasoning>
+
+  <!-- Action: Get data -->
+  <action_call name="get-weather">{"city": "Boston"}</action_call>
+
+  <!-- Output: Communicate result -->
+  <output type="discord:message" channelId="123">
+    Boston weather: {{calls[0].temperature}}, {{calls[0].condition}}
+  </output>
+</response>
+```
+
+## Advanced: Multiple Outputs
+
+Your agent can send multiple outputs in one response:
+
+```xml title="multiple-outputs.xml"
+<response>
+  <reasoning>I'll notify both Discord and email about this important update</reasoning>
+
+  <output type="discord:message" channelId="123">
+    🚨 Server maintenance starting in 10 minutes!
+  </output>
+
+  <output type="email:send" to="admin@company.com" subject="Maintenance Alert">
+    Server maintenance is beginning in 10 minutes. All users have been notified via Discord.
+  </output>
+</response>
+```
+
+## External Service Integration
+
+Outputs are perfect for integrating with external services:
+
+```typescript title="slack-output.ts"
+const slackMessage = output({
+  type: "slack:message",
+  description: "Sends a message to Slack",
+  schema: z.string(),
+  attributes: z.object({
+    channel: z.string().describe("Slack channel name"),
+    threadId: z.string().optional().describe("Thread ID for replies"),
+  }),
+  handler: async (message, ctx) => {
+    try {
+      const { channel, threadId } = ctx.outputRef.params;
+
+      const result = await slackClient.chat.postMessage({
+        channel,
+        text: message,
+        thread_ts: threadId,
+      });
+
+      return {
+        success: true,
+        messageId: result.ts,
+        channel: result.channel,
+        message: `Message sent to #${channel}`,
+      };
+    } catch (error) {
+      console.error("Failed to send Slack message:", error);
+
+      return {
+        success: false,
+        error: error.message,
+        message: "Failed to send Slack message",
+      };
+    }
+  },
+});
+```
+
+## Best Practices
+
+### 1. Use Clear Types and Descriptions
+
+```typescript title="good-naming.ts"
+// ✅ Good - clear what it does
+const userNotification = output({
+  type: "user:notification",
+  description:
+    "Sends a notification directly to the user via their preferred channel",
+  // ...
+});
+
+// ❌ Bad - unclear purpose
+const sendStuff = output({
+  type: "send",
+  description: "Sends something",
+  // ...
+});
+```
+
+### 2. Validate Input with Schemas
+
+```typescript title="good-schemas.ts"
+// ✅ Good - specific validation
+schema: z.object({
+  title: z.string().min(1).max(100),
+  content: z.string().min(1).max(2000),
+  urgency: z.enum(["low", "medium", "high"]),
+});
+
+// ❌ Bad - too loose
+schema: z.any();
+```
+
+### 3. Handle Errors Gracefully
+
+```typescript title="error-handling.ts"
+handler: async (message, ctx) => {
+  try {
+    await sendMessage(message);
+    return { sent: true };
+  } catch (error) {
+    // Log for debugging
+    console.error("Failed to send message:", error);
+
+    // Return structured error info
+    return {
+      sent: false,
+      error: error.message,
+      message: "Failed to send message - will retry later",
+    };
+  }
+};
+```
+
+### 4. Use Async/Await for External Services
+
+```typescript title="async-best-practice.ts"
+// ✅ Good - properly handles async
+handler: async (message, ctx) => {
+  const result = await emailService.send(message);
+  return { emailId: result.id };
+};
+
+// ❌ Bad - doesn't wait for async operations
+handler: (message, ctx) => {
+  emailService.send(message); // This returns a Promise that's ignored!
+  return { status: "sent" }; // Completes before email actually sends
+};
+```
+
+### 5. Provide Good Examples
+
+```typescript title="good-examples.ts"
+examples: [
+  '<output type="discord:message" channelId="123456789">Hello everyone!</output>',
+  '<output type="discord:message" channelId="987654321" replyToUserId="user123">Thanks for the question!</output>',
+];
+```
+
+## Key Takeaways
+
+* **Outputs enable communication** - Without them, agents can think but not
+  respond
+* **LLM chooses when to use them** - Based on types and descriptions you provide
+* **Different from actions** - Outputs communicate results, actions get data
+* **Content and attributes validated** - Zod schemas ensure correct format
+* **Memory can be updated** - Track what was sent for future reference
+* **Error handling is crucial** - External services can fail, handle gracefully
+
+Outputs complete the conversation loop - they're how your intelligent agent
+becomes a helpful communicator that users can actually interact with.
+
+
+file: ./content/docs/core/concepts/prompting.mdx
+meta: {
+  "title": "Prompting",
+  "description": "How Daydreams structures prompts to guide LLM reasoning and actions."
+}
+        
+## What is a Prompt?
+
+A prompt is the text you send to an AI model to tell it what to do. Think of it
+like giving instructions to a smart assistant.
+
+## Simple Prompts vs Agent Prompts
+
+### Simple Prompt (ChatGPT style)
+
+```text title="simple-prompt.txt"
+User: What's the weather in New York?
+Assistant: I don't have access to real-time weather data...
+```
+
+### Agent Prompt (what Daydreams creates)
+
+```text title="agent-prompt.txt"
+You are an AI agent that can:
+- Call weather APIs
+- Send Discord messages
+- Remember conversation history
+
+Current situation:
+- User asked: "What's the weather in New York?"
+- Available actions: getWeather, sendMessage
+- Chat context: user123 in #general channel
+
+Please respond with:
+<action_call name="getWeather">{"city": "New York"}</action_call>
+<output type="discord:message">It's 72°F and sunny in New York!</output>
+```
+
+## The Problem: LLMs Need Structure
+
+Without structure, LLMs can't:
+
+* Know what tools they have available
+* Remember previous conversations
+* Follow consistent output formats
+* Handle complex multi-step tasks
+
+**Example of what goes wrong:**
+
+```text title="unstructured-problem.txt"
+User: "Check weather and send to Discord"
+LLM: "I'll check the weather for you!"
+// ❌ Doesn't actually call any APIs
+// ❌ Doesn't know how to send to Discord
+// ❌ Just generates text
+```
+
+## The Solution: Structured Prompts
+
+Daydreams automatically creates structured prompts that include:
+
+1. **Available Tools** - What the agent can do
+2. **Current State** - What's happening right now
+3. **Response Format** - How to respond properly
+4. **Context Memory** - What happened before
+
+```text title="structured-solution.txt"
+Available Actions:
+- getWeather(city: string) - Gets current weather
+- sendDiscord(message: string) - Sends Discord message
+
+Current Context:
+- User: user123
+- Channel: #general
+- Previous messages: [...]
+
+New Input:
+- "Check weather in Boston and send to Discord"
+
+Respond with XML:
+<action_call name="getWeather">{"city": "Boston"}</action_call>
+<output type="discord:message">Weather in Boston: 65°F, cloudy</output>
+```
+
+## How Daydreams Builds Prompts
+
+Every time your agent thinks, Daydreams automatically builds a prompt like this:
+
+### 1. Instructions
+
+```text title="instructions-section.txt"
+You are an AI agent. Your job is to:
+- Analyze new information
+- Decide what actions to take
+- Respond appropriately
+```
+
+### 2. Available Tools
+
+```xml title="tools-section.xml"
+<available-actions>
+  <action name="getWeather">
+    <description>Gets current weather for a city</description>
+    <schema>{"type": "object", "properties": {"city": {"type": "string"}}}</schema>
+  </action>
+</available-actions>
+
+<available-outputs>
+  <output type="discord:message">
+    <description>Sends a message to Discord</description>
+    <schema>{"type": "string"}</schema>
+  </output>
+</available-outputs>
+```
+
+### 3. Current Context State
+
+```xml title="context-section.xml"
+<contexts>
+  <context type="chat" key="user123">
+    Previous messages:
+    user123: Hi there!
+    agent: Hello! How can I help?
+    user123: What's the weather like?
+  </context>
+</contexts>
+```
+
+### 4. What Just Happened
+
+```xml title="updates-section.xml"
+<updates>
+  <input type="discord:message" timestamp="2024-01-15T10:30:00Z">
+    What's the weather in Boston?
+  </input>
+</updates>
+```
+
+### 5. Expected Response Format
+
+```xml title="response-format.xml"
+Respond with:
+<response>
+  <reasoning>Your thought process here</reasoning>
+  <action_call name="actionName">{"argument": "value"}</action_call>
+  <output type="outputType">Your response here</output>
+</response>
+```
+
+## What the LLM Sees (Complete Example)
+
+Here's what a complete prompt looks like:
+
+```text title="complete-prompt.txt"
+You are an AI agent. Analyze the updates and decide what to do.
+
+<available-actions>
+  <action name="getWeather">
+    <description>Gets current weather for a city</description>
+    <schema>{"type": "object", "properties": {"city": {"type": "string"}}}</schema>
+  </action>
+</available-actions>
+
+<available-outputs>
+  <output type="discord:message">
+    <description>Sends a message to Discord</description>
+    <schema>{"type": "string"}</schema>
+  </output>
+</available-outputs>
+
+<contexts>
+  <context type="chat" key="user123">
+    user123: Hi there!
+    agent: Hello! How can I help?
+  </context>
+</contexts>
+
+<working-memory>
+  <!-- Previous actions from this conversation -->
+</working-memory>
+
+<updates>
+  <input type="discord:message" timestamp="2024-01-15T10:30:00Z">
+    What's the weather in Boston?
+  </input>
+</updates>
+
+Respond with:
+<response>
+  <reasoning>Your thought process</reasoning>
+  <action_call name="actionName">{"arg": "value"}</action_call>
+  <output type="outputType">Your message</output>
+</response>
+```
+
+## LLM Response Example
+
+The LLM responds with structured XML:
+
+```xml title="llm-response.xml"
+<response>
+  <reasoning>
+    The user is asking about weather in Boston. I should:
+    1. Call the getWeather action to get current conditions
+    2. Send the result to Discord
+  </reasoning>
+
+  <action_call name="getWeather">{"city": "Boston"}</action_call>
+  <output type="discord:message">Checking the weather in Boston for you!</output>
+</response>
+```
+
+Daydreams automatically:
+
+* Parses the `<action_call>` and runs the weather API
+* Parses the `<output>` and sends the Discord message
+* Saves the `<reasoning>` for debugging
+
+## Advanced Features
+
+### Template References
+
+LLMs can reference previous action results within the same response:
+
+```xml title="template-example.xml"
+<response>
+  <reasoning>I'll get weather, then send a detailed message</reasoning>
+
+  <action_call name="getWeather">{"city": "Boston"}</action_call>
+
+  <output type="discord:message">
+    Weather in Boston: {{calls[0].temperature}}°F, {{calls[0].condition}}
+  </output>
+</response>
+```
+
+The `{{calls[0].temperature}}` gets replaced with the actual weather data.
+
+### Multi-Context Prompts
+
+When multiple contexts are active:
+
+```xml title="multi-context.xml"
+<contexts>
+  <context type="chat" key="user123">
+    Chat history with user123...
+  </context>
+
+  <context type="game" key="session456">
+    Current game state: level 5, health 80...
+  </context>
+</contexts>
+```
+
+## Key Benefits
+
+* **Consistency** - All agents use the same reliable prompt structure
+* **Clarity** - LLMs always know what tools they have and how to use them
+* **Memory** - Context and conversation history included automatically
+* **Debugging** - You can see exactly what the LLM was told
+* **Extensibility** - Easy to add new actions and outputs
+
+## Customizing Prompts
+
+You can customize prompts in your contexts:
+
+```typescript title="custom-instructions.ts"
+const chatContext = context({
+  type: "chat",
+  schema: z.object({ userId: z.string() }),
+
+  // Custom instructions for this context
+  instructions: (state) =>
+    `You are helping user ${state.args.userId}. Be friendly and helpful.`,
+
+  // Custom context rendering
+  render: (state) => `
+    Chat with ${state.args.userId}
+    Recent messages: ${state.memory.messages.slice(-3).join("\n")}
+    User mood: ${state.memory.userMood || "neutral"}
+  `,
+});
+```
+
+## Key Takeaways
+
+* **Prompts are automatically generated** - You don't write them manually
+* **Structure enables capabilities** - Tools, memory, and context included
+  automatically
+* **LLMs respond with XML** - Parsed automatically into actions and outputs
+* **Templates enable complex flows** - Reference previous results within
+  responses
+* **Customizable per context** - Add specific instructions and state rendering
+
+The prompting system is what makes your agent intelligent - it provides the LLM
+with everything needed to understand the situation and respond appropriately.
+
+
+file: ./content/docs/core/concepts/tasks.mdx
+meta: {
+  "title": "Tasks",
+  "description": "Managing asynchronous operations and concurrency."
+}
+        
+## What is a Task?
+
+A task is any operation that takes time to complete, like:
+
+* Calling a weather API (might take 500ms)
+* Saving data to a database (might take 200ms)
+* Processing an image (might take 2 seconds)
+* Sending an email (might take 1 second)
+
+## The Problem
+
+Imagine your agent needs to do 10 things at once:
+
+```typescript title="problem-example.ts"
+// User asks: "What's the weather in 5 cities?"
+// Agent needs to call weather API 5 times
+// Without task management:
+await getWeather("New York"); // 500ms
+await getWeather("London"); // 500ms
+await getWeather("Tokyo"); // 500ms
+await getWeather("Paris"); // 500ms
+await getWeather("Sydney"); // 500ms
+// Total: 2.5 seconds (slow!)
+```
+
+Even worse - what if your agent tries to make 100 API calls at once? The
+external service might block you or your server might crash.
+
+## The Solution: Task Management
+
+Daydreams automatically manages these operations for you:
+
+```typescript title="solution-example.ts"
+// With task management:
+// Runs 3 operations at the same time (concurrent)
+// Queues the rest until the first ones finish
+// Total: ~1 second (much faster!)
+
+const results = await Promise.all([
+  getWeather("New York"), // Starts immediately
+  getWeather("London"), // Starts immediately
+  getWeather("Tokyo"), // Starts immediately
+  getWeather("Paris"), // Waits in queue
+  getWeather("Sydney"), // Waits in queue
+]);
+```
+
+## How It Works in Your Agent
+
+When you write action handlers, this happens automatically:
+
+```typescript title="weather-action.ts"
+const weatherAction = action({
+  name: "get-weather",
+  description: "Get weather for a city",
+  schema: z.object({
+    city: z.string(),
+  }),
+  handler: async ({ city }) => {
+    // This handler runs as a "task"
+    // Daydreams automatically:
+    // 1. Limits how many run at once (default: 3)
+    // 2. Queues extras until slots open up
+    // 3. Handles errors and retries
+
+    const response = await fetch(`https://api.weather.com/${city}`);
+    return await response.json();
+  },
+});
+```
+
+When your LLM calls this action multiple times:
+
+```xml
+<action_call name="get-weather">{"city": "New York"}</action_call>
+<action_call name="get-weather">{"city": "London"}</action_call>
+<action_call name="get-weather">{"city": "Tokyo"}</action_call>
+<action_call name="get-weather">{"city": "Paris"}</action_call>
+```
+
+Daydreams automatically:
+
+* Runs the first 3 immediately
+* Queues "Paris" until one finishes
+* Prevents your agent from overwhelming the weather API
+
+## Configuring Task Limits
+
+You can control how many tasks run simultaneously:
+
+```typescript title="agent-config.ts"
+import { createDreams, TaskRunner } from "@daydreamsai/core";
+
+// Default: 3 tasks at once
+const agent = createDreams({
+  model: openai("gpt-4o"),
+  extensions: [weatherExtension],
+});
+
+// Custom: 5 tasks at once (for faster APIs)
+const fasterAgent = createDreams({
+  model: openai("gpt-4o"),
+  extensions: [weatherExtension],
+  taskRunner: new TaskRunner(5),
+});
+
+// Custom: 1 task at once (for rate-limited APIs)
+const slowAgent = createDreams({
+  model: openai("gpt-4o"),
+  extensions: [weatherExtension],
+  taskRunner: new TaskRunner(1),
+});
+```
+
+## Best Practices for Action Handlers
+
+### 1. Use async/await Properly
+
+```typescript title="good-handler.ts"
+// ✅ Good - properly handles async operations
+handler: async ({ userId }) => {
+  const user = await database.getUser(userId);
+  const preferences = await database.getPreferences(userId);
+  return { user, preferences };
+};
+
+// ❌ Bad - doesn't wait for async operations
+handler: ({ userId }) => {
+  database.getUser(userId); // This returns a Promise!
+  return { status: "done" }; // Completes before database call finishes
+};
+```
+
+### 2. Handle Cancellation for Long Operations
+
+```typescript title="cancellation-example.ts"
+handler: async ({ largeDataset }, ctx) => {
+  for (let i = 0; i < largeDataset.length; i++) {
+    // Check if the agent wants to cancel this task
+    if (ctx.abortSignal.aborted) {
+      throw new Error("Operation cancelled");
+    }
+
+    await processItem(largeDataset[i]);
+  }
+};
+```
+
+### 3. Make Handlers Idempotent (for Retries)
+
+```typescript title="idempotent-example.ts"
+// ✅ Good - safe to run multiple times
+handler: async ({ email, message }) => {
+  // Check if email already sent
+  const existing = await emailLog.findByKey(`${email}-${hash(message)}`);
+  if (existing) {
+    return { status: "already_sent", messageId: existing.messageId };
+  }
+
+  // Send email and log it
+  const result = await emailService.send(email, message);
+  await emailLog.create({
+    email,
+    messageHash: hash(message),
+    messageId: result.id,
+  });
+  return { status: "sent", messageId: result.id };
+};
+
+// ❌ Bad - creates duplicate emails if retried
+handler: async ({ email, message }) => {
+  const result = await emailService.send(email, message);
+  return { status: "sent", messageId: result.id };
+};
+```
+
+## Advanced: Custom Task Types
+
+Most users won't need this, but you can define custom task types:
+
+```typescript title="custom-task.ts"
+import { task } from "@daydreamsai/core";
+
+const processVideoTask = task(
+  "agent:video:process",
+  async (params: { videoUrl: string }, ctx) => {
+    ctx.debug("processVideo", "Starting video processing", params);
+
+    // Long-running video processing
+    const result = await videoProcessor.process(params.videoUrl);
+
+    return { processedUrl: result.url, duration: result.duration };
+  },
+  {
+    retry: 2, // Retry twice on failure
+  }
+);
+
+// Use it in your agent
+agent.taskRunner.enqueueTask(processVideoTask, { videoUrl: "https://..." });
+```
+
+## Key Takeaways
+
+* **Tasks happen automatically** - Your action handlers become tasks
+* **Concurrency is controlled** - Default limit is 3 simultaneous tasks
+* **Queuing prevents overload** - Extra tasks wait their turn
+* **Write async handlers properly** - Use `async/await` and handle cancellation
+* **Configure based on your APIs** - Increase limit for fast APIs, decrease for
+  rate-limited ones
+
+The task system ensures your agent performs well without overwhelming external
+services or consuming excessive resources.
 
 
 file: ./content/docs/core/advanced/deep.mdx
@@ -1272,7 +5424,7 @@ const weatherService = service({
 
 ```typescript title="weather-context.ts"
 import { context } from "@daydreamsai/core";
-import { z } from "zod";
+import * as z from "zod/v4";
 
 const weatherContext = context({
   type: "weather-preferences",
@@ -1299,7 +5451,7 @@ User Weather Preferences:
 
 ```typescript title="weather-actions.ts"
 import { action } from "@daydreamsai/core";
-import { z } from "zod";
+import * as z from "zod/v4";
 
 const getCurrentWeatherAction = action({
   name: "get-current-weather",
@@ -2723,7 +6875,7 @@ import {
   validateEnv,
 } from "@daydreamsai/core";
 import { createSupabaseBaseMemory } from "@daydreamsai/supabase";
-import { z } from "zod";
+import * as z from "zod/v4";
 import { cliExtension } from "@daydreamsai/cli";
 import { openrouter } from "@openrouter/ai-sdk-provider";
 
@@ -2758,4158 +6910,6 @@ Run the agent and chat via the command line interface!
 ```
 bun run index.ts
 ```
-
-
-file: ./content/docs/core/concepts/actions.mdx
-meta: {
-  "title": "Actions",
-  "description": "Define capabilities and interactions for your Daydreams agent."
-}
-        
-## What is an Action?
-
-An action is something your agent can **do** - like calling an API, saving data,
-or performing calculations. Think of actions as giving your agent superpowers.
-
-## Real Examples
-
-Here are actions that make agents useful:
-
-### Weather Action
-
-```typescript title="weather-action.ts"
-// Agent can check weather
-const getWeather = action({
-  name: "get-weather",
-  description: "Gets current weather for a city",
-  schema: z.object({
-    city: z.string(),
-  }),
-  handler: async ({ city }) => {
-    const response = await fetch(`https://api.weather.com/${city}`);
-    return await response.json(); // { temperature: "72°F", condition: "sunny" }
-  },
-});
-```
-
-### Database Action
-
-```typescript title="database-action.ts"
-// Agent can save user preferences
-const savePreference = action({
-  name: "save-preference",
-  description: "Saves a user preference",
-  schema: z.object({
-    userId: z.string(),
-    key: z.string(),
-    value: z.string(),
-  }),
-  handler: async ({ userId, key, value }) => {
-    await database.save(userId, key, value);
-    return { success: true, message: "Preference saved!" };
-  },
-});
-```
-
-### Email Action
-
-```typescript title="email-action.ts"
-// Agent can send emails
-const sendEmail = action({
-  name: "send-email",
-  description: "Sends an email to a user",
-  schema: z.object({
-    to: z.string(),
-    subject: z.string(),
-    body: z.string(),
-  }),
-  handler: async ({ to, subject, body }) => {
-    await emailService.send({ to, subject, body });
-    return { sent: true, timestamp: new Date().toISOString() };
-  },
-});
-```
-
-## The Problem Without Actions
-
-Without actions, your agent can only **talk**:
-
-```text title="limited-agent.txt"
-User: "What's the weather in Boston?"
-Agent: "I don't have access to weather data, but I imagine it might be nice!"
-// ❌ Can't actually check weather
-// ❌ Just makes stuff up
-// ❌ Not helpful
-```
-
-## The Solution: Actions Give Agents Capabilities
-
-With actions, your agent can **do things**:
-
-```text title="capable-agent.txt"
-User: "What's the weather in Boston?"
-Agent: *calls getWeather action*
-Agent: "It's 65°F and cloudy in Boston right now!"
-// ✅ Actually checks real weather API
-// ✅ Provides accurate information
-// ✅ Actually useful
-```
-
-## How Actions Work in Your Agent
-
-### 1. You Define What the Agent Can Do
-
-```typescript title="define-actions.ts"
-const agent = createDreams({
-  model: openai("gpt-4o"),
-  actions: [
-    getWeather, // Agent can check weather
-    savePreference, // Agent can save user data
-    sendEmail, // Agent can send emails
-  ],
-});
-```
-
-### 2. The LLM Decides When to Use Them
-
-When the agent thinks, it sees:
-
-```text title="llm-prompt.txt"
-Available actions:
-- get-weather: Gets current weather for a city
-- save-preference: Saves a user preference
-- send-email: Sends an email to a user
-
-User message: "Check weather in NYC and email it to john@example.com"
-```
-
-### 3. The LLM Calls Actions
-
-The LLM responds with structured calls:
-
-```xml title="llm-response.xml"
-<response>
-  <reasoning>I need to check weather first, then email the results</reasoning>
-
-  <action_call name="get-weather">{"city": "NYC"}</action_call>
-  <action_call name="send-email">{
-    "to": "john@example.com",
-    "subject": "NYC Weather",
-    "body": "Current weather: {{calls[0].temperature}}, {{calls[0].condition}}"
-  }</action_call>
-</response>
-```
-
-### 4. Daydreams Executes Your Code
-
-Daydreams automatically:
-
-* Validates the arguments against your schema
-* Runs your handler function
-* Returns results to the LLM
-* Handles errors gracefully
-
-## Creating Your First Action
-
-Here's a simple action that adds two numbers:
-
-```typescript title="calculator-action.ts"
-import { action } from "@daydreamsai/core";
-import { z } from "zod";
-
-export const addNumbers = action({
-  // Name the LLM uses to call this action
-  name: "add-numbers",
-
-  // Description helps LLM know when to use it
-  description: "Adds two numbers together",
-
-  // Schema defines what arguments are required
-  schema: z.object({
-    a: z.number().describe("First number"),
-    b: z.number().describe("Second number"),
-  }),
-
-  // Handler is your actual code that runs
-  handler: async ({ a, b }) => {
-    const result = a + b;
-    return {
-      sum: result,
-      message: `${a} + ${b} = ${result}`,
-    };
-  },
-});
-```
-
-Use it in your agent:
-
-```typescript title="agent-with-calculator.ts"
-const agent = createDreams({
-  model: openai("gpt-4o"),
-  actions: [addNumbers],
-});
-
-// Now when user asks "What's 5 + 3?", the agent will:
-// 1. Call addNumbers action with {a: 5, b: 3}
-// 2. Get back {sum: 8, message: "5 + 3 = 8"}
-// 3. Respond: "5 + 3 = 8"
-```
-
-## Working with State and Memory
-
-Actions can read and modify your agent's memory:
-
-```typescript title="todo-actions.ts"
-// Define what your context remembers
-interface TodoMemory {
-  tasks: { id: string; title: string; done: boolean }[];
-}
-
-const addTask = action({
-  name: "add-task",
-  description: "Adds a new task to the todo list",
-  schema: z.object({
-    title: z.string().describe("What the task is"),
-  }),
-  handler: async ({ title }, ctx) => {
-    // Access context memory (automatically typed!)
-    const memory = ctx.memory as TodoMemory;
-
-    // Initialize if needed
-    if (!memory.tasks) {
-      memory.tasks = [];
-    }
-
-    // Add new task
-    const newTask = {
-      id: crypto.randomUUID(),
-      title,
-      done: false,
-    };
-
-    memory.tasks.push(newTask);
-
-    // Changes are automatically saved
-    return {
-      success: true,
-      taskId: newTask.id,
-      message: `Added "${title}" to your todo list`,
-    };
-  },
-});
-
-const completeTask = action({
-  name: "complete-task",
-  description: "Marks a task as completed",
-  schema: z.object({
-    taskId: z.string().describe("ID of task to complete"),
-  }),
-  handler: async ({ taskId }, ctx) => {
-    const memory = ctx.memory as TodoMemory;
-
-    const task = memory.tasks?.find((t) => t.id === taskId);
-    if (!task) {
-      return { success: false, message: "Task not found" };
-    }
-
-    task.done = true;
-
-    return {
-      success: true,
-      message: `Completed "${task.title}"`,
-    };
-  },
-});
-```
-
-Now your agent can manage todo lists across conversations!
-
-## External API Integration
-
-Actions are perfect for calling external APIs:
-
-```typescript title="external-api-action.ts"
-const searchWikipedia = action({
-  name: "search-wikipedia",
-  description: "Searches Wikipedia for information",
-  schema: z.object({
-    query: z.string().describe("What to search for"),
-    limit: z.number().optional().default(3).describe("Max results"),
-  }),
-  handler: async ({ query, limit }) => {
-    try {
-      const response = await fetch(
-        `https://en.wikipedia.org/api/rest_v1/page/search?q=${encodeURIComponent(
-          query
-        )}&limit=${limit}`
-      );
-
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      return {
-        success: true,
-        results: data.pages.map((page) => ({
-          title: page.title,
-          description: page.description,
-          url: `https://en.wikipedia.org/wiki/${page.key}`,
-        })),
-        message: `Found ${data.pages.length} results for "${query}"`,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.message,
-        message: `Failed to search Wikipedia for "${query}"`,
-      };
-    }
-  },
-});
-```
-
-## Best Practices
-
-### 1. Use Clear Names and Descriptions
-
-```typescript title="good-naming.ts"
-// ✅ Good - clear what it does
-const getUserProfile = action({
-  name: "get-user-profile",
-  description: "Gets detailed profile information for a user by their ID",
-  // ...
-});
-
-// ❌ Bad - unclear purpose
-const doStuff = action({
-  name: "do-stuff",
-  description: "Does some user stuff",
-  // ...
-});
-```
-
-### 2. Validate Input with Schemas
-
-```typescript title="good-validation.ts"
-// ✅ Good - specific validation
-schema: z.object({
-  email: z.string().email().describe("User's email address"),
-  age: z.number().min(0).max(150).describe("User's age in years"),
-  preferences: z
-    .array(z.string())
-    .optional()
-    .describe("List of user preferences"),
-});
-
-// ❌ Bad - too loose
-schema: z.object({
-  data: z.any(),
-});
-```
-
-### 3. Handle Errors Gracefully
-
-```typescript title="error-handling.ts"
-handler: async ({ userId }) => {
-  try {
-    const user = await database.getUser(userId);
-    return { success: true, user };
-  } catch (error) {
-    // Log the error for debugging
-    console.error("Failed to get user:", error);
-
-    // Return structured error for the LLM
-    return {
-      success: false,
-      error: "User not found",
-      message: `Could not find user with ID ${userId}`,
-    };
-  }
-};
-```
-
-### 4. Use async/await for I/O Operations
-
-```typescript title="async-best-practice.ts"
-// ✅ Good - properly handles async
-handler: async ({ url }) => {
-  const response = await fetch(url);
-  const data = await response.json();
-  return { data };
-};
-
-// ❌ Bad - doesn't wait for async operations
-handler: ({ url }) => {
-  fetch(url); // This returns a Promise that's ignored!
-  return { status: "done" }; // Completes before fetch finishes
-};
-```
-
-### 5. Check for Cancellation in Long Operations
-
-```typescript title="cancellation-handling.ts"
-handler: async ({ items }, ctx) => {
-  for (let i = 0; i < items.length; i++) {
-    // Check if the agent wants to cancel
-    if (ctx.abortSignal?.aborted) {
-      throw new Error("Operation cancelled");
-    }
-
-    await processItem(items[i]);
-  }
-
-  return { processed: items.length };
-};
-```
-
-## Advanced: Context-Specific Actions
-
-You can attach actions to specific contexts so they're only available in certain
-situations:
-
-```typescript title="context-specific.ts"
-const chatContext = context({
-  type: "chat",
-  schema: z.object({ userId: z.string() }),
-  create: () => ({ messages: [] }),
-}).setActions([
-  // These actions only available during chat
-  action({
-    name: "save-chat-preference",
-    description: "Saves a preference for this chat user",
-    schema: z.object({
-      key: z.string(),
-      value: z.string(),
-    }),
-    handler: async ({ key, value }, ctx) => {
-      // ctx.memory is automatically typed as chat memory
-      if (!ctx.memory.userPreferences) {
-        ctx.memory.userPreferences = {};
-      }
-      ctx.memory.userPreferences[key] = value;
-      return { saved: true };
-    },
-  }),
-]);
-```
-
-## Key Takeaways
-
-* **Actions give agents capabilities** - They can do things, not just talk
-* **LLM chooses when to use them** - Based on names and descriptions you provide
-* **Arguments are validated** - Zod schemas ensure type safety
-* **State persists automatically** - Changes to memory are saved
-* **Error handling is crucial** - Return structured success/error responses
-* **async/await required** - For any I/O operations like API calls
-
-Actions transform your agent from a chatbot into a capable assistant that can
-actually get things done.
-
-
-file: ./content/docs/core/concepts/agent-lifecycle.mdx
-meta: {
-  "title": "Agent Lifecycle",
-  "description": "How Daydreams agents process information and execute tasks."
-}
-        
-## Simple Overview
-
-Think of an agent as following a simple loop:
-
-1. **Something happens** (input arrives)
-2. **Agent thinks** (uses LLM to decide what to do)
-3. **Agent acts** (performs actions or sends responses)
-4. **Agent remembers** (saves what happened)
-5. **Repeat**
-
-This loop continues as long as the agent is running, handling new inputs and
-responding intelligently based on its context and memory.
-
-## The Basic Flow
-
-Here's what happens when your agent receives a Discord message:
-
-```
-Discord Message Arrives
-         ↓
-Agent loads chat context & memory
-         ↓
-Agent thinks: "What should I do?"
-         ↓
-Agent decides: "I'll check the weather and respond"
-         ↓
-Agent calls weather API (action)
-         ↓
-Agent sends Discord reply (output)
-         ↓
-Agent saves conversation to memory
-```
-
-***
-
-## Detailed Technical Explanation
-
-The core of the Daydreams framework is the agent's execution lifecycle. This
-loop manages how an agent receives input, reasons with an LLM, performs actions,
-and handles results. Understanding this flow is crucial for building and
-debugging agents.
-
-Let's trace the lifecycle of a typical request:
-
-## 1. Input Reception
-
-* **Source:** An external system (like Discord, Telegram, CLI, or an API) sends
-  information to the agent. This is usually configured via an `extension`.
-* **Listener:** An `input` definition within the agent or an extension listens
-  for these events (e.g., a new message arrives).
-* **Trigger:** When the external event occurs, the input listener is triggered.
-* **Invocation:** The listener typically calls `agent.send(...)`, providing:
-  * The target `context` definition (which part of the agent should handle
-    this?).
-  * `args` to identify the specific context instance (e.g., which chat
-    session?).
-  * The input `data` itself (e.g., the message content).
-
-## 2. `agent.send` - Starting the Process
-
-* **Log Input:** The framework logs the incoming information as an `InputRef` (a
-  record of the input).
-* **Initiate Run:** It then calls the internal `agent.run` method to start or
-  continue the processing cycle for the specified context instance, passing the
-  new `InputRef` along.
-
-## 3. `agent.run` - Managing the Execution Cycle
-
-* **Load/Create Context:** The framework finds the specific `ContextState` for
-  the target instance (e.g., the state for chat session #123). If it's the first
-  time interacting with this instance, it creates the state and its associated
-  persistent memory (`ContextState.memory`). It also retrieves or creates the
-  temporary `WorkingMemory` for this specific run.
-* **Handle Concurrency:** It checks if this context instance is already
-  processing another request. If so, the new input is usually added to the
-  ongoing run. If not, it sets up a new run.
-* **Setup Run Environment:** It prepares the environment for the LLM
-  interaction, gathering all available `actions`, `outputs`, and relevant
-  context information.
-* **Start Step Loop:** It begins the main processing loop, which iterates
-  through one or more reasoning steps until the interaction is complete.
-
-## 4. Inside the Step Loop - Perception, Reasoning, Action
-
-Each iteration (step) within the `agent.run` loop represents one turn of the
-agent's core reasoning cycle:
-
-* **Prepare State:** The agent gathers the latest information, including:
-  * The current persistent state of the active `Context`(s) (via their `render`
-    functions).
-  * The history of the current interaction from `WorkingMemory` (processed
-    inputs, outputs, action results from previous steps).
-  - Any *new* unprocessed information (like the initial `InputRef` or results
-    from actions completed in the previous step).
-  - The list of currently available `actions` and `outputs`.
-* **Generate Prompt:** This information is formatted into a structured prompt
-  (using XML) for the LLM. The prompt clearly tells the LLM its instructions,
-  what tools (actions/outputs) it has, the current state, and what new
-  information needs attention. (See [Prompting](/docs/core/concepts/prompting)).
-* **LLM Call:** The agent sends the complete prompt to the configured LLM.
-* **Process LLM Response Stream:** As the LLM generates its response token by
-  token:
-  * The framework **streams** the response.
-  * It **parses** the stream, looking for specific XML tags defined in the
-    expected response structure (`<reasoning>`, `<action_call>`, `<output>`).
-  * The LLM's thought process is extracted from `<reasoning>` tags and logged.
-  * Instructions to perform actions (`<action_call>`) or send outputs
-    (`<output>`) are identified.
-* **Execute Actions & Outputs:**
-  * For each identified `<action_call>`, the framework validates the arguments
-    against the action's schema and schedules the action's `handler` function to
-    run via the `TaskRunner`. (See [Actions](/docs/core/concepts/actions) and
-    [Tasks](/docs/core/concepts/tasks)).
-  - For each identified `<output>`, the framework validates the
-    content/attributes and runs the output's `handler` function to send the
-    information externally (e.g., post a message). (See
-    [Outputs](/docs/core/concepts/outputs)).
-* **Wait for Actions:** The agent waits for any critical asynchronous actions
-  scheduled in this step to complete. Their results (`ActionResult`) are logged
-  to `WorkingMemory`.
-* **Check Completion:** The agent determines if the interaction is complete or
-  if another reasoning step (another loop iteration) is needed based on defined
-  conditions (`shouldContinue` hooks or remaining unprocessed logs).
-
-## 5. Run Completion
-
-* **Exit Loop:** Once the loop condition determines no further steps are needed,
-  the loop exits.
-* **Final Tasks:** Any final cleanup logic or `onRun` hooks defined in the
-  context are executed.
-* **Save State:** The final persistent state (`ContextState.memory`) of all
-  involved contexts is saved to the `MemoryStore`.
-* **Return Results:** The framework resolves the promise originally returned by
-  `agent.send` or `agent.run`, providing the complete log (`chain`) of the
-  interaction.
-
-This detailed cycle illustrates how Daydreams agents iteratively perceive
-(inputs, results), reason (LLM prompt/response), and act (outputs, actions),
-using streaming and asynchronous task management to handle potentially complex
-interactions efficiently.
-
-
-file: ./content/docs/core/concepts/building-blocks.mdx
-meta: {
-  "title": "Building Blocks",
-  "description": "The core components that make up a Daydreams agent."
-}
-        
-Every Daydreams agent is built from four main building blocks. Think of them as
-the essential parts that work together to create intelligent behavior.
-
-## The Four Building Blocks
-
-### 1. Inputs - How Your Agent Listens
-
-Inputs are how your agent receives information from the outside world.
-
-```typescript title="input-example.ts"
-// Listen for Discord messages
-const discordMessage = input({
-  name: "discord-message",
-  description: "Receives messages from Discord",
-  // When a message arrives, this triggers the agent
-});
-```
-
-**Examples:**
-
-* A Discord message arrives
-* A user types in the CLI
-* An API webhook gets called
-* A timer goes off
-
-### 2. Outputs - How Your Agent Speaks
-
-Outputs are how your agent sends information back to the world.
-
-```typescript title="output-example.ts"
-// Send a Discord message
-const discordReply = output({
-  name: "discord-reply",
-  description: "Sends a message to Discord",
-  // The agent can call this to respond
-});
-```
-
-**Examples:**
-
-* Posting a message to Discord
-* Printing to the console
-* Sending an email
-* Making an API call
-
-### 3. Actions - What Your Agent Can Do
-
-Actions are tasks your agent can perform to interact with systems or gather
-information.
-
-```typescript title="action-example.ts"
-// Check the weather
-const getWeather = action({
-  name: "get-weather",
-  description: "Gets current weather for a location",
-  schema: z.object({
-    location: z.string(),
-  }),
-  handler: async ({ location }) => {
-    // Call weather API and return result
-    return { temperature: "72°F", condition: "sunny" };
-  },
-});
-```
-
-**Examples:**
-
-* Calling a weather API
-* Reading from a database
-* Processing a file
-* Making calculations
-
-### 4. Contexts - Your Agent's Workspace
-
-Contexts define different "workspaces" or "modes" for your agent. Each context
-has its own memory and behavior.
-
-```typescript title="context-example.ts"
-// A chat session context
-const chatContext = context({
-  type: "chat",
-  schema: z.object({
-    userId: z.string(),
-  }),
-  // This context remembers chat history
-  create: () => ({
-    messages: [],
-    userPreferences: {},
-  }),
-});
-```
-
-**Examples:**
-
-* A chat session with a specific user
-* Playing a specific game
-* Processing a specific document
-* Managing a specific project
-
-## How They Work Together
-
-Here's a simple flow showing how these building blocks connect:
-
-1. **Input arrives** → "New Discord message from user123"
-2. **Agent thinks** → "I should respond helpfully in this chat context"
-3. **Agent acts** → Calls the `getWeather` action if needed
-4. **Agent responds** → Uses an output to send a reply
-5. **Context remembers** → Saves the conversation in chat context memory
-
-## The React Mental Model
-
-If you know React, think of it this way:
-
-* **Contexts** = React components (manage state and behavior)
-* **Actions** = Event handlers (respond to interactions)
-* **Inputs/Outputs** = Props/callbacks (data in and out)
-* **Agent** = React app (orchestrates everything)
-
-## Next Steps
-
-Now that you understand the building blocks, you can dive deeper into each one:
-
-* **[Contexts](/docs/core/concepts/contexts)** - Learn how to manage state and
-  memory
-* **[Inputs](/docs/core/concepts/inputs)** - Set up ways for your agent to
-  receive information
-* **[Outputs](/docs/core/concepts/outputs)** - Configure how your agent responds
-* **[Actions](/docs/core/concepts/actions)** - Define what your agent can do
-* **[Agent Lifecycle](/docs/core/concepts/agent-lifecycle)** - Understand the
-  complete execution flow
-
-
-file: ./content/docs/core/concepts/contexts.mdx
-meta: {
-  "title": "Contexts",
-  "description": "Managing state, memory, and behavior for agent interactions."
-}
-        
-## What is a Context?
-
-A context is like a **separate workspace** for your agent. Think of it like
-having different tabs open in your browser - each tab has its own state and
-remembers different things.
-
-## Real Examples
-
-Here are contexts that make agents stateful:
-
-### Chat Context
-
-```typescript title="chat-context.ts"
-// Each user gets their own chat workspace
-const chatContext = context({
-  type: "chat",
-  schema: z.object({
-    userId: z.string(),
-  }),
-  create: () => ({
-    messages: [],
-    userPreferences: {},
-    lastSeen: null,
-  }),
-  render: (state) => `
-    Chat with ${state.args.userId}
-    Recent messages: ${state.memory.messages.slice(-3).join("\n")}
-  `,
-});
-```
-
-### Game Context
-
-```typescript title="game-context.ts"
-// Each game session has its own state
-const gameContext = context({
-  type: "game",
-  schema: z.object({
-    gameId: z.string(),
-  }),
-  create: () => ({
-    playerHealth: 100,
-    level: 1,
-    inventory: [],
-    currentRoom: "start",
-  }),
-  render: (state) => `
-    Game: ${state.args.gameId}
-    Health: ${state.memory.playerHealth}
-    Level: ${state.memory.level}
-    Room: ${state.memory.currentRoom}
-  `,
-});
-```
-
-### Project Context
-
-```typescript title="project-context.ts"
-// Each project tracks its own progress
-const projectContext = context({
-  type: "project",
-  schema: z.object({
-    projectId: z.string(),
-  }),
-  create: () => ({
-    tasks: [],
-    status: "planning",
-    teamMembers: [],
-    deadlines: [],
-  }),
-  render: (state) => `
-    Project: ${state.args.projectId}
-    Status: ${state.memory.status}
-    Tasks: ${state.memory.tasks.length} total
-  `,
-});
-```
-
-## The Problem: Agents Need to Remember Different Things
-
-Without contexts, your agent mixes everything together:
-
-```text title="confused-agent.txt"
-User Alice: "My favorite color is blue"
-User Bob: "What's Alice's favorite color?"
-Agent: "Alice's favorite color is blue"
-// ❌ Bob shouldn't see Alice's private info!
-
-User in Game A: "Go north"
-User in Game B: "What room am I in?"
-Agent: "You went north" (from Game A!)
-// ❌ Wrong game state mixed up!
-
-Project Alpha discussion mixed with Project Beta tasks
-// ❌ Complete chaos!
-```
-
-## The Solution: Contexts Separate Everything
-
-With contexts, each conversation/session/game stays separate:
-
-```text title="organized-agent.txt"
-Alice's Chat Context:
-- Alice: "My favorite color is blue"
-- Agent remembers: Alice likes blue
-
-Bob's Chat Context:
-- Bob: "What's Alice's favorite color?"
-- Agent: "I don't have information about Alice"
-// ✅ Privacy maintained!
-
-Game A Context:
-- Player went north → remembers current room
-
-Game B Context:
-- Separate game state → different room
-// ✅ No mixing of game states!
-```
-
-## How Contexts Work in Your Agent
-
-### 1. You Define Different Context Types
-
-```typescript title="define-contexts.ts"
-const agent = createDreams({
-  model: openai("gpt-4o"),
-  contexts: [
-    chatContext, // For user conversations
-    gameContext, // For game sessions
-    projectContext, // For project management
-  ],
-});
-```
-
-### 2. Inputs Route to Specific Context Instances
-
-```typescript title="context-routing.ts"
-// Discord input routes to chat contexts
-discordInput.subscribe((send, agent) => {
-  discord.on("message", (msg) => {
-    // Each user gets their own chat context instance
-    send(
-      chatContext,
-      { userId: msg.author.id },
-      {
-        content: msg.content,
-      }
-    );
-  });
-});
-
-// Game input routes to game contexts
-gameInput.subscribe((send, agent) => {
-  gameServer.on("move", (event) => {
-    // Each game gets its own context instance
-    send(
-      gameContext,
-      { gameId: event.gameId },
-      {
-        action: event.action,
-      }
-    );
-  });
-});
-```
-
-### 3. Agent Maintains Separate Memory
-
-```text title="context-instances.txt"
-Chat Context Instances:
-- chat:alice → { messages: [...], preferences: {...} }
-- chat:bob   → { messages: [...], preferences: {...} }
-- chat:carol → { messages: [...], preferences: {...} }
-
-Game Context Instances:
-- game:session1 → { health: 80, level: 3, room: "forest" }
-- game:session2 → { health: 100, level: 1, room: "start" }
-- game:session3 → { health: 45, level: 7, room: "dungeon" }
-
-All completely separate!
-```
-
-## Creating Your First Context
-
-Here's a simple todo list context:
-
-```typescript title="todo-context.ts"
-import { context } from "@daydreamsai/core";
-import { z } from "zod";
-
-// Define what this context remembers
-interface TodoMemory {
-  tasks: { id: string; title: string; done: boolean }[];
-  createdAt: string;
-}
-
-export const todoContext = context<TodoMemory>({
-  // Type identifies this kind of context
-  type: "todo",
-
-  // Schema defines how to identify specific instances
-  schema: z.object({
-    listId: z.string().describe("Unique ID for this todo list"),
-  }),
-
-  // Create initial memory when first accessed
-  create: () => ({
-    tasks: [],
-    createdAt: new Date().toISOString(),
-  }),
-
-  // How this context appears to the LLM
-  render: (state) => {
-    const { tasks } = state.memory;
-    const pending = tasks.filter((t) => !t.done).length;
-    const completed = tasks.filter((t) => t.done).length;
-
-    return `
-Todo List: ${state.args.listId}
-Tasks: ${pending} pending, ${completed} completed
-
-Recent tasks:
-${tasks
-  .slice(-5)
-  .map((t) => `${t.done ? "✅" : "⏳"} ${t.title}`)
-  .join("\n")}
-    `;
-  },
-
-  // Instructions for the LLM when this context is active
-  instructions:
-    "Help the user manage their todo list. You can add, complete, and list tasks.",
-});
-```
-
-Use it in your agent:
-
-```typescript title="agent-with-todo.ts"
-const agent = createDreams({
-  model: openai("gpt-4o"),
-  contexts: [todoContext],
-});
-
-// Now users can have separate todo lists:
-// todo:work → Work tasks
-// todo:personal → Personal tasks
-// todo:shopping → Shopping list
-// Each maintains separate state!
-```
-
-## Context Memory: What Gets Remembered
-
-Context memory persists between conversations:
-
-```typescript title="memory-example.ts"
-// First conversation
-User: "Add 'buy milk' to my shopping list"
-Agent: → todoContext(listId: "shopping")
-       → memory.tasks.push({id: "1", title: "buy milk", done: false})
-       → "Added 'buy milk' to your shopping list"
-
-// Later conversation (hours/days later)
-User: "What's on my shopping list?"
-Agent: → todoContext(listId: "shopping")
-       → Loads saved memory: {tasks: [{title: "buy milk", done: false}]}
-       → "You have 'buy milk' on your shopping list"
-
-// ✅ Context remembered the task across conversations!
-```
-
-## Multiple Contexts in One Agent
-
-Your agent can switch between different contexts:
-
-```xml title="context-switching.xml"
-<!-- User starts in chat context -->
-<input type="discord:message" userId="alice">
-  "Add 'finish project' to my work todo list"
-</input>
-
-<!-- Agent recognizes this needs todo context -->
-<response>
-  <reasoning>User wants to add a task to their work todo list. I should use the todo context.</reasoning>
-
-  <!-- Switch to todo context -->
-  <action_call name="add-task" context="todo" args='{"listId": "work"}'>
-    {"title": "finish project"}
-  </action_call>
-
-  <!-- Respond back in chat context -->
-  <output type="discord:message" channelId="123">
-    Added "finish project" to your work todo list!
-  </output>
-</response>
-```
-
-## Advanced: Context-Specific Actions
-
-You can attach actions that only work in certain contexts:
-
-```typescript title="context-specific-actions.ts"
-const todoContextWithActions = todoContext.setActions([
-  action({
-    name: "add-task",
-    description: "Adds a new task to the todo list",
-    schema: z.object({
-      title: z.string(),
-    }),
-    handler: async ({ title }, ctx) => {
-      // ctx.memory is automatically typed as TodoMemory!
-      const newTask = {
-        id: crypto.randomUUID(),
-        title,
-        done: false,
-      };
-
-      ctx.memory.tasks.push(newTask);
-
-      return {
-        success: true,
-        taskId: newTask.id,
-        message: `Added "${title}" to the list`,
-      };
-    },
-  }),
-
-  action({
-    name: "complete-task",
-    description: "Marks a task as completed",
-    schema: z.object({
-      taskId: z.string(),
-    }),
-    handler: async ({ taskId }, ctx) => {
-      const task = ctx.memory.tasks.find((t) => t.id === taskId);
-      if (!task) {
-        return { success: false, message: "Task not found" };
-      }
-
-      task.done = true;
-
-      return {
-        success: true,
-        message: `Completed "${task.title}"`,
-      };
-    },
-  }),
-]);
-```
-
-Now these actions only appear when the todo context is active!
-
-## Context Lifecycle
-
-Contexts have hooks for different stages:
-
-```typescript title="context-lifecycle.ts"
-const advancedContext = context({
-  type: "advanced",
-  schema: z.object({ sessionId: z.string() }),
-
-  // Called when context instance is first created
-  create: (state, agent) => {
-    agent.logger.info(`Creating new session: ${state.key}`);
-    return {
-      startTime: Date.now(),
-      interactions: 0,
-    };
-  },
-
-  // Called before each LLM interaction
-  onStep: async (ctx, agent) => {
-    ctx.memory.interactions++;
-  },
-
-  // Called when a conversation/run completes
-  onRun: async (ctx, agent) => {
-    const duration = Date.now() - ctx.memory.startTime;
-    agent.logger.info(`Session ${ctx.key} lasted ${duration}ms`);
-  },
-
-  // Called if there's an error
-  onError: async (error, ctx, agent) => {
-    agent.logger.error(`Error in session ${ctx.key}:`, error);
-  },
-});
-```
-
-## Best Practices
-
-### 1. Design Clear Boundaries
-
-```typescript title="good-context-design.ts"
-// ✅ Good - clear, specific purpose
-const userProfileContext = context({
-  type: "user-profile",
-  schema: z.object({ userId: z.string() }),
-  // Manages user preferences, settings, history
-});
-
-const orderContext = context({
-  type: "order",
-  schema: z.object({ orderId: z.string() }),
-  // Manages specific order state, items, shipping
-});
-
-// ❌ Bad - too broad, unclear purpose
-const stuffContext = context({
-  type: "stuff",
-  schema: z.object({ id: z.string() }),
-  // What does this manage? Everything? Nothing clear.
-});
-```
-
-### 2. Keep Memory Structures Simple
-
-```typescript title="good-memory-structure.ts"
-// ✅ Good - clear, simple structure
-interface ChatMemory {
-  messages: Array<{
-    sender: "user" | "agent";
-    content: string;
-    timestamp: number;
-  }>;
-  userPreferences: {
-    language?: string;
-    timezone?: string;
-  };
-}
-
-// ❌ Bad - overly complex, nested
-interface OverComplexMemory {
-  data: {
-    nested: {
-      deeply: {
-        structured: {
-          confusing: {
-            memory: any;
-          };
-        };
-      };
-    };
-  };
-}
-```
-
-### 3. Write Helpful Render Functions
-
-```typescript title="good-render-function.ts"
-// ✅ Good - concise, relevant information
-render: (state) => `
-  Shopping Cart: ${state.args.cartId}
-  Items: ${state.memory.items.length}
-  Total: $${state.memory.total.toFixed(2)}
-  
-  Recent items:
-  ${state.memory.items
-    .slice(-3)
-    .map((item) => `- ${item.name} ($${item.price})`)
-    .join("\n")}
-`;
-
-// ❌ Bad - too much information, overwhelming
-render: (state) => JSON.stringify(state.memory, null, 2); // Dumps everything!
-```
-
-### 4. Use Descriptive Schema
-
-```typescript title="good-schema.ts"
-// ✅ Good - clear descriptions
-schema: z.object({
-  userId: z.string().uuid().describe("Unique identifier for the user"),
-  sessionType: z
-    .enum(["support", "sales", "general"])
-    .describe("Type of support session"),
-});
-
-// ❌ Bad - no descriptions, unclear
-schema: z.object({
-  id: z.string(),
-  type: z.string(),
-});
-```
-
-## Key Takeaways
-
-* **Contexts separate state** - Each conversation/session/game gets its own
-  memory
-* **Instance-based** - Same context type, different instances for different
-  users/sessions
-* **Memory persists** - State is saved between conversations automatically
-* **LLM sees context** - Render function shows current state to the AI
-* **Context-specific actions** - Attach actions that only work in certain
-  contexts
-* **Clear boundaries** - Design contexts around specific tasks or domains
-
-Contexts are what make your agent stateful and able to maintain separate
-conversations and tasks without mixing things up. They're the foundation for
-building agents that can remember and manage complex, ongoing interactions.
-
-
-file: ./content/docs/core/concepts/core.mdx
-meta: {
-  "title": "Introduction",
-  "description": "Understand the fundamental building blocks of the Daydreams framework."
-}
-        
-The Daydreams framework is designed around a set of core concepts that work
-together to enable autonomous agent behavior. Understanding these concepts is
-key to effectively building and customizing agents.
-
-## Getting Started
-
-If you're new to agent frameworks, start here:
-
-1. **[Building Blocks](/docs/core/concepts/building-blocks)** - Learn the four
-   main components (inputs, outputs, actions, contexts) with simple examples
-2. **[Agent Lifecycle](/docs/core/concepts/agent-lifecycle)** - Understand how
-   agents process information in a continuous loop
-
-Once you understand the basics, dive deeper into each component:
-
-## Core Architecture
-
-A Daydreams agent consists of several key components:
-
-### Contexts
-
-Contexts are the foundation of a Daydreams agent. Similar to React components,
-contexts manage state and rendering for your agent. Each context:
-
-* Has a defined schema for initialization
-* Maintains its own memory state
-* Provides a rendering function that formats its state for the LLM
-
-```ts title="context.ts"
-const myContext = context({
-  // Unique identifier for this context type
-  type: "my-context",
-
-  // Schema defining the arguments needed to initialize this context
-  schema: z.object({
-    id: z.string(),
-  }),
-
-  // Function to generate a unique key for this context instance
-  key({ id }) {
-    return id;
-  },
-
-  // Initialize the context's memory state
-  create(state) {
-    return {
-      items: [],
-      currentItem: null,
-    };
-  },
-
-  // Format the context for the LLM
-  render({ memory }) {
-    return `
-      Current Items: ${memory.items.join(", ")}
-      Active Item: ${memory.currentItem || "None"}
-    `;
-  },
-});
-```
-
-### Actions
-
-Actions are functions that your agent can call to interact with its environment
-or modify its state. They're similar to event handlers in React:
-
-```ts title="action.ts"
-action({
-  name: "addItem",
-  description: "Add a new item to the list",
-  schema: z.object({
-    item: z.string().describe("The item to add"),
-  }),
-  handler(call, ctx, agent) {
-    // Access the context memory
-    const contextMemory = ctx.agentMemory;
-
-    // Update the state
-    contextMemory.items.push(call.data.item);
-
-    // Return a response
-    return {
-      message: `Added ${call.data.item} to the list`,
-      items: contextMemory.items,
-    };
-  },
-});
-```
-
-### Extensions
-
-Extensions are pre-packaged bundles of inputs, outputs, and actions that add
-specific capabilities to your agent. For example, the `cli` extension adds
-terminal input/output capabilities.
-
-## The React-like Mental Model
-
-If you're familiar with React, you can think of Daydreams in similar terms:
-
-* **Contexts** are like React components, managing state and rendering
-* **Actions** are like event handlers, responding to inputs and updating state
-* **Extensions** are like pre-built component libraries
-* The agent itself is like a React application, orchestrating everything
-
-This mental model makes it easy to reason about how your agent works and how to
-structure complex behaviors.
-
-***
-
-## Detailed Component Documentation
-
-This section provides a detailed explanation of each fundamental component:
-
-* **[Building Blocks](/docs/core/concepts/building-blocks):** Simple
-  introduction to the four main components with examples
-* **[Agent Lifecycle](/docs/core/concepts/agent-lifecycle):** How an agent
-  processes information, makes decisions, and executes tasks in a continuous
-  loop.
-* **[Contexts](/docs/core/concepts/contexts):** The mechanism for managing
-  state, memory, and behavior for specific tasks or interactions.
-* **[Actions](/docs/core/concepts/actions):** Definable tasks or capabilities
-  that an agent can perform.
-* **[Inputs](/docs/core/concepts/inputs):** How agents receive data and trigger
-  processing cycles.
-* **[Outputs](/docs/core/concepts/outputs):** How agents communicate results or
-  send information to external systems.
-* **[Memory](/docs/core/concepts/memory):** The different ways agents store,
-  retrieve, and utilize information (Working, Episodic, Vector).
-* **[Prompting](/docs/core/concepts/prompting):** How instructions and context
-  are formatted for the LLM to guide its reasoning.
-* **[Tasks](/docs/core/concepts/tasks):** The system for managing asynchronous
-  operations and background tasks.
-* **[Services & Extensions](/docs/core/advanced):** How to integrate external
-  services and extend the framework's capabilities.
-
-For beginners, start with [Building Blocks](/docs/core/concepts/building-blocks)
-to understand the mental model, then explore these detailed pages as needed.
-
-
-file: ./content/docs/core/concepts/inputs.mdx
-meta: {
-  "title": "Inputs",
-  "description": "How Daydreams agents receive information and trigger processing."
-}
-        
-## What is an Input?
-
-An input is how your agent **listens** to the outside world. If outputs are how
-your agent "speaks", inputs are how your agent "hears" things happening.
-
-## Real Examples
-
-Here are inputs that make agents responsive:
-
-### Discord Messages
-
-```typescript title="discord-input.ts"
-// Agent listens for Discord messages
-const discordMessage = input({
-  type: "discord:message",
-  schema: z.object({
-    content: z.string(),
-    userId: z.string(),
-    channelId: z.string(),
-  }),
-  subscribe: (send, agent) => {
-    discord.on("messageCreate", (message) => {
-      send(
-        chatContext,
-        { channelId: message.channel.id },
-        {
-          content: message.content,
-          userId: message.author.id,
-          channelId: message.channel.id,
-        }
-      );
-    });
-
-    return () => discord.removeAllListeners("messageCreate");
-  },
-});
-```
-
-### CLI Commands
-
-```typescript title="cli-input.ts"
-// Agent listens for terminal input
-const cliInput = input({
-  type: "cli:input",
-  schema: z.string(),
-  subscribe: (send, agent) => {
-    const readline = require("readline").createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-
-    readline.on("line", (input) => {
-      send(cliContext, { sessionId: "cli" }, input);
-    });
-
-    return () => readline.close();
-  },
-});
-```
-
-### API Webhooks
-
-```typescript title="webhook-input.ts"
-// Agent listens for API webhooks
-const webhookInput = input({
-  type: "api:webhook",
-  schema: z.object({
-    event: z.string(),
-    data: z.any(),
-  }),
-  subscribe: (send, agent) => {
-    const server = express();
-
-    server.post("/webhook", (req, res) => {
-      send(
-        webhookContext,
-        { eventId: req.body.id },
-        {
-          event: req.body.event,
-          data: req.body.data,
-        }
-      );
-      res.status(200).send("OK");
-    });
-
-    const serverInstance = server.listen(3000);
-    return () => serverInstance.close();
-  },
-});
-```
-
-## The Problem: Agents Need to Know When Things Happen
-
-Without inputs, your agent can't react to anything:
-
-```text title="deaf-agent.txt"
-User sends Discord message: "Hey agent, what's the weather?"
-Agent: *doesn't hear anything*
-Agent: *sits idle, does nothing*
-User: "Hello??"
-Agent: *still nothing*
-// ❌ Agent can't hear Discord messages
-// ❌ No way to trigger the agent
-// ❌ Completely unresponsive
-```
-
-## The Solution: Inputs Enable Listening
-
-With inputs, your agent can hear and respond:
-
-```text title="listening-agent.txt"
-User sends Discord message: "Hey agent, what's the weather?"
-Discord Input: *detects new message*
-Agent: *wakes up and processes the message*
-Agent: *calls weather API*
-Agent: *responds via Discord output*
-Discord: "It's 72°F and sunny in San Francisco!"
-// ✅ Agent hears the message
-// ✅ Automatically triggered to respond
-// ✅ Completes the conversation
-```
-
-## How Inputs Work in Your Agent
-
-### 1. You Define What the Agent Listens For
-
-```typescript title="define-inputs.ts"
-const agent = createDreams({
-  model: openai("gpt-4o"),
-  inputs: [
-    discordMessage, // Agent listens to Discord
-    cliInput, // Agent listens to terminal
-    webhookInput, // Agent listens to webhooks
-  ],
-});
-```
-
-### 2. Inputs Watch for Events
-
-When you start your agent, inputs begin listening:
-
-```typescript title="listening-pattern.ts"
-// Discord input starts watching for messages
-discord.on("messageCreate", (message) => {
-  // When message arrives, input sends it to agent
-  send(chatContext, { channelId: message.channel.id }, messageData);
-});
-
-// CLI input starts watching for terminal input
-readline.on("line", (input) => {
-  // When user types, input sends it to agent
-  send(cliContext, { sessionId: "cli" }, input);
-});
-```
-
-### 3. Inputs Trigger the Agent
-
-When an input detects something, it "sends" the data to your agent:
-
-```text title="input-flow.txt"
-1. Discord message arrives: "What's the weather?"
-2. Discord input detects it
-3. Input calls: send(chatContext, {channelId: "123"}, {content: "What's the weather?"})
-4. Agent wakes up and starts thinking
-5. Agent sees the message and decides what to do
-6. Agent calls weather action and responds
-```
-
-## Creating Your First Input
-
-Here's a simple input that listens for file changes:
-
-```typescript title="file-watcher-input.ts"
-import { input } from "@daydreamsai/core";
-import { z } from "zod";
-import fs from "fs";
-
-export const fileWatcher = input({
-  // Type the agent uses to identify this input
-  type: "file:watcher",
-
-  // Schema defines what data the input provides
-  schema: z.object({
-    filename: z.string(),
-    content: z.string(),
-    event: z.enum(["created", "modified", "deleted"]),
-  }),
-
-  // Subscribe function starts listening
-  subscribe: (send, agent) => {
-    const watchDir = "./watched-files";
-
-    // Watch for file changes
-    const watcher = fs.watch(watchDir, (eventType, filename) => {
-      if (filename) {
-        const filepath = `${watchDir}/${filename}`;
-
-        try {
-          const content = fs.readFileSync(filepath, "utf8");
-
-          // Send the file change to the agent
-          send(
-            fileContext,
-            { filename },
-            {
-              filename,
-              content,
-              event: eventType === "rename" ? "created" : "modified",
-            }
-          );
-        } catch (error) {
-          // File might be deleted
-          send(
-            fileContext,
-            { filename },
-            {
-              filename,
-              content: "",
-              event: "deleted",
-            }
-          );
-        }
-      }
-    });
-
-    // Return cleanup function
-    return () => {
-      watcher.close();
-    };
-  },
-});
-```
-
-Use it in your agent:
-
-```typescript title="agent-with-file-watcher.ts"
-const agent = createDreams({
-  model: openai("gpt-4o"),
-  inputs: [fileWatcher],
-});
-
-// Now when files change in ./watched-files/:
-// 1. File watcher detects the change
-// 2. Input sends file data to agent
-// 3. Agent can process and respond to file changes
-```
-
-## Working with Context Targeting
-
-Inputs need to know which context should handle the incoming data:
-
-```typescript title="context-targeting.ts"
-const chatInput = input({
-  type: "chat:message",
-  schema: z.object({
-    message: z.string(),
-    userId: z.string(),
-  }),
-  subscribe: (send, agent) => {
-    chatService.on("message", (data) => {
-      // Target the specific chat context for this user
-      send(
-        chatContext,
-        { userId: data.userId },
-        {
-          message: data.message,
-          userId: data.userId,
-        }
-      );
-    });
-
-    return () => chatService.removeAllListeners("message");
-  },
-});
-```
-
-This creates separate context instances for each user:
-
-* User "alice" gets context instance `chat:alice`
-* User "bob" gets context instance `chat:bob`
-* Each maintains separate conversation memory
-
-## Real-Time vs Polling Inputs
-
-### Real-Time (Event-Driven)
-
-```typescript title="realtime-input.ts"
-// ✅ Good - responds immediately
-subscribe: (send, agent) => {
-  websocket.on("message", (data) => {
-    send(context, args, data);
-  });
-
-  return () => websocket.close();
-};
-```
-
-### Polling (Check Periodically)
-
-```typescript title="polling-input.ts"
-// Sometimes necessary for APIs without webhooks
-subscribe: (send, agent) => {
-  const checkForUpdates = async () => {
-    const newData = await api.getUpdates();
-    if (newData.length > 0) {
-      newData.forEach((item) => {
-        send(context, { id: item.id }, item);
-      });
-    }
-  };
-
-  const interval = setInterval(checkForUpdates, 5000); // Every 5 seconds
-
-  return () => clearInterval(interval);
-};
-```
-
-## Multiple Inputs Working Together
-
-Your agent can listen to multiple sources simultaneously:
-
-```typescript title="multiple-inputs.ts"
-const agent = createDreams({
-  model: openai("gpt-4o"),
-  inputs: [
-    discordMessage, // Discord messages
-    slackMessage, // Slack messages
-    emailReceived, // New emails
-    webhookReceived, // API webhooks
-    fileChanged, // File system changes
-    timerTick, // Scheduled events
-  ],
-});
-
-// Agent now responds to any of these inputs automatically
-```
-
-## Error Handling and Validation
-
-Always handle errors gracefully in your inputs:
-
-```typescript title="error-handling-input.ts"
-const robustInput = input({
-  type: "api:events",
-  schema: z.object({
-    eventId: z.string(),
-    data: z.any(),
-  }),
-  subscribe: (send, agent) => {
-    api.on("event", (rawData) => {
-      try {
-        // Validate the data first
-        const validData = {
-          eventId: rawData.id,
-          data: rawData.payload,
-        };
-
-        // Schema validation happens automatically
-        send(eventContext, { eventId: rawData.id }, validData);
-      } catch (error) {
-        agent.logger.error("api:events", "Invalid event data", {
-          rawData,
-          error: error.message,
-        });
-        // Don't crash - just log and continue
-      }
-    });
-
-    return () => api.removeAllListeners("event");
-  },
-});
-```
-
-## Best Practices
-
-### 1. Use Clear Types and Schemas
-
-```typescript title="good-input-definition.ts"
-// ✅ Good - clear purpose and validation
-const userMessage = input({
-  type: "user:message",
-  schema: z.object({
-    content: z.string().min(1).max(2000),
-    userId: z.string().uuid(),
-    timestamp: z.number(),
-  }),
-  // ...
-});
-
-// ❌ Bad - unclear and unvalidated
-const dataInput = input({
-  type: "data",
-  schema: z.any(),
-  // ...
-});
-```
-
-### 2. Always Return Cleanup Functions
-
-```typescript title="cleanup-function.ts"
-// ✅ Good - proper cleanup
-subscribe: (send, agent) => {
-  const listener = (data) => send(context, args, data);
-
-  eventSource.addEventListener("event", listener);
-
-  return () => {
-    eventSource.removeEventListener("event", listener);
-    eventSource.close();
-  };
-};
-
-// ❌ Bad - no cleanup (memory leaks!)
-subscribe: (send, agent) => {
-  eventSource.addEventListener("event", (data) => {
-    send(context, args, data);
-  });
-
-  return () => {}; // Nothing cleaned up!
-};
-```
-
-### 3. Handle Connection Failures
-
-```typescript title="reconnection-input.ts"
-subscribe: (send, agent) => {
-  let reconnectAttempts = 0;
-  const maxReconnects = 5;
-
-  const connect = () => {
-    try {
-      const connection = createConnection();
-
-      connection.on("data", (data) => {
-        reconnectAttempts = 0; // Reset on successful data
-        send(context, args, data);
-      });
-
-      connection.on("error", () => {
-        if (reconnectAttempts < maxReconnects) {
-          reconnectAttempts++;
-          setTimeout(connect, 1000 * reconnectAttempts);
-        }
-      });
-
-      return connection;
-    } catch (error) {
-      agent.logger.error("connection failed", error);
-    }
-  };
-
-  const connection = connect();
-
-  return () => connection?.close();
-};
-```
-
-### 4. Target the Right Context
-
-```typescript title="context-routing.ts"
-subscribe: (send, agent) => {
-  service.on("event", (event) => {
-    // Route to appropriate context based on event type
-    if (event.type === "user_message") {
-      send(chatContext, { userId: event.userId }, event.data);
-    } else if (event.type === "system_alert") {
-      send(alertContext, { alertId: event.id }, event.data);
-    } else if (event.type === "game_move") {
-      send(gameContext, { gameId: event.gameId }, event.data);
-    }
-  });
-
-  return () => service.removeAllListeners("event");
-};
-```
-
-## Key Takeaways
-
-* **Inputs enable responsiveness** - Without them, agents can't hear anything
-* **Subscribe pattern** - Watch external sources, call `send()` when data
-  arrives
-* **Context targeting** - Route inputs to appropriate context instances
-* **Always cleanup** - Return functions to disconnect when agent stops
-* **Validate data** - Use schemas to ensure incoming data is correct
-* **Handle errors gracefully** - Don't let bad input data crash your agent
-
-Inputs are what turn your agent from a one-time script into a responsive,
-always-listening assistant that can react to the world in real-time.
-
-
-file: ./content/docs/core/concepts/mcp.mdx
-meta: {
-  "title": "Model Context Protocol (MCP)",
-  "description": "Connect your agent to any MCP server for expanded capabilities and context."
-}
-        
-## What is MCP Integration?
-
-**Model Context Protocol (MCP)** lets your agent connect to external services
-and data sources through a standardized interface. Think of it like **adding
-superpowers from other applications** to your agent.
-
-Your agent becomes a **headless MCP client** that can:
-
-* **Connect** to any MCP server (local or remote)
-* **Access** their resources, tools, and prompts
-* **Use** these capabilities seamlessly alongside your other actions
-* **Scale** by connecting to multiple servers simultaneously
-
-## Real Examples
-
-Here's what MCP servers can provide to your agent:
-
-### Database Explorer
-
-```typescript title="sqlite-mcp-connection.ts"
-// MCP server provides database access
-// → Agent can query any SQLite database
-// → No need to write database connection code
-
-const result = await ctx.callAction("mcp.callTool", {
-  serverId: "sqlite-explorer",
-  name: "query",
-  arguments: {
-    sql: "SELECT * FROM users WHERE active = 1",
-  },
-});
-
-// Returns: User data from the database
-```
-
-### Web Search Service
-
-```typescript title="web-search-mcp.ts"
-// MCP server provides web search capabilities
-// → Agent can search the internet
-// → Get real-time information
-
-const result = await ctx.callAction("mcp.callTool", {
-  serverId: "web-search",
-  name: "search",
-  arguments: {
-    query: "latest OpenAI announcements",
-    maxResults: 5,
-  },
-});
-
-// Returns: Current search results
-```
-
-### File System Access
-
-```typescript title="filesystem-mcp.ts"
-// MCP server provides file system access
-// → Agent can read/write files
-// → Access local documents and data
-
-const content = await ctx.callAction("mcp.readResource", {
-  serverId: "filesystem",
-  uri: "file:///project/README.md",
-});
-
-// Returns: File contents
-```
-
-## The Problem: Isolated Agent Capabilities
-
-Without MCP, your agent is limited to what you explicitly code:
-
-```typescript title="limited-agent-capabilities.ts"
-// ❌ Without MCP - every capability needs custom implementation
-
-// Want database access? Write database code
-const db = new Database(connectionString);
-const users = await db.query("SELECT * FROM users");
-
-// Want web search? Build web scraping
-const response = await fetch(`https://api.search.com/q=${query}`);
-const results = await response.json();
-
-// Want file access? Handle file I/O
-const content = await fs.readFile(filepath, "utf-8");
-
-// Want weather data? Build weather client
-const weather = await fetch(`https://api.weather.com/${city}`);
-
-// Problems:
-// 🔧 Manual integration for every data source
-// 🐛 Custom error handling for each service
-// 📚 Learning different APIs for each capability
-// 🔄 Maintaining multiple integrations
-```
-
-## The Solution: MCP Provides Universal Access
-
-With MCP, your agent connects to any data source through one interface:
-
-```typescript title="mcp-universal-access.ts"
-// ✅ With MCP - universal interface for all capabilities
-
-// Database access through MCP
-const users = await ctx.callAction("mcp.callTool", {
-  serverId: "database",
-  name: "query",
-  arguments: { sql: "SELECT * FROM users" },
-});
-
-// Web search through MCP
-const searchResults = await ctx.callAction("mcp.callTool", {
-  serverId: "search",
-  name: "web-search",
-  arguments: { query: "OpenAI news" },
-});
-
-// File access through MCP
-const fileContent = await ctx.callAction("mcp.readResource", {
-  serverId: "filesystem",
-  uri: "file:///project/data.json",
-});
-
-// Weather data through MCP
-const weather = await ctx.callAction("mcp.callTool", {
-  serverId: "weather",
-  name: "current-conditions",
-  arguments: { city: "San Francisco" },
-});
-
-// Benefits:
-// 🎯 Same interface for all data sources
-// 🛡️ Consistent error handling
-// 📖 One API pattern to learn
-// ⚡ Pre-built server integrations
-```
-
-## How MCP Works with Daydreams
-
-MCP integration happens through the **extension system**:
-
-```typescript title="mcp-integration-flow.ts"
-// 1. Add MCP extension to your agent
-const agent = createDreams({
-  extensions: [
-    createMcpExtension([
-      {
-        id: "my-database",
-        name: "SQLite Explorer",
-        transport: {
-          type: "stdio",
-          command: "npx",
-          args: ["@modelcontextprotocol/server-sqlite", "path/to/database.db"],
-        },
-      },
-      {
-        id: "web-search",
-        name: "Search Service",
-        transport: {
-          type: "sse",
-          serverUrl: "http://localhost:3001",
-        },
-      },
-    ]),
-  ],
-});
-
-// 2. Agent automatically gets MCP actions:
-// - mcp.listServers
-// - mcp.listTools
-// - mcp.callTool
-// - mcp.listResources
-// - mcp.readResource
-// - mcp.listPrompts
-// - mcp.getPrompt
-
-// 3. Use MCP capabilities in any action
-const weatherAction = action({
-  name: "get-weather",
-  handler: async ({ city }, ctx) => {
-    // Call MCP weather server
-    const weather = await ctx.callAction("mcp.callTool", {
-      serverId: "weather-service",
-      name: "current",
-      arguments: { location: city },
-    });
-
-    return `Weather in ${city}: ${weather.result.description}`;
-  },
-});
-```
-
-## MCP Transport Types
-
-MCP supports two connection methods:
-
-### Local Servers (stdio)
-
-For servers running as separate processes:
-
-```typescript title="stdio-transport.ts"
-// Local MCP server via command line
-{
-  id: "sqlite-db",
-  name: "SQLite Database",
-  transport: {
-    type: "stdio",
-    command: "npx",
-    args: ["@modelcontextprotocol/server-sqlite", "./data.db"]
-  }
-}
-
-// Local Python MCP server
-{
-  id: "python-analysis",
-  name: "Data Analysis Server",
-  transport: {
-    type: "stdio",
-    command: "python",
-    args: ["analysis_server.py"]
-  }
-}
-
-// Local Node.js MCP server
-{
-  id: "file-system",
-  name: "File System Access",
-  transport: {
-    type: "stdio",
-    command: "node",
-    args: ["filesystem-server.js"]
-  }
-}
-```
-
-### Remote Servers (SSE)
-
-For servers running as web services:
-
-```typescript title="sse-transport.ts"
-// Remote MCP server via HTTP
-{
-  id: "cloud-search",
-  name: "Cloud Search Service",
-  transport: {
-    type: "sse",
-    serverUrl: "https://search-api.example.com"
-  }
-}
-
-// Local development server
-{
-  id: "dev-database",
-  name: "Development Database",
-  transport: {
-    type: "sse",
-    serverUrl: "http://localhost:3001",
-    sseEndpoint: "/events",      // Optional
-    messageEndpoint: "/messages" // Optional
-  }
-}
-```
-
-## Working with MCP Capabilities
-
-### Discover Available Tools
-
-```typescript title="discover-mcp-tools.ts"
-// List all connected MCP servers
-const servers = await ctx.callAction("mcp.listServers", {});
-console.log("Connected servers:", servers.servers);
-
-// Discover tools on a specific server
-const tools = await ctx.callAction("mcp.listTools", {
-  serverId: "database-server",
-});
-
-console.log("Available tools:", tools.tools);
-// Output: [
-//   { name: "query", description: "Execute SQL query" },
-//   { name: "schema", description: "Get table schema" },
-//   { name: "insert", description: "Insert new record" }
-// ]
-```
-
-### Use Server Tools
-
-```typescript title="use-mcp-tools.ts"
-// Execute a database query
-const queryResult = await ctx.callAction("mcp.callTool", {
-  serverId: "database-server",
-  name: "query",
-  arguments: {
-    sql: "SELECT name, email FROM users WHERE active = 1 LIMIT 10",
-  },
-});
-
-if (queryResult.error) {
-  console.error("Query failed:", queryResult.error);
-} else {
-  console.log("Query results:", queryResult.result);
-}
-
-// Call a web search tool
-const searchResult = await ctx.callAction("mcp.callTool", {
-  serverId: "search-server",
-  name: "web-search",
-  arguments: {
-    query: "Daydreams AI framework tutorial",
-    maxResults: 5,
-    safeSearch: true,
-  },
-});
-```
-
-### Access Server Resources
-
-```typescript title="access-mcp-resources.ts"
-// List available resources
-const resources = await ctx.callAction("mcp.listResources", {
-  serverId: "filesystem-server",
-});
-
-console.log("Available resources:", resources.resources);
-
-// Read a specific resource
-const fileContent = await ctx.callAction("mcp.readResource", {
-  serverId: "filesystem-server",
-  uri: "file:///project/config.json",
-});
-
-console.log("File content:", fileContent.resource.contents[0].text);
-
-// Read a database schema resource
-const schema = await ctx.callAction("mcp.readResource", {
-  serverId: "database-server",
-  uri: "schema://users",
-});
-```
-
-### Use Server Prompts
-
-```typescript title="use-mcp-prompts.ts"
-// List available prompts
-const prompts = await ctx.callAction("mcp.listPrompts", {
-  serverId: "analysis-server",
-});
-
-// Get a specific prompt with arguments
-const analysisPrompt = await ctx.callAction("mcp.getPrompt", {
-  serverId: "analysis-server",
-  name: "analyze-data",
-  arguments: {
-    dataType: "sales",
-    timeframe: "last-quarter",
-  },
-});
-
-// Use the prompt content with your LLM
-const llmResponse = await generateText({
-  model: openai("gpt-4"),
-  prompt: analysisPrompt.prompt.messages[0].content.text,
-});
-```
-
-## Real-World Examples
-
-### Customer Support Agent
-
-```typescript title="customer-support-with-mcp.ts"
-const customerSupportAgent = createDreams({
-  extensions: [
-    createMcpExtension([
-      {
-        id: "crm-database",
-        name: "Customer Database",
-        transport: {
-          type: "stdio",
-          command: "npx",
-          args: ["@company/crm-mcp-server"],
-        },
-      },
-      {
-        id: "knowledge-base",
-        name: "Support Knowledge Base",
-        transport: {
-          type: "sse",
-          serverUrl: "https://kb.company.com/mcp",
-        },
-      },
-    ]),
-  ],
-
-  actions: [
-    action({
-      name: "handle-support-ticket",
-      handler: async ({ ticketId, customerEmail }, ctx) => {
-        // Get customer history from CRM
-        const customerData = await ctx.callAction("mcp.callTool", {
-          serverId: "crm-database",
-          name: "get-customer",
-          arguments: { email: customerEmail },
-        });
-
-        // Search knowledge base for solutions
-        const solutions = await ctx.callAction("mcp.callTool", {
-          serverId: "knowledge-base",
-          name: "search-solutions",
-          arguments: {
-            query: customerData.result.lastIssueCategory,
-            limit: 3,
-          },
-        });
-
-        return {
-          customer: customerData.result,
-          suggestedSolutions: solutions.result,
-          escalate:
-            customerData.result.tier === "premium" &&
-            solutions.result.length === 0,
-        };
-      },
-    }),
-  ],
-});
-```
-
-### Trading Analytics Agent
-
-```typescript title="trading-agent-with-mcp.ts"
-const tradingAgent = createDreams({
-  extensions: [
-    createMcpExtension([
-      {
-        id: "market-data",
-        name: "Market Data Provider",
-        transport: {
-          type: "sse",
-          serverUrl: "wss://market-data.example.com/mcp",
-        },
-      },
-      {
-        id: "portfolio-db",
-        name: "Portfolio Database",
-        transport: {
-          type: "stdio",
-          command: "python",
-          args: ["portfolio_server.py"],
-        },
-      },
-    ]),
-  ],
-
-  actions: [
-    action({
-      name: "analyze-portfolio",
-      handler: async ({ portfolioId }, ctx) => {
-        // Get current portfolio positions
-        const positions = await ctx.callAction("mcp.callTool", {
-          serverId: "portfolio-db",
-          name: "get-positions",
-          arguments: { portfolioId },
-        });
-
-        // Get real-time market data for each position
-        const marketData = await Promise.all(
-          positions.result.map((position) =>
-            ctx.callAction("mcp.callTool", {
-              serverId: "market-data",
-              name: "get-quote",
-              arguments: { symbol: position.symbol },
-            })
-          )
-        );
-
-        // Calculate portfolio performance
-        const analysis = {
-          totalValue: 0,
-          dayChange: 0,
-          positions: positions.result.map((position, i) => ({
-            ...position,
-            currentPrice: marketData[i].result.price,
-            dayChange: marketData[i].result.change,
-          })),
-        };
-
-        return analysis;
-      },
-    }),
-  ],
-});
-```
-
-## Error Handling Best Practices
-
-### Graceful Fallbacks
-
-```typescript title="mcp-error-handling.ts"
-const robustAction = action({
-  name: "get-data-with-fallback",
-  handler: async ({ query }, ctx) => {
-    // Try primary MCP server first
-    let result = await ctx.callAction("mcp.callTool", {
-      serverId: "primary-search",
-      name: "search",
-      arguments: { query },
-    });
-
-    if (result.error) {
-      console.warn("Primary search failed, trying backup:", result.error);
-
-      // Fallback to secondary server
-      result = await ctx.callAction("mcp.callTool", {
-        serverId: "backup-search",
-        name: "search",
-        arguments: { query },
-      });
-    }
-
-    if (result.error) {
-      // Final fallback to local search
-      return {
-        results: [],
-        source: "local-cache",
-        message: "External search unavailable",
-      };
-    }
-
-    return {
-      results: result.result,
-      source: result.error ? "backup" : "primary",
-    };
-  },
-});
-```
-
-### Connection Monitoring
-
-```typescript title="mcp-connection-monitoring.ts"
-const monitorConnections = action({
-  name: "check-mcp-health",
-  handler: async (args, ctx) => {
-    const servers = await ctx.callAction("mcp.listServers", {});
-
-    const healthChecks = await Promise.all(
-      servers.servers.map(async (server) => {
-        try {
-          // Try to list tools as a health check
-          const tools = await ctx.callAction("mcp.listTools", {
-            serverId: server.id,
-          });
-
-          return {
-            serverId: server.id,
-            name: server.name,
-            status: tools.error ? "error" : "healthy",
-            error: tools.error,
-          };
-        } catch (error) {
-          return {
-            serverId: server.id,
-            name: server.name,
-            status: "disconnected",
-            error: error.message,
-          };
-        }
-      })
-    );
-
-    return {
-      timestamp: new Date().toISOString(),
-      servers: healthChecks,
-    };
-  },
-});
-```
-
-## Available MCP Servers
-
-The MCP ecosystem includes servers for common use cases:
-
-### Official Servers
-
-```typescript title="official-mcp-servers.ts"
-// SQLite database access
-{
-  id: "sqlite",
-  name: "SQLite Database",
-  transport: {
-    type: "stdio",
-    command: "npx",
-    args: ["@modelcontextprotocol/server-sqlite", "./database.db"]
-  }
-}
-
-// File system access
-{
-  id: "filesystem",
-  name: "File System",
-  transport: {
-    type: "stdio",
-    command: "npx",
-    args: ["@modelcontextprotocol/server-filesystem", "./data"]
-  }
-}
-
-// Git repository access
-{
-  id: "git",
-  name: "Git Repository",
-  transport: {
-    type: "stdio",
-    command: "npx",
-    args: ["@modelcontextprotocol/server-git", "./repo"]
-  }
-}
-```
-
-### Community Servers
-
-```typescript title="community-mcp-servers.ts"
-// Web search capabilities
-{
-  id: "web-search",
-  name: "Web Search",
-  transport: {
-    type: "stdio",
-    command: "python",
-    args: ["-m", "mcp_server_web_search"]
-  }
-}
-
-// AWS services access
-{
-  id: "aws",
-  name: "AWS Services",
-  transport: {
-    type: "stdio",
-    command: "node",
-    args: ["aws-mcp-server.js"]
-  }
-}
-```
-
-## Building Custom MCP Servers
-
-You can create custom MCP servers for your specific needs:
-
-```typescript title="custom-mcp-server.ts"
-// Simple MCP server example
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { z } from "zod";
-
-const server = new McpServer({
-  name: "Custom Business Server",
-  version: "1.0.0",
-});
-
-// Add a tool for business logic
-server.tool(
-  "calculate-roi",
-  {
-    investment: z.number(),
-    returns: z.number(),
-    timeframe: z.number(),
-  },
-  async ({ investment, returns, timeframe }) => {
-    const roi = ((returns - investment) / investment) * 100;
-    const annualizedRoi = roi / timeframe;
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify({
-            roi: roi.toFixed(2),
-            annualizedRoi: annualizedRoi.toFixed(2),
-            profitable: roi > 0,
-          }),
-        },
-      ],
-    };
-  }
-);
-
-// Add a resource for business data
-server.resource("business-metrics", async () => ({
-  contents: [
-    {
-      uri: "metrics://quarterly",
-      text: JSON.stringify({
-        revenue: 1000000,
-        expenses: 750000,
-        profit: 250000,
-        customers: 5000,
-      }),
-    },
-  ],
-}));
-
-// Start the server
-const transport = new StdioServerTransport();
-await server.connect(transport);
-```
-
-## Best Practices
-
-### 1. Server Organization
-
-```typescript title="organize-mcp-servers.ts"
-// ✅ Good - group related servers by purpose
-const databaseServers = [
-  {
-    id: "user-db",
-    name: "User Database",
-    transport: {
-      /* ... */
-    },
-  },
-  {
-    id: "analytics-db",
-    name: "Analytics Database",
-    transport: {
-      /* ... */
-    },
-  },
-];
-
-const externalServers = [
-  {
-    id: "web-search",
-    name: "Web Search",
-    transport: {
-      /* ... */
-    },
-  },
-  {
-    id: "weather",
-    name: "Weather API",
-    transport: {
-      /* ... */
-    },
-  },
-];
-
-createMcpExtension([...databaseServers, ...externalServers]);
-
-// ❌ Bad - unclear server purposes
-createMcpExtension([
-  {
-    id: "server1",
-    name: "Server",
-    transport: {
-      /* ... */
-    },
-  },
-  {
-    id: "server2",
-    name: "Other Server",
-    transport: {
-      /* ... */
-    },
-  },
-]);
-```
-
-### 2. Error Boundaries
-
-```typescript title="mcp-error-boundaries.ts"
-// ✅ Good - wrap MCP calls in try-catch
-const safeAction = action({
-  name: "safe-mcp-call",
-  handler: async ({ query }, ctx) => {
-    try {
-      const result = await ctx.callAction("mcp.callTool", {
-        serverId: "search-server",
-        name: "search",
-        arguments: { query },
-      });
-
-      if (result.error) {
-        return { error: `Search failed: ${result.error}` };
-      }
-
-      return { data: result.result };
-    } catch (error) {
-      return { error: `Connection failed: ${error.message}` };
-    }
-  },
-});
-```
-
-### 3. Resource Validation
-
-```typescript title="mcp-resource-validation.ts"
-// ✅ Good - validate MCP responses
-const validateResponse = (mcpResult: any) => {
-  if (mcpResult.error) {
-    throw new Error(`MCP Error: ${mcpResult.error}`);
-  }
-
-  if (!mcpResult.result) {
-    throw new Error("MCP returned no result");
-  }
-
-  return mcpResult.result;
-};
-
-const validatedAction = action({
-  name: "validated-mcp-call",
-  handler: async ({ id }, ctx) => {
-    const result = await ctx.callAction("mcp.callTool", {
-      serverId: "database",
-      name: "get-user",
-      arguments: { id },
-    });
-
-    const userData = validateResponse(result);
-
-    // Now safe to use userData
-    return { user: userData };
-  },
-});
-```
-
-## Next Steps
-
-* **[Extensions vs Services](/docs/core/advanced/extensions-vs-services)** -
-  When to use MCP vs other integration patterns
-* **[Custom Extensions](/docs/core/advanced/extensions)** - Build your own
-  integrations
-* **[Examples](/docs/tutorials/examples)** - See complete MCP implementations
-
-## Key Takeaways
-
-* **Universal interface** - One API pattern for all external capabilities
-* **Headless client** - Your agent connects to any MCP server seamlessly
-* **Seamless integration** - MCP actions work like any other agent action
-* **Multiple transports** - Support both local (stdio) and remote (SSE) servers
-* **Ecosystem ready** - Connect to existing MCP servers or build custom ones
-
-MCP transforms your agent from isolated code into a connected system that can
-access any data source or service through a standardized protocol.
-
-
-file: ./content/docs/core/concepts/memory.mdx
-meta: {
-  "title": "Memory",
-  "description": "How Daydreams agents store, recall, and learn from information."
-}
-        
-## What is Memory?
-
-Memory is how your agent **remembers** things between conversations. Just like
-you remember what you talked about yesterday, agents need memory to be helpful
-over time.
-
-## Real Examples
-
-Here are different types of memory your agent uses:
-
-### Short-Term Memory (This Conversation)
-
-```typescript title="short-term-memory.ts"
-// What happened in the current conversation
-const workingMemory = {
-  messages: [
-    { user: "What's the weather?" },
-    { agent: "Let me check..." },
-    { action: "getWeather", result: "72°F, sunny" },
-    { agent: "It's 72°F and sunny!" },
-  ],
-  // This gets cleared when conversation ends
-};
-```
-
-### Long-Term Memory (Persistent Data)
-
-```typescript title="long-term-memory.ts"
-// What the agent remembers about you
-const contextMemory = {
-  userId: "alice",
-  preferences: {
-    favoriteColor: "blue",
-    timezone: "America/New_York",
-    wantsDetailedWeather: true,
-  },
-  chatHistory: [
-    "Discussed weather preferences on 2024-01-15",
-    "Helped with todo list on 2024-01-16",
-  ],
-  // This persists forever
-};
-```
-
-### Experience Memory (Learning from Past)
-
-```typescript title="experience-memory.ts"
-// What the agent learned from previous interactions
-const episodicMemory = [
-  {
-    situation: "User asked about weather in winter",
-    action: "Provided temperature + suggested warm clothes",
-    result: "User was happy and thanked me",
-    lesson: "Winter weather queries benefit from clothing suggestions",
-  },
-  // Agent can recall and apply these lessons to new situations
-];
-```
-
-## The Problem: Agents Without Memory Are Useless
-
-Without memory, every conversation starts from scratch:
-
-```text title="forgetful-agent.txt"
-Day 1:
-User: "My name is Alice and I like detailed weather reports"
-Agent: "Nice to meet you Alice! I'll remember you like detailed weather."
-
-Day 2:
-User: "What's the weather?"
-Agent: "Hi! I'm not sure who you are. What kind of weather info do you want?"
-// ❌ Forgot everything about Alice
-// ❌ Has to ask the same questions again
-// ❌ Terrible user experience
-```
-
-## The Solution: Memory Makes Agents Smart
-
-With memory, agents get better over time:
-
-```text title="smart-agent.txt"
-Day 1:
-User: "My name is Alice and I like detailed weather reports"
-Agent: "Nice to meet you Alice! I'll remember you like detailed weather."
-→ Saves: { user: "Alice", preferences: { detailedWeather: true } }
-
-Day 2:
-User: "What's the weather?"
-Agent: → Loads: { user: "Alice", preferences: { detailedWeather: true } }
-Agent: "Hi Alice! It's 72°F and sunny with 15mph winds from the west,
-       humidity at 45%, and clear skies expected all day."
-// ✅ Remembered Alice and her preferences
-// ✅ Provided detailed weather automatically
-// ✅ Great user experience
-```
-
-## How Memory Works in Your Agent
-
-### 1. Agent Automatically Saves Important Information
-
-```typescript title="automatic-memory.ts"
-// Your agent's context automatically saves important info
-const chatContext = context({
-  type: "chat",
-  schema: z.object({ userId: z.string() }),
-
-  create: () => ({
-    preferences: {},
-    chatHistory: [],
-    firstMet: new Date().toISOString(),
-  }),
-
-  // This memory persists between conversations
-});
-
-// When user says: "I prefer metric units"
-// Agent automatically saves: preferences.units = "metric"
-// Next conversation: Agent uses metric units automatically
-```
-
-### 2. Different Types of Memory for Different Needs
-
-```typescript title="memory-types.ts"
-const agent = createDreams({
-  model: openai("gpt-4o"),
-
-  // Configure where memory gets saved
-  memory: createMemory(
-    // Long-term storage (user preferences, chat history)
-    await createMongoMemoryStore({ uri: "mongodb://localhost:27017" }),
-
-    // Experience storage (what worked well in the past)
-    createChromaVectorStore("agent-experiences")
-  ),
-
-  // Enable automatic learning from conversations
-  generateMemories: true,
-});
-```
-
-### 3. Agent Recalls Relevant Memories
-
-```text title="memory-recall.txt"
-New user question: "How do I cook pasta?"
-
-Agent thinks:
-1. Check if I know this user (loads context memory)
-2. Recall similar past conversations (searches experience memory)
-3. Found: "Previous users liked step-by-step cooking instructions"
-4. Respond with detailed cooking steps
-
-Result: Agent gives better answer based on past experience!
-```
-
-## Setting Up Memory in Your Agent
-
-Here's how to add memory to your agent:
-
-### Basic Memory (In-Memory)
-
-```typescript title="basic-memory.ts"
-import {
-  createDreams,
-  createMemory,
-  createMemoryStore,
-} from "@daydreamsai/core";
-
-const agent = createDreams({
-  model: openai("gpt-4o"),
-
-  // Basic memory - data lost when agent restarts
-  memory: createMemory(
-    createMemoryStore(), // Stores in RAM
-    createVectorStore() // No persistent experience storage
-  ),
-});
-```
-
-### Persistent Memory (Database)
-
-```typescript title="persistent-memory.ts"
-import { createMongoMemoryStore } from "@daydreamsai/mongo";
-import { createChromaVectorStore } from "@daydreamsai/chroma";
-
-const agent = createDreams({
-  model: openai("gpt-4o"),
-
-  // Persistent memory - data survives restarts
-  memory: createMemory(
-    // Save to MongoDB
-    await createMongoMemoryStore({
-      uri: "mongodb://localhost:27017",
-      dbName: "my-agent-memory",
-    }),
-
-    // Save experiences to ChromaDB for learning
-    createChromaVectorStore("my-agent-experiences")
-  ),
-
-  // Enable automatic learning
-  generateMemories: true,
-});
-```
-
-## Working with Context Memory
-
-Context memory is what your agent remembers about specific conversations:
-
-```typescript title="context-memory-usage.ts"
-const userProfileContext = context({
-  type: "user-profile",
-  schema: z.object({ userId: z.string() }),
-
-  // Define what to remember about each user
-  create: () => ({
-    name: null,
-    preferences: {
-      language: "en",
-      timezone: null,
-      communicationStyle: "friendly",
-    },
-    chatSummary: [],
-    lastSeen: null,
-  }),
-
-  // How this memory appears to the LLM
-  render: (state) => `
-User Profile: ${state.args.userId}
-Name: ${state.memory.name || "Unknown"}
-Preferences: ${JSON.stringify(state.memory.preferences)}
-Last interaction: ${state.memory.lastSeen || "First time"}
-
-Recent chat summary:
-${state.memory.chatSummary.slice(-3).join("\n")}
-  `,
-});
-```
-
-### Actions Can Update Memory
-
-```typescript title="memory-updating-action.ts"
-const updatePreferenceAction = action({
-  name: "update-user-preference",
-  description: "Updates a user's preference",
-  schema: z.object({
-    key: z.string(),
-    value: z.string(),
-  }),
-
-  handler: async ({ key, value }, ctx) => {
-    // Update the user's memory
-    ctx.memory.preferences[key] = value;
-    ctx.memory.lastSeen = new Date().toISOString();
-
-    // Memory automatically saves after this action
-    return {
-      success: true,
-      message: `Updated ${key} to ${value}`,
-    };
-  },
-});
-```
-
-## Experience Memory: Learning from the Past
-
-Your agent can learn from previous conversations:
-
-```typescript title="experience-learning.ts"
-// Enable automatic experience generation
-const agent = createDreams({
-  model: openai("gpt-4o"),
-  memory: createMemory(
-    await createMongoMemoryStore({ uri: "mongodb://localhost:27017" }),
-    createChromaVectorStore("experiences")
-  ),
-
-  // Agent automatically creates "episodes" from conversations
-  generateMemories: true,
-
-  // Optional: Export training data for fine-tuning
-  exportTrainingData: true,
-  trainingDataPath: "./agent-training.jsonl",
-});
-
-// Now when user asks: "How do I bake a cake?"
-// Agent recalls: "I helped someone bake a cake before. They liked step-by-step instructions with temperatures."
-// Agent provides: Detailed baking instructions with exact temperatures and times
-```
-
-## Memory in Action: Complete Example
-
-Here's how all the memory types work together:
-
-```typescript title="complete-memory-example.ts"
-// 1. User starts conversation
-User: "Hi, I'm Sarah. I'm learning to cook."
-
-// 2. Agent creates/loads context memory
-Context Memory: {
-  name: null,  // Will be updated
-  interests: [], // Will be updated
-  skillLevel: null // Will be updated
-}
-
-// 3. Agent processes and updates memory
-Action: updateUserProfile({
-  name: "Sarah",
-  interests: ["cooking"],
-  skillLevel: "beginner"
-})
-
-// 4. Later conversation
-User: "How do I make pasta?"
-
-// 5. Agent loads Sarah's memory
-Context Memory: {
-  name: "Sarah",
-  interests: ["cooking"],
-  skillLevel: "beginner"  // Agent knows she's a beginner!
-}
-
-// 6. Agent recalls similar past experiences
-Experience Memory: "When helping beginners with pasta, detailed steps work best"
-
-// 7. Agent responds appropriately
-Agent: "Hi Sarah! Since you're learning to cook, I'll give you detailed step-by-step pasta instructions..."
-
-// ✅ Personalized response based on memory!
-```
-
-## Best Practices
-
-### 1. Choose the Right Memory Storage
-
-```typescript title="memory-storage-choice.ts"
-// ✅ Good for development - simple setup
-memory: createMemory(
-  createMemoryStore(), // In-memory, lost on restart
-  createVectorStore() // No learning capabilities
-);
-
-// ✅ Good for production - data persists
-memory: createMemory(
-  await createMongoMemoryStore({ uri: process.env.MONGODB_URI }),
-  createChromaVectorStore("prod-experiences")
-);
-```
-
-### 2. Design Clear Memory Structures
-
-```typescript title="clear-memory-structure.ts"
-// ✅ Good - clear, organized structure
-interface UserMemory {
-  profile: {
-    name: string;
-    email: string;
-    joinDate: string;
-  };
-  preferences: {
-    language: string;
-    timezone: string;
-    notifications: boolean;
-  };
-  activityHistory: Array<{
-    action: string;
-    timestamp: string;
-    result: string;
-  }>;
-}
-
-// ❌ Bad - everything mixed together
-interface MessyMemory {
-  stuff: any;
-  data: any;
-  things: any;
-}
-```
-
-### 3. Don't Store Too Much
-
-```typescript title="memory-size-management.ts"
-// ✅ Good - keep recent, relevant data
-render: (state) => {
-  const recentChats = state.memory.chatHistory.slice(-5); // Last 5 only
-  const importantPrefs = {
-    language: state.memory.preferences.language,
-    timezone: state.memory.preferences.timezone,
-  };
-
-  return `Recent activity: ${recentChats.join("\n")}`;
-};
-
-// ❌ Bad - dump everything
-render: (state) => JSON.stringify(state.memory); // Overwhelming!
-```
-
-### 4. Handle Memory Gracefully
-
-```typescript title="graceful-memory-handling.ts"
-handler: async ({ userId }, ctx) => {
-  try {
-    // Try to load user memory
-    const userPrefs = ctx.memory.preferences || {};
-
-    // Provide defaults if memory is empty
-    const language = userPrefs.language || "en";
-    const timezone = userPrefs.timezone || "UTC";
-
-    return { language, timezone };
-  } catch (error) {
-    // Handle memory errors gracefully
-    console.error("Memory error:", error);
-    return { language: "en", timezone: "UTC" }; // Safe defaults
-  }
-};
-```
-
-## Memory Types Summary
-
-| Memory Type           | Purpose               | Lifetime            | Example                                |
-| --------------------- | --------------------- | ------------------- | -------------------------------------- |
-| **Working Memory**    | Current conversation  | Single conversation | "User just asked about weather"        |
-| **Context Memory**    | User/session data     | Persists forever    | "Alice prefers detailed weather"       |
-| **Action Memory**     | Action-specific state | Persists forever    | "Weather API called 47 times today"    |
-| **Experience Memory** | Learning from past    | Persists forever    | "Users like step-by-step cooking help" |
-
-## Key Takeaways
-
-* **Memory makes agents smart** - Without it, every conversation starts from
-  scratch
-* **Multiple memory types** - Short-term (conversation), long-term (user data),
-  experience (learning)
-* **Automatic persistence** - Agent saves important information without extra
-  code
-* **Experience learning** - Agent gets better over time by remembering what
-  works
-* **Choose storage wisely** - In-memory for development, database for production
-* **Keep it organized** - Clear memory structures make agents more reliable
-
-Memory transforms your agent from a stateless chatbot into an intelligent
-assistant that learns, remembers, and gets better with every interaction.
-
-
-file: ./content/docs/core/concepts/outputs.mdx
-meta: {
-  "title": "Outputs",
-  "description": "How Daydreams agents send information and responses."
-}
-        
-## What is an Output?
-
-An output is how your agent **sends** information to the outside world. If
-actions are what your agent can "do", outputs are how your agent "speaks" or
-"responds".
-
-## Real Examples
-
-Here are outputs that make agents useful:
-
-### Discord Message
-
-```typescript title="discord-output.ts"
-// Agent can send Discord messages
-const discordMessage = output({
-  type: "discord:message",
-  description: "Sends a message to Discord",
-  schema: z.string(),
-  attributes: z.object({
-    channelId: z.string(),
-  }),
-  handler: async (message, ctx) => {
-    await discord.send(ctx.outputRef.params.channelId, message);
-    return { sent: true };
-  },
-});
-```
-
-### Console Print
-
-```typescript title="console-output.ts"
-// Agent can print to console
-const consolePrint = output({
-  type: "console:print",
-  description: "Prints a message to the console",
-  schema: z.string(),
-  handler: async (message) => {
-    console.log(`Agent: ${message}`);
-    return { printed: true };
-  },
-});
-```
-
-### Email Notification
-
-```typescript title="email-output.ts"
-// Agent can send emails
-const emailOutput = output({
-  type: "email:send",
-  description: "Sends an email notification",
-  schema: z.string(),
-  attributes: z.object({
-    to: z.string(),
-    subject: z.string(),
-  }),
-  handler: async (body, ctx) => {
-    const { to, subject } = ctx.outputRef.params;
-    await emailService.send({ to, subject, body });
-    return { emailSent: true };
-  },
-});
-```
-
-## The Problem: Agents Need to Communicate
-
-Without outputs, your agent can think but can't communicate:
-
-```text title="silent-agent.txt"
-User: "Send me the weather report"
-Agent: *calls weather API internally*
-Agent: *knows it's 72°F and sunny*
-Agent: *...but can't tell you!*
-// ❌ Agent gets the data but you never see it
-// ❌ No way to respond or communicate
-// ❌ Useless to humans
-```
-
-## The Solution: Outputs Enable Communication
-
-With outputs, your agent can respond properly:
-
-```text title="communicating-agent.txt"
-User: "Send me the weather report"
-Agent: *calls weather API*
-Agent: *gets weather data*
-Agent: *uses discord:message output*
-Discord: "It's 72°F and sunny in San Francisco!"
-// ✅ Agent gets data AND tells you about it
-// ✅ Complete conversation loop
-// ✅ Actually useful
-```
-
-## How Outputs Work in Your Agent
-
-### 1. You Define How the Agent Can Respond
-
-```typescript title="define-outputs.ts"
-const agent = createDreams({
-  model: openai("gpt-4o"),
-  outputs: [
-    discordMessage, // Agent can send Discord messages
-    consolePrint, // Agent can print to console
-    emailOutput, // Agent can send emails
-  ],
-});
-```
-
-### 2. The LLM Decides When to Respond
-
-When the agent thinks, it sees:
-
-```text title="llm-sees-outputs.txt"
-Available outputs:
-- discord:message: Sends a message to Discord
-- console:print: Prints a message to the console
-- email:send: Sends an email notification
-
-User asked: "Check weather and let me know via Discord"
-```
-
-### 3. The LLM Uses Outputs to Respond
-
-The LLM responds with structured output calls:
-
-```xml title="llm-uses-outputs.xml"
-<response>
-  <reasoning>User wants weather info via Discord. I'll get weather then send message.</reasoning>
-
-  <action_call name="get-weather">{"city": "San Francisco"}</action_call>
-
-  <output type="discord:message" channelId="123456789">
-    Weather in San Francisco: {{calls[0].temperature}}, {{calls[0].condition}}
-  </output>
-</response>
-```
-
-### 4. Daydreams Sends the Output
-
-Daydreams automatically:
-
-* Validates the output format
-* Runs your handler function
-* Actually sends the Discord message
-* Logs the result
-
-## Creating Your First Output
-
-Here's a simple output that saves messages to a file:
-
-```typescript title="file-output.ts"
-import { output } from "@daydreamsai/core";
-import { z } from "zod";
-import fs from "fs/promises";
-
-export const saveToFile = output({
-  // Type the LLM uses to call this output
-  type: "file:save",
-
-  // Description helps LLM know when to use it
-  description: "Saves a message to a text file",
-
-  // Schema defines what content is expected
-  schema: z.string().describe("The message to save"),
-
-  // Attributes define extra parameters on the output tag
-  attributes: z.object({
-    filename: z.string().describe("Name of the file to save to"),
-  }),
-
-  // Handler is your actual code that runs
-  handler: async (message, ctx) => {
-    const { filename } = ctx.outputRef.params;
-
-    await fs.writeFile(filename, message + "\n", { flag: "a" });
-
-    return {
-      saved: true,
-      filename,
-      message: `Saved message to ${filename}`,
-    };
-  },
-});
-```
-
-Use it in your agent:
-
-```typescript title="agent-with-file-output.ts"
-const agent = createDreams({
-  model: openai("gpt-4o"),
-  outputs: [saveToFile],
-});
-
-// Now when the LLM wants to save something:
-// <output type="file:save" filename="log.txt">This is my message</output>
-// The message gets saved to log.txt
-```
-
-## Working with Context Memory
-
-Outputs can read and update your agent's memory:
-
-```typescript title="notification-output.ts"
-// Define what your context remembers
-interface ChatMemory {
-  messagesSent: number;
-  lastNotification?: string;
-}
-
-const notificationOutput = output({
-  type: "notification:send",
-  description: "Sends a notification to the user",
-  schema: z.string(),
-  attributes: z.object({
-    priority: z.enum(["low", "medium", "high"]),
-  }),
-  handler: async (message, ctx) => {
-    // Access context memory (automatically typed!)
-    const memory = ctx.memory as ChatMemory;
-
-    // Update statistics
-    if (!memory.messagesSent) {
-      memory.messagesSent = 0;
-    }
-    memory.messagesSent++;
-    memory.lastNotification = message;
-
-    // Send the actual notification
-    const { priority } = ctx.outputRef.params;
-    await notificationService.send({
-      message,
-      priority,
-      userId: ctx.args.userId,
-    });
-
-    // Changes to memory are automatically saved
-    return {
-      sent: true,
-      totalSent: memory.messagesSent,
-      message: `Notification sent (total: ${memory.messagesSent})`,
-    };
-  },
-});
-```
-
-## Outputs vs Actions: When to Use Which?
-
-Understanding the difference is crucial:
-
-### Use **Outputs** When:
-
-* **Communicating results** to users or external systems
-* **You don't need a response** back for the LLM to continue
-* **Final step** in a conversation or workflow
-
-```typescript title="output-example.ts"
-// ✅ Good use of output - telling user the result
-<output type="discord:message" channelId="123">
-  Weather: 72°F, sunny. Have a great day!
-</output>
-```
-
-### Use **Actions** When:
-
-* **Getting data** the LLM needs for next steps
-* **You need the result** for further reasoning
-* **Middle step** in a complex workflow
-
-```typescript title="action-example.ts"
-// ✅ Good use of action - getting data for next step
-<action_call name="get-weather">{"city": "San Francisco"}</action_call>
-// LLM will use this result to decide what to tell the user
-```
-
-### Common Pattern: Actions → Outputs
-
-```xml title="action-then-output.xml"
-<response>
-  <reasoning>I'll get weather data, then tell the user about it</reasoning>
-
-  <!-- Action: Get data -->
-  <action_call name="get-weather">{"city": "Boston"}</action_call>
-
-  <!-- Output: Communicate result -->
-  <output type="discord:message" channelId="123">
-    Boston weather: {{calls[0].temperature}}, {{calls[0].condition}}
-  </output>
-</response>
-```
-
-## Advanced: Multiple Outputs
-
-Your agent can send multiple outputs in one response:
-
-```xml title="multiple-outputs.xml"
-<response>
-  <reasoning>I'll notify both Discord and email about this important update</reasoning>
-
-  <output type="discord:message" channelId="123">
-    🚨 Server maintenance starting in 10 minutes!
-  </output>
-
-  <output type="email:send" to="admin@company.com" subject="Maintenance Alert">
-    Server maintenance is beginning in 10 minutes. All users have been notified via Discord.
-  </output>
-</response>
-```
-
-## External Service Integration
-
-Outputs are perfect for integrating with external services:
-
-```typescript title="slack-output.ts"
-const slackMessage = output({
-  type: "slack:message",
-  description: "Sends a message to Slack",
-  schema: z.string(),
-  attributes: z.object({
-    channel: z.string().describe("Slack channel name"),
-    threadId: z.string().optional().describe("Thread ID for replies"),
-  }),
-  handler: async (message, ctx) => {
-    try {
-      const { channel, threadId } = ctx.outputRef.params;
-
-      const result = await slackClient.chat.postMessage({
-        channel,
-        text: message,
-        thread_ts: threadId,
-      });
-
-      return {
-        success: true,
-        messageId: result.ts,
-        channel: result.channel,
-        message: `Message sent to #${channel}`,
-      };
-    } catch (error) {
-      console.error("Failed to send Slack message:", error);
-
-      return {
-        success: false,
-        error: error.message,
-        message: "Failed to send Slack message",
-      };
-    }
-  },
-});
-```
-
-## Best Practices
-
-### 1. Use Clear Types and Descriptions
-
-```typescript title="good-naming.ts"
-// ✅ Good - clear what it does
-const userNotification = output({
-  type: "user:notification",
-  description:
-    "Sends a notification directly to the user via their preferred channel",
-  // ...
-});
-
-// ❌ Bad - unclear purpose
-const sendStuff = output({
-  type: "send",
-  description: "Sends something",
-  // ...
-});
-```
-
-### 2. Validate Input with Schemas
-
-```typescript title="good-schemas.ts"
-// ✅ Good - specific validation
-schema: z.object({
-  title: z.string().min(1).max(100),
-  content: z.string().min(1).max(2000),
-  urgency: z.enum(["low", "medium", "high"]),
-});
-
-// ❌ Bad - too loose
-schema: z.any();
-```
-
-### 3. Handle Errors Gracefully
-
-```typescript title="error-handling.ts"
-handler: async (message, ctx) => {
-  try {
-    await sendMessage(message);
-    return { sent: true };
-  } catch (error) {
-    // Log for debugging
-    console.error("Failed to send message:", error);
-
-    // Return structured error info
-    return {
-      sent: false,
-      error: error.message,
-      message: "Failed to send message - will retry later",
-    };
-  }
-};
-```
-
-### 4. Use Async/Await for External Services
-
-```typescript title="async-best-practice.ts"
-// ✅ Good - properly handles async
-handler: async (message, ctx) => {
-  const result = await emailService.send(message);
-  return { emailId: result.id };
-};
-
-// ❌ Bad - doesn't wait for async operations
-handler: (message, ctx) => {
-  emailService.send(message); // This returns a Promise that's ignored!
-  return { status: "sent" }; // Completes before email actually sends
-};
-```
-
-### 5. Provide Good Examples
-
-```typescript title="good-examples.ts"
-examples: [
-  '<output type="discord:message" channelId="123456789">Hello everyone!</output>',
-  '<output type="discord:message" channelId="987654321" replyToUserId="user123">Thanks for the question!</output>',
-];
-```
-
-## Key Takeaways
-
-* **Outputs enable communication** - Without them, agents can think but not
-  respond
-* **LLM chooses when to use them** - Based on types and descriptions you provide
-* **Different from actions** - Outputs communicate results, actions get data
-* **Content and attributes validated** - Zod schemas ensure correct format
-* **Memory can be updated** - Track what was sent for future reference
-* **Error handling is crucial** - External services can fail, handle gracefully
-
-Outputs complete the conversation loop - they're how your intelligent agent
-becomes a helpful communicator that users can actually interact with.
-
-
-file: ./content/docs/core/concepts/prompting.mdx
-meta: {
-  "title": "Prompting",
-  "description": "How Daydreams structures prompts to guide LLM reasoning and actions."
-}
-        
-## What is a Prompt?
-
-A prompt is the text you send to an AI model to tell it what to do. Think of it
-like giving instructions to a smart assistant.
-
-## Simple Prompts vs Agent Prompts
-
-### Simple Prompt (ChatGPT style)
-
-```text title="simple-prompt.txt"
-User: What's the weather in New York?
-Assistant: I don't have access to real-time weather data...
-```
-
-### Agent Prompt (what Daydreams creates)
-
-```text title="agent-prompt.txt"
-You are an AI agent that can:
-- Call weather APIs
-- Send Discord messages
-- Remember conversation history
-
-Current situation:
-- User asked: "What's the weather in New York?"
-- Available actions: getWeather, sendMessage
-- Chat context: user123 in #general channel
-
-Please respond with:
-<action_call name="getWeather">{"city": "New York"}</action_call>
-<output type="discord:message">It's 72°F and sunny in New York!</output>
-```
-
-## The Problem: LLMs Need Structure
-
-Without structure, LLMs can't:
-
-* Know what tools they have available
-* Remember previous conversations
-* Follow consistent output formats
-* Handle complex multi-step tasks
-
-**Example of what goes wrong:**
-
-```text title="unstructured-problem.txt"
-User: "Check weather and send to Discord"
-LLM: "I'll check the weather for you!"
-// ❌ Doesn't actually call any APIs
-// ❌ Doesn't know how to send to Discord
-// ❌ Just generates text
-```
-
-## The Solution: Structured Prompts
-
-Daydreams automatically creates structured prompts that include:
-
-1. **Available Tools** - What the agent can do
-2. **Current State** - What's happening right now
-3. **Response Format** - How to respond properly
-4. **Context Memory** - What happened before
-
-```text title="structured-solution.txt"
-Available Actions:
-- getWeather(city: string) - Gets current weather
-- sendDiscord(message: string) - Sends Discord message
-
-Current Context:
-- User: user123
-- Channel: #general
-- Previous messages: [...]
-
-New Input:
-- "Check weather in Boston and send to Discord"
-
-Respond with XML:
-<action_call name="getWeather">{"city": "Boston"}</action_call>
-<output type="discord:message">Weather in Boston: 65°F, cloudy</output>
-```
-
-## How Daydreams Builds Prompts
-
-Every time your agent thinks, Daydreams automatically builds a prompt like this:
-
-### 1. Instructions
-
-```text title="instructions-section.txt"
-You are an AI agent. Your job is to:
-- Analyze new information
-- Decide what actions to take
-- Respond appropriately
-```
-
-### 2. Available Tools
-
-```xml title="tools-section.xml"
-<available-actions>
-  <action name="getWeather">
-    <description>Gets current weather for a city</description>
-    <schema>{"type": "object", "properties": {"city": {"type": "string"}}}</schema>
-  </action>
-</available-actions>
-
-<available-outputs>
-  <output type="discord:message">
-    <description>Sends a message to Discord</description>
-    <schema>{"type": "string"}</schema>
-  </output>
-</available-outputs>
-```
-
-### 3. Current Context State
-
-```xml title="context-section.xml"
-<contexts>
-  <context type="chat" key="user123">
-    Previous messages:
-    user123: Hi there!
-    agent: Hello! How can I help?
-    user123: What's the weather like?
-  </context>
-</contexts>
-```
-
-### 4. What Just Happened
-
-```xml title="updates-section.xml"
-<updates>
-  <input type="discord:message" timestamp="2024-01-15T10:30:00Z">
-    What's the weather in Boston?
-  </input>
-</updates>
-```
-
-### 5. Expected Response Format
-
-```xml title="response-format.xml"
-Respond with:
-<response>
-  <reasoning>Your thought process here</reasoning>
-  <action_call name="actionName">{"argument": "value"}</action_call>
-  <output type="outputType">Your response here</output>
-</response>
-```
-
-## What the LLM Sees (Complete Example)
-
-Here's what a complete prompt looks like:
-
-```text title="complete-prompt.txt"
-You are an AI agent. Analyze the updates and decide what to do.
-
-<available-actions>
-  <action name="getWeather">
-    <description>Gets current weather for a city</description>
-    <schema>{"type": "object", "properties": {"city": {"type": "string"}}}</schema>
-  </action>
-</available-actions>
-
-<available-outputs>
-  <output type="discord:message">
-    <description>Sends a message to Discord</description>
-    <schema>{"type": "string"}</schema>
-  </output>
-</available-outputs>
-
-<contexts>
-  <context type="chat" key="user123">
-    user123: Hi there!
-    agent: Hello! How can I help?
-  </context>
-</contexts>
-
-<working-memory>
-  <!-- Previous actions from this conversation -->
-</working-memory>
-
-<updates>
-  <input type="discord:message" timestamp="2024-01-15T10:30:00Z">
-    What's the weather in Boston?
-  </input>
-</updates>
-
-Respond with:
-<response>
-  <reasoning>Your thought process</reasoning>
-  <action_call name="actionName">{"arg": "value"}</action_call>
-  <output type="outputType">Your message</output>
-</response>
-```
-
-## LLM Response Example
-
-The LLM responds with structured XML:
-
-```xml title="llm-response.xml"
-<response>
-  <reasoning>
-    The user is asking about weather in Boston. I should:
-    1. Call the getWeather action to get current conditions
-    2. Send the result to Discord
-  </reasoning>
-
-  <action_call name="getWeather">{"city": "Boston"}</action_call>
-  <output type="discord:message">Checking the weather in Boston for you!</output>
-</response>
-```
-
-Daydreams automatically:
-
-* Parses the `<action_call>` and runs the weather API
-* Parses the `<output>` and sends the Discord message
-* Saves the `<reasoning>` for debugging
-
-## Advanced Features
-
-### Template References
-
-LLMs can reference previous action results within the same response:
-
-```xml title="template-example.xml"
-<response>
-  <reasoning>I'll get weather, then send a detailed message</reasoning>
-
-  <action_call name="getWeather">{"city": "Boston"}</action_call>
-
-  <output type="discord:message">
-    Weather in Boston: {{calls[0].temperature}}°F, {{calls[0].condition}}
-  </output>
-</response>
-```
-
-The `{{calls[0].temperature}}` gets replaced with the actual weather data.
-
-### Multi-Context Prompts
-
-When multiple contexts are active:
-
-```xml title="multi-context.xml"
-<contexts>
-  <context type="chat" key="user123">
-    Chat history with user123...
-  </context>
-
-  <context type="game" key="session456">
-    Current game state: level 5, health 80...
-  </context>
-</contexts>
-```
-
-## Key Benefits
-
-* **Consistency** - All agents use the same reliable prompt structure
-* **Clarity** - LLMs always know what tools they have and how to use them
-* **Memory** - Context and conversation history included automatically
-* **Debugging** - You can see exactly what the LLM was told
-* **Extensibility** - Easy to add new actions and outputs
-
-## Customizing Prompts
-
-You can customize prompts in your contexts:
-
-```typescript title="custom-instructions.ts"
-const chatContext = context({
-  type: "chat",
-  schema: z.object({ userId: z.string() }),
-
-  // Custom instructions for this context
-  instructions: (state) =>
-    `You are helping user ${state.args.userId}. Be friendly and helpful.`,
-
-  // Custom context rendering
-  render: (state) => `
-    Chat with ${state.args.userId}
-    Recent messages: ${state.memory.messages.slice(-3).join("\n")}
-    User mood: ${state.memory.userMood || "neutral"}
-  `,
-});
-```
-
-## Key Takeaways
-
-* **Prompts are automatically generated** - You don't write them manually
-* **Structure enables capabilities** - Tools, memory, and context included
-  automatically
-* **LLMs respond with XML** - Parsed automatically into actions and outputs
-* **Templates enable complex flows** - Reference previous results within
-  responses
-* **Customizable per context** - Add specific instructions and state rendering
-
-The prompting system is what makes your agent intelligent - it provides the LLM
-with everything needed to understand the situation and respond appropriately.
-
-
-file: ./content/docs/core/concepts/tasks.mdx
-meta: {
-  "title": "Tasks",
-  "description": "Managing asynchronous operations and concurrency."
-}
-        
-## What is a Task?
-
-A task is any operation that takes time to complete, like:
-
-* Calling a weather API (might take 500ms)
-* Saving data to a database (might take 200ms)
-* Processing an image (might take 2 seconds)
-* Sending an email (might take 1 second)
-
-## The Problem
-
-Imagine your agent needs to do 10 things at once:
-
-```typescript title="problem-example.ts"
-// User asks: "What's the weather in 5 cities?"
-// Agent needs to call weather API 5 times
-// Without task management:
-await getWeather("New York"); // 500ms
-await getWeather("London"); // 500ms
-await getWeather("Tokyo"); // 500ms
-await getWeather("Paris"); // 500ms
-await getWeather("Sydney"); // 500ms
-// Total: 2.5 seconds (slow!)
-```
-
-Even worse - what if your agent tries to make 100 API calls at once? The
-external service might block you or your server might crash.
-
-## The Solution: Task Management
-
-Daydreams automatically manages these operations for you:
-
-```typescript title="solution-example.ts"
-// With task management:
-// Runs 3 operations at the same time (concurrent)
-// Queues the rest until the first ones finish
-// Total: ~1 second (much faster!)
-
-const results = await Promise.all([
-  getWeather("New York"), // Starts immediately
-  getWeather("London"), // Starts immediately
-  getWeather("Tokyo"), // Starts immediately
-  getWeather("Paris"), // Waits in queue
-  getWeather("Sydney"), // Waits in queue
-]);
-```
-
-## How It Works in Your Agent
-
-When you write action handlers, this happens automatically:
-
-```typescript title="weather-action.ts"
-const weatherAction = action({
-  name: "get-weather",
-  description: "Get weather for a city",
-  schema: z.object({
-    city: z.string(),
-  }),
-  handler: async ({ city }) => {
-    // This handler runs as a "task"
-    // Daydreams automatically:
-    // 1. Limits how many run at once (default: 3)
-    // 2. Queues extras until slots open up
-    // 3. Handles errors and retries
-
-    const response = await fetch(`https://api.weather.com/${city}`);
-    return await response.json();
-  },
-});
-```
-
-When your LLM calls this action multiple times:
-
-```xml
-<action_call name="get-weather">{"city": "New York"}</action_call>
-<action_call name="get-weather">{"city": "London"}</action_call>
-<action_call name="get-weather">{"city": "Tokyo"}</action_call>
-<action_call name="get-weather">{"city": "Paris"}</action_call>
-```
-
-Daydreams automatically:
-
-* Runs the first 3 immediately
-* Queues "Paris" until one finishes
-* Prevents your agent from overwhelming the weather API
-
-## Configuring Task Limits
-
-You can control how many tasks run simultaneously:
-
-```typescript title="agent-config.ts"
-import { createDreams, TaskRunner } from "@daydreamsai/core";
-
-// Default: 3 tasks at once
-const agent = createDreams({
-  model: openai("gpt-4o"),
-  extensions: [weatherExtension],
-});
-
-// Custom: 5 tasks at once (for faster APIs)
-const fasterAgent = createDreams({
-  model: openai("gpt-4o"),
-  extensions: [weatherExtension],
-  taskRunner: new TaskRunner(5),
-});
-
-// Custom: 1 task at once (for rate-limited APIs)
-const slowAgent = createDreams({
-  model: openai("gpt-4o"),
-  extensions: [weatherExtension],
-  taskRunner: new TaskRunner(1),
-});
-```
-
-## Best Practices for Action Handlers
-
-### 1. Use async/await Properly
-
-```typescript title="good-handler.ts"
-// ✅ Good - properly handles async operations
-handler: async ({ userId }) => {
-  const user = await database.getUser(userId);
-  const preferences = await database.getPreferences(userId);
-  return { user, preferences };
-};
-
-// ❌ Bad - doesn't wait for async operations
-handler: ({ userId }) => {
-  database.getUser(userId); // This returns a Promise!
-  return { status: "done" }; // Completes before database call finishes
-};
-```
-
-### 2. Handle Cancellation for Long Operations
-
-```typescript title="cancellation-example.ts"
-handler: async ({ largeDataset }, ctx) => {
-  for (let i = 0; i < largeDataset.length; i++) {
-    // Check if the agent wants to cancel this task
-    if (ctx.abortSignal.aborted) {
-      throw new Error("Operation cancelled");
-    }
-
-    await processItem(largeDataset[i]);
-  }
-};
-```
-
-### 3. Make Handlers Idempotent (for Retries)
-
-```typescript title="idempotent-example.ts"
-// ✅ Good - safe to run multiple times
-handler: async ({ email, message }) => {
-  // Check if email already sent
-  const existing = await emailLog.findByKey(`${email}-${hash(message)}`);
-  if (existing) {
-    return { status: "already_sent", messageId: existing.messageId };
-  }
-
-  // Send email and log it
-  const result = await emailService.send(email, message);
-  await emailLog.create({
-    email,
-    messageHash: hash(message),
-    messageId: result.id,
-  });
-  return { status: "sent", messageId: result.id };
-};
-
-// ❌ Bad - creates duplicate emails if retried
-handler: async ({ email, message }) => {
-  const result = await emailService.send(email, message);
-  return { status: "sent", messageId: result.id };
-};
-```
-
-## Advanced: Custom Task Types
-
-Most users won't need this, but you can define custom task types:
-
-```typescript title="custom-task.ts"
-import { task } from "@daydreamsai/core";
-
-const processVideoTask = task(
-  "agent:video:process",
-  async (params: { videoUrl: string }, ctx) => {
-    ctx.debug("processVideo", "Starting video processing", params);
-
-    // Long-running video processing
-    const result = await videoProcessor.process(params.videoUrl);
-
-    return { processedUrl: result.url, duration: result.duration };
-  },
-  {
-    retry: 2, // Retry twice on failure
-  }
-);
-
-// Use it in your agent
-agent.taskRunner.enqueueTask(processVideoTask, { videoUrl: "https://..." });
-```
-
-## Key Takeaways
-
-* **Tasks happen automatically** - Your action handlers become tasks
-* **Concurrency is controlled** - Default limit is 3 simultaneous tasks
-* **Queuing prevents overload** - Extra tasks wait their turn
-* **Write async handlers properly** - Use `async/await` and handle cancellation
-* **Configure based on your APIs** - Increase limit for fast APIs, decrease for
-  rate-limited ones
-
-The task system ensures your agent performs well without overwhelming external
-services or consuming excessive resources.
 
 
 file: ./content/docs/core/extra-reading/container.mdx
@@ -7794,7 +7794,7 @@ the types defined here frequently when writing your agent code:
     type ActionCallContext,
     type AnyAgent,
   } from "@daydreamsai/core";
-  import { z } from "zod";
+  import * as z from "zod/v4";
 
   // Define the memory structure for a specific context
   interface MyChatMemory {
@@ -7891,7 +7891,7 @@ your agent's components, typically in separate files.
 
   ```typescript
   import { action } from "@daydreamsai/core";
-  import { z } from "zod";
+  import * as z from "zod/v4";
 
   export const myAction = action({
     name: "myTool",
@@ -8339,7 +8339,7 @@ For production applications, consider IndexedDB for larger data storage.
 
 ```typescript title="browser.ts"
 import { extension, context, input, output } from "@daydreamsai/core";
-import { z } from "zod";
+import * as z from "zod/v4";
 
 const chatContext = context({
   type: "web-chat",
@@ -8548,7 +8548,7 @@ export function Chat() {
 
 ```typescript title="actions.ts"
 import { action } from "@daydreamsai/core";
-import { z } from "zod";
+import * as z from "zod/v4";
 
 export const webActions = [
   action({
@@ -8829,7 +8829,7 @@ import { createDreams, action, validateEnv } from "@daydreamsai/core";
 import { cliExtension } from "@daydreamsai/cli";
 import { anthropic } from "@ai-sdk/anthropic";
 import { tavily, type TavilyClient } from "@tavily/core";
-import { z } from "zod";
+import * as z from "zod/v4";
 
 validateEnv(
   z.object({
@@ -9022,6 +9022,124 @@ createDreams({
 ```
 
 
+file: ./content/docs/tutorials/basic/file-system-agent.mdx
+meta: {
+  "title": "File System Agent",
+  "description": "An agent that can interact with the local file system in a sandboxed way."
+}
+        
+## 1. Create agent workspace
+
+```typescript title="index.ts"
+validateEnv(
+  z.object({
+    OPENROUTER_API_KEY: z.string().min(1),
+  })
+);
+
+const workspaceDir = path.resolve("./file-agent-workspace");
+fs.mkdir(workspaceDir, { recursive: true });
+
+const resolveSafePath = (userPath: string) => {
+  const resolvedPath = path.resolve(workspaceDir, userPath);
+  if (!resolvedPath.startsWith(workspaceDir)) {
+    throw new Error("Access denied.");
+  }
+  return resolvedPath;
+};
+```
+
+## 2. Define the filesystem actions
+
+Here we are making three actions: read, write, list.
+
+```typescript title="index.ts"
+const listFilesAction = action({
+  name: "listFiles",
+  description:
+    "Lists files and directories in a specified path within the workspace.",
+  schema: z.object({
+    path: z
+      .string()
+      .default(".")
+      .describe("The path to list files from, relative to the workspace."),
+  }),
+  async handler({ path: dirPath }) {
+    const safePath = resolveSafePath(dirPath);
+    const files = await fs.readdir(safePath);
+    return { files };
+  },
+});
+```
+
+```typescript title="index.ts"
+const readFileAction = action({
+  name: "readFile",
+  description: "Reads the content of a specified file within the workspace.",
+  schema: z.object({
+    path: z
+      .string()
+      .describe("The path of the file to read, relative to the workspace."),
+  }),
+  async handler({ path: filePath }) {
+    const safePath = resolveSafePath(filePath);
+    const content = await fs.readFile(safePath, "utf-8");
+    return { content };
+  },
+});
+```
+
+```typescript title="index.ts"
+const writeFileAction = action({
+  name: "writeFile",
+  description:
+    "Writes content to a specified file within the workspace. Overwrites existing files.",
+  schema: z.object({
+    path: z
+      .string()
+      .describe("The path of the file to write to, relative to the workspace."),
+    content: z.string().describe("The content to write to the file."),
+  }),
+  async handler({ path: filePath, content }) {
+    const safePath = resolveSafePath(filePath);
+    await fs.writeFile(safePath, content, "utf-8");
+    return { success: true, path: filePath };
+  },
+});
+```
+
+## 3. Define a context
+
+```typescript title="index.ts"
+const fileAgentContext = context({
+  type: "filesystem-agent",
+  schema: z.object({}),
+  instructions: `You are a helpful AI assistant that can interact with a file system. You can list, read, and write files within the './file-agent-workspace' directory.
+    When asked to perform a file operation, use the available tools.
+    For example:
+    - "List all files" should call listFiles with path ".".
+    - "Read the file named 'hello.txt'" should call readFile with path "hello.txt".
+    - "Create a file 'test.txt' with content 'hello world'" should call writeFile with path "test.txt" and the content.
+  `,
+});
+```
+
+## 4. Create the agent
+
+```typescript title="index.ts"
+const agent = createDreams({
+  model: openrouter("google/gemini-2.0-flash-001"),
+  extensions: [cliExtension],
+  actions: [listFilesAction, readFileAction, writeFileAction],
+  contexts: [fileAgentContext],
+});
+agent.start();
+```
+
+Converse with your agent in the command line and let it write to files in a
+scoped sandbox.
+
+
 file: ./content/docs/tutorials/basic/multi-context-agent.mdx
 meta: {
   "title": "Multi-Context Agent",
@@ -9036,7 +9154,7 @@ meta: {
 import { createDreams, context, input, output } from "@daydreamsai/core";
 import { cliExtension } from "@daydreamsai/cli";
 import { openai } from "@ai-sdk/openai";
-import { z } from "zod";
+import * as z from "zod/v4";
 
 const fetchContext = context({
   type: "fetch",
@@ -9140,7 +9258,7 @@ meta: {
 import { createDreams, context, input, output } from "@daydreamsai/core";
 import { cliExtension } from "@daydreamsai/cli";
 import { openai } from "@ai-sdk/openai";
-import { z } from "zod";
+import * as z from "zod/v4";
 
 // 1. Define the main context for our agent
 const echoContext = context({
@@ -9201,7 +9319,7 @@ meta: {
 import { createDreams, context, action, validateEnv } from "@daydreamsai/core";
 import { cliExtension } from "@daydreamsai/cli";
 import { anthropic } from "@ai-sdk/anthropic";
-import { z } from "zod";
+import * as z from "zod/v4";
 
 validateEnv(
   z.object({
@@ -9327,7 +9445,7 @@ meta: {
 import { createDreams, context, action, validateEnv } from "@daydreamsai/core";
 import { cliExtension } from "@daydreamsai/cli";
 import { openrouter } from "@openrouter/ai-sdk-provider";
-import { z } from "zod";
+import * as z from "zod/v4";
 
 validateEnv(
   z.object({
@@ -9429,6 +9547,335 @@ await agent.start();
 The agent will now listen for input and update, add, and retrieve tasks.
 
 
+file: ./content/docs/tutorials/chains/solana.mdx
+meta: {
+  "title": "Solana Agent",
+  "description": "An agent that can interact with the Solana blockchain to check balances and transfer SOL."
+}
+        
+This tutorial demonstrates how to build an agent that can interact with the
+Solana blockchain. The agent can check wallet balances, transfer SOL, and get
+the current block height.
+
+## 1. Imports and Initialization
+
+First, set up the necessary imports and initialize the `SolanaChain` with your
+RPC URL and private key from environment variables.
+
+```typescript title="index.ts"
+import { openrouter } from "@openrouter/ai-sdk-provider";
+import {
+  createDreams,
+  context,
+  action,
+  validateEnv,
+  extension,
+  input,
+} from "@daydreamsai/core";
+import * as z from "zod/v4";
+import chalk from "chalk";
+import { SolanaChain } from "@daydreamsai/defai";
+import {
+  PublicKey,
+  SystemProgram,
+  LAMPORTS_PER_SOL,
+  Keypair,
+} from "@solana/web3.js";
+import bs58 from "bs58";
+
+// Validate environment variables
+const env = validateEnv(
+  z.object({
+    OPENROUTER_API_KEY: z.string().min(1, "OPENROUTER_API_KEY is required"),
+    SOLANA_RPC_URL: z.string().min(1, "SOLANA_RPC_URL is required"),
+    SOLANA_PRIVATE_KEY: z
+      .string()
+      .min(1, "SOLANA_PRIVATE_KEY is required")
+      .refine((key) => {
+        try {
+          const decoded = bs58.decode(key);
+          return decoded.length === 64;
+        } catch {
+          return false;
+        }
+      }, "SOLANA_PRIVATE_KEY must be a valid base58-encoded 64-byte private key"),
+  })
+);
+
+// Initialize Solana Chain
+const solanaChain = new SolanaChain({
+  chainName: "solana-devnet",
+  rpcUrl: env.SOLANA_RPC_URL,
+  privateKey: env.SOLANA_PRIVATE_KEY,
+});
+```
+
+## 2. Define the Solana Context
+
+Next, define the memory structure, a template for the agent's prompts, and the
+context configuration.
+
+```typescript title="index.ts"
+// Define memory type
+type SolanaMemory = {
+  wallet: string;
+  transactions: string[];
+  lastTransaction: string | null;
+  balance: number;
+};
+
+// Define context template
+const template = ({
+  wallet,
+  lastTransaction,
+  transactions,
+  balance,
+}: SolanaMemory) => `You are an the daydreamsAI agent solana trader/assistant. Do not include xml tags in side your instructed output format.
+Wallet: ${wallet}
+Balance: ${balance / LAMPORTS_PER_SOL} SOL
+Last Transaction: ${lastTransaction ?? "NONE"}
+Transaction History:
+${transactions.join("\n")}
+
+RPC Provider: Helius (High-performance Solana RPC with full archival data)
+Note: If you encounter "Failed to query long-term storage" errors, it may be due to rate limiting. Wait a moment and try again. If persistent, respect the API. 
+
+IMPORTANT: When responding with action results, include the actual data in your response, not template references like {{calls[0].data}}. You're meant to be actionable and helpful, not just a data tool. If the user's request requires multiple actions, take them. You have agency.
+`;
+
+// Create context
+const solanaContext = context({
+  type: "solana",
+  schema: {
+    wallet: z.string(),
+  },
+  key: ({ wallet }) => wallet,
+  create({ args }): SolanaMemory {
+    return {
+      wallet: args.wallet,
+      transactions: [],
+      lastTransaction: null,
+      balance: 0,
+    };
+  },
+  render({ memory }) {
+    return template(memory);
+  },
+}).setOutputs({
+  message: {
+    schema: z.string().describe("The message to send to the user"),
+  },
+});
+```
+
+## 3. Define Solana Actions
+
+Define the actions the agent can perform, such as getting a balance,
+transferring SOL, and checking the block height. These actions are then attached
+to the `solanaContext`.
+
+```typescript title="index.ts"
+// Helper function to ensure consistent action responses
+const actionResponse = (message: string) => ({
+  data: message,
+  content: message,
+});
+
+const solanaActions = [
+  action({
+    name: "solana.getBalance",
+    description: "Get the SOL balance of a wallet address",
+    schema: {
+      address: z
+        .string()
+        .describe("The Solana wallet address to check balance for"),
+    },
+    async handler({ address }, { memory }) {
+      const balance = await solanaChain.read({
+        type: "getBalance",
+        address,
+      });
+
+      if (balance instanceof Error) {
+        return actionResponse(`Error getting balance: ${balance.message}`);
+      }
+
+      const solBalance = balance / LAMPORTS_PER_SOL;
+
+      if (address === memory.wallet) {
+        memory.balance = balance;
+      }
+
+      return actionResponse(
+        `Balance for ${address}: ${solBalance} SOL (${balance} lamports)`
+      );
+    },
+  }),
+  action({
+    name: "solana.transfer",
+    description: "Transfer SOL from your wallet to another address",
+    schema: {
+      recipient: z.string().describe("The recipient's Solana wallet address"),
+      amount: z.number().describe("Amount of SOL to transfer (not lamports)"),
+    },
+    async handler({ recipient, amount }, { memory }) {
+      try {
+        const fromPubkey = new PublicKey(memory.wallet);
+        const toPubkey = new PublicKey(recipient);
+        const lamports = Math.floor(amount * LAMPORTS_PER_SOL);
+
+        const transferInstruction = SystemProgram.transfer({
+          fromPubkey,
+          toPubkey,
+          lamports,
+        });
+
+        const txSignature = await solanaChain.write({
+          instructions: [transferInstruction],
+          signers: [],
+        });
+
+        if (txSignature instanceof Error) {
+          return actionResponse(
+            `Error sending transaction: ${txSignature.message}`
+          );
+        }
+
+        const txInfo = `Transferred ${amount} SOL to ${recipient}. Signature: ${txSignature}`;
+        memory.lastTransaction = txInfo;
+        memory.transactions.push(txInfo);
+
+        const newBalance = await solanaChain.read({
+          type: "getBalance",
+          address: memory.wallet,
+        });
+        if (!(newBalance instanceof Error)) {
+          memory.balance = newBalance;
+        }
+
+        return actionResponse(txInfo);
+      } catch (error) {
+        return actionResponse(
+          `Error: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    },
+  }),
+  action({
+    name: "solana.getBlockHeight",
+    description: "Get the current block height of the Solana blockchain",
+    schema: {},
+    async handler(_, { memory }) {
+      const blockHeight = await solanaChain.read({
+        type: "getBlockHeight",
+      });
+
+      if (blockHeight instanceof Error) {
+        return actionResponse(
+          `Error getting block height: ${blockHeight.message}`
+        );
+      }
+
+      return actionResponse(`Current Solana block height: ${blockHeight}`);
+    },
+  }),
+];
+
+solanaContext.setActions(solanaActions);
+```
+
+## 4. Create and Run the Agent
+
+Finally, create a custom extension to handle command-line interaction, create
+the Dreams instance with the extension, and start the agent.
+
+```typescript title="index.ts"
+// Create a custom extension that combines CLI with Solana context
+const solanaExtension = extension({
+  name: "solana-cli",
+  contexts: {
+    solana: solanaContext,
+  },
+  inputs: {
+    cli: input({
+      schema: z.object({
+        text: z.string(),
+      }),
+      subscribe(send, agent) {
+        const readline = require("readline");
+        const rl = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout,
+        });
+
+        const prompt = () => {
+          rl.question("> ", async (text: string) => {
+            if (text.trim()) {
+              console.log(`User: ${text}`);
+              await agent.send({
+                context: solanaContext,
+                args: { wallet: walletAddress },
+                input: { type: "cli", data: { text } },
+                handlers: {
+                  onLogStream(log, done) {
+                    if (done) {
+                      if (log.ref === "output") {
+                        const content = log.content || log.data;
+                        if (content && !content.includes("attributes_schema")) {
+                          console.log(chalk.green(`Assistant: ${content}`));
+                        }
+                      }
+                    }
+                  },
+                },
+              });
+            }
+            prompt();
+          });
+        };
+
+        console.log(
+          chalk.cyan(
+            "\nType your message and press Enter to send it to the agent.\n"
+          )
+        );
+        prompt();
+
+        return () => {
+          rl.close();
+        };
+      },
+    }),
+  },
+  actions: [],
+});
+
+// Create Dreams instance
+const dreams = createDreams({
+  model: openrouter("google/gemini-2.0-flash-001"),
+  extensions: [solanaExtension],
+});
+
+// Get the wallet address from the private key
+let walletAddress: string;
+try {
+  const keypair = Keypair.fromSecretKey(
+    Buffer.from(bs58.decode(env.SOLANA_PRIVATE_KEY))
+  );
+  walletAddress = keypair.publicKey.toBase58();
+} catch (error) {
+  console.error(chalk.red("❌ Failed to load wallet from private key:"), error);
+  process.exit(1);
+}
+
+// Start the Dreams instance
+await dreams.start();
+
+console.log(chalk.green("✅ Solana Dreams agent started!"));
+console.log(chalk.blue(`Wallet: ${walletAddress}`));
+```
+
+
 file: ./content/docs/tutorials/gaming/blockchain-game-agent.mdx
 meta: {
   "title": "Blockchain Game Agent",
@@ -9454,7 +9901,7 @@ import {
 } from "@daydreamsai/core";
 import { cliExtension } from "@daydreamsai/cli";
 import { anthropic } from "@ai-sdk/anthropic";
-import { z } from "zod";
+import * as z from "zod/v4";
 
 validateEnv(
   z.object({
@@ -9944,7 +10391,7 @@ Ensure the following environment variables are set:
 import { createDreams, context, action, validateEnv } from "@daydreamsai/core";
 import { cliExtension } from "@daydreamsai/cli";
 import { anthropic } from "@ai-sdk/anthropic";
-import { z } from "zod";
+import * as z from "zod/v4";
 
 validateEnv(
   z.object({
@@ -10234,7 +10681,7 @@ import {
   type Agent,
 } from "@daydreamsai/core";
 import { cliExtension } from "@daydreamsai/cli";
-import { string, z } from "zod";
+import { string, z } from "zod/v4";
 
 // Validate environment variables
 const env = validateEnv(
@@ -10802,7 +11249,7 @@ meta: {
 import { createGroq } from "@ai-sdk/groq";
 import { createDreams, LogLevel, validateEnv } from "@daydreamsai/core";
 import { telegram } from "@daydreamsai/telegram";
-import { z } from "zod";
+import * as z from "zod/v4";
 
 const env = validateEnv(
   z.object({

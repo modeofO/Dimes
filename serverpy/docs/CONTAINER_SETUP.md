@@ -7,7 +7,7 @@
 ### 1. Build and Start Development Environment
 ```bash
 # Navigate to serverpy directory
-cd serverpy
+cd serverpy/app
 
 # Build the container
 docker-compose build
@@ -24,6 +24,9 @@ docker ps
 ```bash
 # Activate conda environment (should auto-activate)
 conda activate cad-env
+
+# change directories
+cd src
 
 # Run the CAD server
 python main.py
