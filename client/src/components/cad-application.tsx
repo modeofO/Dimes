@@ -99,6 +99,20 @@ export function CADApplication() {
         }
     }, []);
 
+    const exitSketchMode = useCallback(() => {
+        console.log('🚪 Exiting sketch editing mode');
+        setActiveSketchId(null);
+        
+        if (rendererRef.current) {
+            // Clear the active sketch highlight
+            rendererRef.current.clearActiveSketchHighlight();
+            // Reset to isometric view
+            rendererRef.current.viewIsometric();
+        }
+        
+        updateStatus('Exited sketch editing mode', 'info');
+    }, [updateStatus]);
+
     const handleSetDrawingTool = useCallback((tool: DrawingTool) => {
         setCurrentDrawingTool(tool);
         if (rendererRef.current) {
@@ -571,8 +585,17 @@ export function CADApplication() {
                 >
                     {/* The 3D viewport will be mounted here */}
                     {activeSketchId && (
-                        <div className="absolute top-2 left-2 bg-blue-500 text-white px-3 py-1 rounded-md text-sm font-medium shadow-md z-10">
-                            ✏️ Editing Sketch: {activeSketchId}
+                        <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
+                            <div className="bg-blue-500 text-white px-3 py-1 rounded-md text-sm font-medium shadow-md">
+                                ✏️ Editing Sketch: {activeSketchId}
+                            </div>
+                            <button
+                                onClick={exitSketchMode}
+                                className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded-md text-xs font-medium shadow-md transition-colors duration-200"
+                                title="Exit sketch editing mode"
+                            >
+                                🚪 Exit Sketch
+                            </button>
                         </div>
                     )}
                 </div>
