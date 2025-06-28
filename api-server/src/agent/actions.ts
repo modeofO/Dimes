@@ -60,7 +60,7 @@ const createSketchPlaneAction = action({
     name: "createSketchPlane",
     description: "Create a new 2D sketch plane.",
     schema: z.object({
-        plane_type: z.enum(['XY', 'XZ', 'YZ']).describe("The plane to create the sketch on."),
+        plane_type: z.enum(['XZ', 'XY', 'YZ']).describe("The plane to create the sketch on."),
         origin: z.array(z.number()).length(3).optional().describe("An array of 3 numbers for the [x, y, z] origin of the plane.")
     }),
     async handler(planeData, ctx, agent) {

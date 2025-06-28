@@ -39,7 +39,7 @@ export default function(webSocketManager) {
 
   // Sketch plane validation
   const validateSketchPlane = [
-    body('plane_type').isIn(['XY', 'XZ', 'YZ']).withMessage('Invalid plane type'),
+    body('plane_type').isIn(['XZ', 'XY', 'YZ']).withMessage('Invalid plane type'),
     body('origin').optional().isArray({ min: 3, max: 3 }).withMessage('Origin must be an array of 3 numbers'),
     handleValidationErrors,
   ];

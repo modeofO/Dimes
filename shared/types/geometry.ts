@@ -22,7 +22,7 @@ export interface BoundingBox {
 }
 
 // Sketch-based modeling types
-export type PlaneType = 'XY' | 'XZ' | 'YZ';
+export type PlaneType = 'XZ' | 'XY' | 'YZ';
 export type SketchElementType = 'line' | 'circle' | 'arc' | 'rectangle' | 'polygon' | 'fillet' | 'chamfer';
 export type ExtrudeType = 'blind' | 'symmetric' | 'through_all' | 'to_surface';
 

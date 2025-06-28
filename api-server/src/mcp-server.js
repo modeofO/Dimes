@@ -26,7 +26,7 @@ server.tool(
   {
     description: 'Creates a sketch plane for 2D sketching (XY, XZ, or YZ plane).',
     schema: z.object({
-      plane_type: z.enum(['XY', 'XZ', 'YZ']).describe('The type of plane to create.'),
+      plane_type: z.enum(['XZ', 'XY', 'YZ']).describe('The type of plane to create.'),
       origin: z.array(z.number()).length(3).optional().describe('The [x, y, z] origin point of the plane.'),
     }),
   },
@@ -240,7 +240,7 @@ server.tool(
   {
     description: 'Creates a complete 3D model using sketch-based workflow: plane → sketch → elements → extrude. TIP: Use "rectangle" element_type for rectangular shapes instead of 4 separate lines.',
     schema: z.object({
-      plane_type: z.enum(['XY', 'XZ', 'YZ']).describe('The type of plane to create.'),
+      plane_type: z.enum(['XZ', 'XY', 'YZ']).describe('The type of plane to create.'),
       plane_origin: z.array(z.number()).length(3).optional().describe('The [x, y, z] origin point of the plane.'),
       elements: z.array(z.object({
         element_type: z.enum(['line', 'circle', 'rectangle']).describe('The type of element. Use "rectangle" for squares/rectangles, not individual lines.'),

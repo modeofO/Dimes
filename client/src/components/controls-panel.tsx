@@ -70,7 +70,7 @@ export function ControlsPanel({
     currentPolygonSides = 6
 }: ControlsPanelProps) {
     // Form states
-    const [planeType, setPlaneType] = useState('XY');
+    const [planeType, setPlaneType] = useState('XZ');
     const [planeOrigin, setPlaneOrigin] = useState({ x: 0, y: 0, z: 0 });
     const [selectedPlane, setSelectedPlane] = useState('');
     const [selectedSketch, setSelectedSketch] = useState('');
@@ -429,8 +429,8 @@ export function ControlsPanel({
                             onChange={(e) => setPlaneType(e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                         >
-                            <option value="XY">XY Plane</option>
                             <option value="XZ">XZ Plane</option>
+                            <option value="XY">XY Plane</option>
                             <option value="YZ">YZ Plane</option>
                         </select>
                         

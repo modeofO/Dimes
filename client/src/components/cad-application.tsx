@@ -336,17 +336,27 @@ export function CADApplication() {
                 });
                 
                 client.onSketchVisualization((data) => {
-                    console.log('Received sketch visualization:', data);
+                    console.log('🎯 Received sketch visualization (CALLBACK TRIGGERED):', data);
+                    console.log('📊 Sketch visualization data structure:', {
+                        hasSketchId: !!data.sketch_id,
+                        hasPlaneId: !!data.plane_id,
+                        hasOrigin: !!data.origin,
+                        hasNormal: !!data.normal,
+                        dataKeys: Object.keys(data)
+                    });
+                    
                     renderer.addSketchVisualization(data);
                     
                     // Set this sketch as the active sketch plane for interactive drawing
+                    console.log('🎯 Setting active sketch plane in renderer...');
                     renderer.setActiveSketchPlane(data.sketch_id, data);
                     
                     // Auto-select the newly created sketch as active
-                    console.log('🎯 Setting activeSketchId to:', data.sketch_id);
+                    console.log('🎯 Setting activeSketchId state to:', data.sketch_id);
                     setActiveSketchId(data.sketch_id);
                     
                     // Automatically switch to top-down view for sketch creation
+                    console.log('📐 Switching to top-down view...');
                     renderer.viewTop();
                     updateStatus('Switched to top-down view for sketch', 'info');
                     
@@ -367,6 +377,8 @@ export function CADApplication() {
                             return prev;
                         });
                     }
+                    
+                    console.log('✅ Sketch visualization callback completed successfully');
                 });
                 
                 client.onElementVisualization((data) => {

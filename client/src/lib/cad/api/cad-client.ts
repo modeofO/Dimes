@@ -562,14 +562,26 @@ export class CADClient {
     
     public handleVisualizationData(data: any): void {
         console.log('🎨 Received visualization data from agent:', data);
+        console.log('🔍 Data structure:', {
+            hasPlaneId: !!data.plane_id,
+            hasSketchId: !!data.sketch_id,
+            hasElementId: !!data.element_id,
+            dataKeys: Object.keys(data)
+        });
         
         // Handle different types of visualization data
-        if (data.plane_id && this.planeVisualizationCallback) {
-            this.planeVisualizationCallback(data);
-        } else if (data.sketch_id && !data.element_id && this.sketchVisualizationCallback) {
-            this.sketchVisualizationCallback(data);
-        } else if (data.element_id && this.elementVisualizationCallback) {
+        // IMPORTANT: Check for sketch data first since it may also contain plane_id
+        if (data.element_id && this.elementVisualizationCallback) {
+            console.log('🔷 Triggering element visualization callback');
             this.elementVisualizationCallback(data);
+        } else if (data.sketch_id && !data.element_id && this.sketchVisualizationCallback) {
+            console.log('📐 Triggering sketch visualization callback for agent-created sketch');
+            this.sketchVisualizationCallback(data);
+        } else if (data.plane_id && !data.sketch_id && this.planeVisualizationCallback) {
+            console.log('✈️ Triggering plane visualization callback');
+            this.planeVisualizationCallback(data);
+        } else {
+            console.log('⚠️ No matching visualization callback found for data:', data);
         }
     }
     
