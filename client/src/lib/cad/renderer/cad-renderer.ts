@@ -52,12 +52,6 @@ export class CADRenderer {
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0xf0f0f0);
         
-        // Add grid helper
-        const gridHelper = new THREE.GridHelper(100, 100);
-        gridHelper.material.transparent = true;
-        gridHelper.material.opacity = 0.3;
-        this.scene.add(gridHelper);
-        
         // Add axes helper
         const axesHelper = new THREE.AxesHelper(20);
         this.scene.add(axesHelper);
@@ -343,7 +337,14 @@ export class CADRenderer {
             this.activeSketchPlane.v_axis
         );
         
+        // Highlight the active sketch plane
+        this.visualizationManager.highlightActiveSketch(sketch_id);
+        
         console.log(`Set active sketch plane for interactive drawing: ${sketch_id}`);
+    }
+    
+    public clearActiveSketchHighlight(): void {
+        this.visualizationManager.clearActiveSketchHighlight();
     }
     
     public getActiveSketchPlane(): string | null {

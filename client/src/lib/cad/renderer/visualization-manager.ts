@@ -10,6 +10,7 @@ export class VisualizationManager {
     private planeMeshes = new Map<string, THREE.Group>();
     private sketchMeshes = new Map<string, THREE.Group>();
     private elementMeshes = new Map<string, THREE.Group>();
+    private activeSketchHighlight: THREE.Group | null = null;
     
     constructor(scene: THREE.Scene) {
         this.scene = scene;
@@ -19,15 +20,15 @@ export class VisualizationManager {
         const group = new THREE.Group();
         group.name = `plane-${data.plane_id}`;
         
-        // Create plane grid
-        const gridGeometry = new THREE.PlaneGeometry(data.size, data.size, 10, 10);
-        const gridMaterial = new THREE.MeshBasicMaterial({
-            color: 0x444444,
-            wireframe: true,
+        // Create light blue plane box
+        const planeGeometry = new THREE.PlaneGeometry(data.size, data.size);
+        const planeMaterial = new THREE.MeshBasicMaterial({
+            color: 0xadd8e6, // Light blue color
             transparent: true,
-            opacity: 0.3
+            opacity: 0.2,
+            side: THREE.DoubleSide
         });
-        const gridMesh = new THREE.Mesh(gridGeometry, gridMaterial);
+        const planeMesh = new THREE.Mesh(planeGeometry, planeMaterial);
         
         // Position and orient the plane
         const origin = new THREE.Vector3(...data.origin);
@@ -40,8 +41,8 @@ export class VisualizationManager {
         matrix.makeBasis(uAxis, vAxis, normal);
         matrix.setPosition(origin);
         
-        gridMesh.applyMatrix4(matrix);
-        group.add(gridMesh);
+        planeMesh.applyMatrix4(matrix);
+        group.add(planeMesh);
         
         // Add coordinate axes for the plane
         const axesGroup = this.createCoordinateAxes(20, origin, uAxis, vAxis, normal);
@@ -239,11 +240,69 @@ export class VisualizationManager {
         });
         this.elementMeshes.clear();
         
+        // Clear active sketch highlight
+        this.clearActiveSketchHighlight();
+        
         console.log('Cleared all visualizations');
     }
     
     public dispose(): void {
         this.clearAll();
+    }
+    
+    public highlightActiveSketch(sketchId: string): void {
+        // Clear any existing highlight
+        this.clearActiveSketchHighlight();
+        
+        // Find the sketch group
+        const sketchGroup = this.sketchMeshes.get(sketchId);
+        if (!sketchGroup) {
+            console.warn(`Sketch ${sketchId} not found for highlighting`);
+            return;
+        }
+        
+        // Create a highlight ring around the sketch area
+        const highlightGroup = new THREE.Group();
+        highlightGroup.name = `active-sketch-highlight-${sketchId}`;
+        
+        // Create a glowing ring effect
+        const ringGeometry = new THREE.RingGeometry(18, 22, 32);
+        const ringMaterial = new THREE.MeshBasicMaterial({
+            color: 0x0066ff,
+            transparent: true,
+            opacity: 0.4,
+            side: THREE.DoubleSide
+        });
+        const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+        
+        // Position the ring at the same location as the sketch
+        ring.position.copy(sketchGroup.position);
+        ring.rotation.copy(sketchGroup.rotation);
+        
+        // Add animated pulsing effect
+        const animate = () => {
+            if (this.activeSketchHighlight) {
+                const time = Date.now() * 0.002;
+                ring.material.opacity = 0.3 + Math.sin(time) * 0.1;
+                requestAnimationFrame(animate);
+            }
+        };
+        animate();
+        
+        highlightGroup.add(ring);
+        this.scene.add(highlightGroup);
+        this.activeSketchHighlight = highlightGroup;
+        
+        console.log(`Added highlight for active sketch: ${sketchId}`);
+    }
+    
+    public clearActiveSketchHighlight(): void {
+        if (this.activeSketchHighlight) {
+            this.scene.remove(this.activeSketchHighlight);
+            this.disposeMeshGroup(this.activeSketchHighlight);
+            this.activeSketchHighlight = null;
+            console.log('Cleared active sketch highlight');
+        }
     }
     
     private createCoordinateAxes(

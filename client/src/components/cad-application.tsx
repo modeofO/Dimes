@@ -346,6 +346,10 @@ export function CADApplication() {
                     console.log('🎯 Setting activeSketchId to:', data.sketch_id);
                     setActiveSketchId(data.sketch_id);
                     
+                    // Automatically switch to top-down view for sketch creation
+                    renderer.viewTop();
+                    updateStatus('Switched to top-down view for sketch', 'info');
+                    
                     // Update frontend state for agent-created sketches
                     if (data.sketch_id && data.plane_id) {
                         const sketch: CreatedSketch = {
@@ -534,8 +538,20 @@ export function CADApplication() {
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col">
-                <div ref={viewportRef} className="flex-1 relative bg-white">
+                <div 
+                    ref={viewportRef} 
+                    className={`flex-1 relative bg-white transition-all duration-300 ${
+                        activeSketchId 
+                            ? 'border-4 border-blue-400 shadow-lg shadow-blue-200' 
+                            : 'border border-gray-200'
+                    }`}
+                >
                     {/* The 3D viewport will be mounted here */}
+                    {activeSketchId && (
+                        <div className="absolute top-2 left-2 bg-blue-500 text-white px-3 py-1 rounded-md text-sm font-medium shadow-md z-10">
+                            ✏️ Editing Sketch: {activeSketchId}
+                        </div>
+                    )}
                 </div>
                 <StatusBar status={status} />
             </div>
