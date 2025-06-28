@@ -71,7 +71,6 @@ export function ControlsPanel({
 }: ControlsPanelProps) {
     // Form states
     const [planeType, setPlaneType] = useState('XZ');
-    const [planeOrigin, setPlaneOrigin] = useState({ x: 0, y: 0, z: 0 });
     const [selectedPlane, setSelectedPlane] = useState('');
     const [selectedSketch, setSelectedSketch] = useState('');
     const [elementType, setElementType] = useState('line');
@@ -120,10 +119,7 @@ export function ControlsPanel({
         try {
             onUpdateStatus(`Creating ${planeType} plane...`, 'info');
             
-            const response = await client.createSketchPlane(
-                planeType as any,
-                [planeOrigin.x, planeOrigin.y, planeOrigin.z]
-            );
+            const response = await client.createSketchPlane(planeType as any);
             
             if (response.success && response.data) {
                 // State will be updated via WebSocket notification to avoid duplicates
@@ -133,7 +129,7 @@ export function ControlsPanel({
             console.error('Failed to create sketch plane:', error);
             onUpdateStatus(`❌ Error creating plane: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
         }
-    }, [client, planeType, planeOrigin, onUpdateStatus]);
+    }, [client, planeType, onUpdateStatus]);
 
     const createSketch = useCallback(async () => {
         if (!client || !selectedPlane) return;
@@ -433,30 +429,6 @@ export function ControlsPanel({
                             <option value="XY">XY Plane</option>
                             <option value="YZ">YZ Plane</option>
                         </select>
-                        
-                        <div className="grid grid-cols-3 gap-2">
-                            <input
-                                type="number"
-                                placeholder="X"
-                                value={planeOrigin.x}
-                                onChange={(e) => setPlaneOrigin(prev => ({ ...prev, x: Number(e.target.value) }))}
-                                className="px-2 py-1 border border-gray-300 rounded text-sm"
-                            />
-                            <input
-                                type="number"
-                                placeholder="Y"
-                                value={planeOrigin.y}
-                                onChange={(e) => setPlaneOrigin(prev => ({ ...prev, y: Number(e.target.value) }))}
-                                className="px-2 py-1 border border-gray-300 rounded text-sm"
-                            />
-                            <input
-                                type="number"
-                                placeholder="Z"
-                                value={planeOrigin.z}
-                                onChange={(e) => setPlaneOrigin(prev => ({ ...prev, z: Number(e.target.value) }))}
-                                className="px-2 py-1 border border-gray-300 rounded text-sm"
-                            />
-                        </div>
                         
                         <button
                             onClick={createSketchPlane}
