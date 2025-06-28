@@ -65,10 +65,11 @@ const createSketchPlaneAction = action({
     }),
     async handler(planeData, ctx, agent) {
         const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
-        const sessionId = ctx.id;
-        const result = await cppBackend.createSketchPlane(sessionId, planeData) as CppBackendResponse;
+        const agentSessionId = ctx.id;
+        const backendSessionId = agentSessionId.replace('web-chat:', '');
+        const result = await cppBackend.createSketchPlane(backendSessionId, planeData) as CppBackendResponse;
         if (result.success && result.data) {
-          sendVisualizationData(agent, sessionId, result.data);
+          sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
         }
         return result;
@@ -83,10 +84,11 @@ const createSketchAction = action({
     }),
     async handler(sketchData, ctx, agent) {
         const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
-        const sessionId = ctx.id;
-        const result = await cppBackend.createSketch(sessionId, sketchData) as CppBackendResponse;
+        const agentSessionId = ctx.id;
+        const backendSessionId = agentSessionId.replace('web-chat:', '');
+        const result = await cppBackend.createSketch(backendSessionId, sketchData) as CppBackendResponse;
         if (result.success && result.data) {
-          sendVisualizationData(agent, sessionId, result.data);
+          sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
         }
         return result;
@@ -103,10 +105,11 @@ const addSketchElementAction = action({
     }),
     async handler(elementData, ctx, agent) {
         const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
-        const sessionId = ctx.id;
-        const result = await cppBackend.addSketchElement(sessionId, elementData) as CppBackendResponse;
+        const agentSessionId = ctx.id;
+        const backendSessionId = agentSessionId.replace('web-chat:', '');
+        const result = await cppBackend.addSketchElement(backendSessionId, elementData) as CppBackendResponse;
         if (result.success && result.data) {
-          sendVisualizationData(agent, sessionId, result.data);
+          sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
         }
         return result;
@@ -124,7 +127,8 @@ const createRectangleAction = action({
     }),
     async handler(params, ctx, agent) {
         const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
-        const sessionId = ctx.id;
+        const agentSessionId = ctx.id;
+        const backendSessionId = agentSessionId.replace('web-chat:', '');
         const elementData = {
             sketch_id: params.sketch_id,
             element_type: 'rectangle' as const,
@@ -134,9 +138,9 @@ const createRectangleAction = action({
                 height: params.height
             }
         };
-        const result = await cppBackend.addSketchElement(sessionId, elementData) as CppBackendResponse;
+        const result = await cppBackend.addSketchElement(backendSessionId, elementData) as CppBackendResponse;
         if (result.success && result.data) {
-          sendVisualizationData(agent, sessionId, result.data);
+          sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
         }
         return result;
@@ -211,7 +215,8 @@ const createPolygonAction = action({
     }),
     async handler(params, ctx, agent) {
         const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
-        const sessionId = ctx.id;
+        const agentSessionId = ctx.id;
+        const backendSessionId = agentSessionId.replace('web-chat:', '');
         const elementData = {
             sketch_id: params.sketch_id,
             element_type: 'polygon' as const,
@@ -221,9 +226,9 @@ const createPolygonAction = action({
                 radius: params.radius
             }
         };
-        const result = await cppBackend.addSketchElement(sessionId, elementData) as CppBackendResponse;
+        const result = await cppBackend.addSketchElement(backendSessionId, elementData) as CppBackendResponse;
         if (result.success && result.data) {
-          sendVisualizationData(agent, sessionId, result.data);
+          sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
         }
         return result;
@@ -450,10 +455,11 @@ const extrudeFeatureAction = action({
     }),
     async handler(extrudeData, ctx, agent) {
         const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
-        const sessionId = ctx.id;
-        const result = await cppBackend.extrudeFeature(sessionId, extrudeData) as CppBackendResponse;
+        const agentSessionId = ctx.id;
+        const backendSessionId = agentSessionId.replace('web-chat:', '');
+        const result = await cppBackend.extrudeFeature(backendSessionId, extrudeData) as CppBackendResponse;
         if (result.success && result.data) {
-          sendVisualizationData(agent, sessionId, result.data);
+          sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
         }
         return result;

@@ -9,7 +9,7 @@ import { UIManager } from '@/components/ui-manager';
 import { ChatPanel } from '@/components/chat-panel';
 import { ControlsPanel } from '@/components/controls-panel';
 import { StatusBar } from '@/components/status-bar';
-import { MeshData } from '../../../shared/types/geometry';
+import { MeshData, SketchVisualizationData } from '../../../shared/types/geometry';
 import { DrawingTool } from '@/lib/cad/controls/cad-controls';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -35,6 +35,7 @@ interface CreatedSketch {
     sketch_id: string;
     plane_id: string;
     elements: SketchElementInfo[];
+    visualization_data?: SketchVisualizationData;
 }
 
 export function CADApplication() {
@@ -121,12 +122,21 @@ export function CADApplication() {
         // Find the sketch and set it as active in the renderer
         const sketch = createdSketches.find(s => s.sketch_id === sketchId);
         if (sketch && rendererRef.current) {
-            // We need the sketch visualization data to set the plane
-            // For now, we'll just mark it as active
-            updateStatus(`Set active sketch: ${sketchId}`, 'info');
             console.log('📝 Found sketch in state:', sketch);
+            
+            // Configure the renderer for interactive drawing if we have visualization data
+            if (sketch.visualization_data) {
+                console.log('🎯 Setting up renderer for interactive drawing on sketch:', sketchId);
+                rendererRef.current.setActiveSketchPlane(sketchId, sketch.visualization_data);
+                rendererRef.current.viewTop();
+                updateStatus(`Set active sketch: ${sketchId} (ready for drawing)`, 'success');
+            } else {
+                console.log('⚠️ No visualization data available for sketch:', sketchId);
+                updateStatus(`Set active sketch: ${sketchId} (limited functionality)`, 'warning');
+            }
         } else {
             console.log('❌ Sketch not found in state or no renderer');
+            updateStatus('❌ Sketch not found', 'error');
         }
     }, [createdSketches, updateStatus]);
 
@@ -365,12 +375,13 @@ export function CADApplication() {
                         const sketch: CreatedSketch = {
                             sketch_id: data.sketch_id,
                             plane_id: data.plane_id,
-                            elements: []
+                            elements: [],
+                            visualization_data: data
                         };
                         setCreatedSketches(prev => {
                             const exists = prev.some(s => s.sketch_id === sketch.sketch_id);
                             if (!exists) {
-                                console.log('📝 Adding new sketch to state:', sketch);
+                                console.log('📝 Adding new sketch to state with visualization data:', sketch);
                                 return [...prev, sketch];
                             }
                             console.log('📝 Sketch already exists in state');
