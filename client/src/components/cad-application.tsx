@@ -613,9 +613,9 @@ export function CADApplication() {
             </div>
 
             {/* Right Sidebar */}
-            <div className="w-[350px] bg-white border-l border-gray-300 shadow-lg flex flex-col h-0">
-                {/* Scene Tree */}
-                <div className="flex-1">
+            <div className="w-[350px] bg-white border-l border-gray-300 shadow-lg flex flex-col h-full">
+                {/* Scene Tree - Scrollable container with fixed height */}
+                <div className="flex-1 overflow-y-auto">
                     <UIManager 
                         createdPlanes={createdPlanes}
                         createdSketches={createdSketches}
@@ -628,8 +628,8 @@ export function CADApplication() {
                 {/* Spacer */}
                 <div className="h-2 bg-gray-100 border-t border-b border-gray-300"></div>
 
-                {/* Agent Chat */}
-                <div className="flex-1">
+                {/* Agent Chat - Fixed height at bottom */}
+                <div className="h-80 flex-shrink-0">
                     <ChatPanel messages={chatMessages} onSendMessage={handleChatMessage} />
                 </div>
             </div>
