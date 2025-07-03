@@ -46,10 +46,11 @@ const createModelAction = action({
   }),
   async handler(parameters, ctx, agent) {
     const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
-    const sessionId = ctx.id;
-    const result = await cppBackend.createModel(sessionId, parameters) as CppBackendResponse;
+    const agentSessionId = ctx.id;
+    const backendSessionId = agentSessionId.replace('web-chat:', '');
+    const result = await cppBackend.createModel(backendSessionId, parameters) as CppBackendResponse;
     if (result.success && result.data) {
-      sendVisualizationData(agent, sessionId, result.data);
+      sendVisualizationData(agent, agentSessionId, result.data);
       return result.data;
     }
     return result;
@@ -165,7 +166,8 @@ const createArcAction = action({
     }),
     async handler(params, ctx, agent) {
         const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
-        const sessionId = ctx.id;
+        const agentSessionId = ctx.id;
+        const backendSessionId = agentSessionId.replace('web-chat:', '');
         
         let parameters;
         if (params.type === 'center_radius') {
@@ -195,9 +197,9 @@ const createArcAction = action({
             parameters
         };
         
-        const result = await cppBackend.addSketchElement(sessionId, elementData) as CppBackendResponse;
+        const result = await cppBackend.addSketchElement(backendSessionId, elementData) as CppBackendResponse;
         if (result.success && result.data) {
-          sendVisualizationData(agent, sessionId, result.data);
+          sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
         }
         return result;
@@ -246,10 +248,27 @@ const addFilletAction = action({
     }),
     async handler(filletData, ctx, agent) {
         const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
-        const sessionId = ctx.id;
-        const result = await cppBackend.addFillet(sessionId, filletData) as CppBackendResponse;
+        const agentSessionId = ctx.id;
+        const backendSessionId = agentSessionId.replace('web-chat:', '');
+        const result = await cppBackend.addFillet(backendSessionId, filletData) as CppBackendResponse;
         if (result.success && result.data) {
-          sendVisualizationData(agent, sessionId, result.data);
+          // Send visualization data for the fillet
+          sendVisualizationData(agent, agentSessionId, result.data);
+          
+          // Send visualization data for updated elements (modified lines)
+          if (result.data.updated_elements) {
+            const webSocketManager = agent.container.resolve<WebSocketManager>("webSocketManager");
+            const actualSessionId = agentSessionId.replace('web-chat:', '');
+            
+            result.data.updated_elements.forEach((elementData: any) => {
+              console.log(`🔄 Sending updated element visualization for: ${elementData.element_id}`);
+              webSocketManager.sendToClient(actualSessionId, {
+                type: 'visualization_data',
+                payload: elementData,
+              });
+            });
+          }
+          
           return result.data;
         }
         return result;
@@ -267,10 +286,27 @@ const addChamferAction = action({
     }),
     async handler(chamferData, ctx, agent) {
         const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
-        const sessionId = ctx.id;
-        const result = await cppBackend.addChamfer(sessionId, chamferData) as CppBackendResponse;
+        const agentSessionId = ctx.id;
+        const backendSessionId = agentSessionId.replace('web-chat:', '');
+        const result = await cppBackend.addChamfer(backendSessionId, chamferData) as CppBackendResponse;
         if (result.success && result.data) {
-          sendVisualizationData(agent, sessionId, result.data);
+          // Send visualization data for the chamfer
+          sendVisualizationData(agent, agentSessionId, result.data);
+          
+          // Send visualization data for updated elements (modified lines)
+          if (result.data.updated_elements) {
+            const webSocketManager = agent.container.resolve<WebSocketManager>("webSocketManager");
+            const actualSessionId = agentSessionId.replace('web-chat:', '');
+            
+            result.data.updated_elements.forEach((elementData: any) => {
+              console.log(`🔄 Sending updated element visualization for chamfer: ${elementData.element_id}`);
+              webSocketManager.sendToClient(actualSessionId, {
+                type: 'visualization_data',
+                payload: elementData,
+              });
+            });
+          }
+          
           return result.data;
         }
         return result;
@@ -287,10 +323,11 @@ const trimLineToLineAction = action({
     }),
     async handler(trimData, ctx, agent) {
         const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
-        const sessionId = ctx.id;
-        const result = await cppBackend.trimLineToLine(sessionId, trimData) as CppBackendResponse;
+        const agentSessionId = ctx.id;
+        const backendSessionId = agentSessionId.replace('web-chat:', '');
+        const result = await cppBackend.trimLineToLine(backendSessionId, trimData) as CppBackendResponse;
         if (result.success && result.data) {
-          sendVisualizationData(agent, sessionId, result.data);
+          sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
         }
         return result;
@@ -307,10 +344,11 @@ const extendLineToLineAction = action({
     }),
     async handler(extendData, ctx, agent) {
         const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
-        const sessionId = ctx.id;
-        const result = await cppBackend.extendLineToLine(sessionId, extendData) as CppBackendResponse;
+        const agentSessionId = ctx.id;
+        const backendSessionId = agentSessionId.replace('web-chat:', '');
+        const result = await cppBackend.extendLineToLine(backendSessionId, extendData) as CppBackendResponse;
         if (result.success && result.data) {
-          sendVisualizationData(agent, sessionId, result.data);
+          sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
         }
         return result;
@@ -330,10 +368,11 @@ const mirrorElementAction = action({
     }),
     async handler(mirrorData, ctx, agent) {
         const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
-        const sessionId = ctx.id;
-        const result = await cppBackend.mirrorElements(sessionId, mirrorData) as CppBackendResponse;
+        const agentSessionId = ctx.id;
+        const backendSessionId = agentSessionId.replace('web-chat:', '');
+        const result = await cppBackend.mirrorElements(backendSessionId, mirrorData) as CppBackendResponse;
         if (result.success && result.data) {
-          sendVisualizationData(agent, sessionId, result.data);
+          sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
         }
         return result;
@@ -350,10 +389,11 @@ const offsetElementAction = action({
     }),
     async handler(offsetData, ctx, agent) {
         const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
-        const sessionId = ctx.id;
-        const result = await cppBackend.offsetElement(sessionId, offsetData) as CppBackendResponse;
+        const agentSessionId = ctx.id;
+        const backendSessionId = agentSessionId.replace('web-chat:', '');
+        const result = await cppBackend.offsetElement(backendSessionId, offsetData) as CppBackendResponse;
         if (result.success && result.data) {
-          sendVisualizationData(agent, sessionId, result.data);
+          sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
         }
         return result;
@@ -370,10 +410,11 @@ const copyElementAction = action({
     }),
     async handler(copyData, ctx, agent) {
         const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
-        const sessionId = ctx.id;
-        const result = await cppBackend.copyElement(sessionId, copyData) as CppBackendResponse;
+        const agentSessionId = ctx.id;
+        const backendSessionId = agentSessionId.replace('web-chat:', '');
+        const result = await cppBackend.copyElement(backendSessionId, copyData) as CppBackendResponse;
         if (result.success && result.data) {
-          sendVisualizationData(agent, sessionId, result.data);
+          sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
         }
         return result;
@@ -390,10 +431,11 @@ const moveElementAction = action({
     }),
     async handler(moveData, ctx, agent) {
         const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
-        const sessionId = ctx.id;
-        const result = await cppBackend.moveElement(sessionId, moveData) as CppBackendResponse;
+        const agentSessionId = ctx.id;
+        const backendSessionId = agentSessionId.replace('web-chat:', '');
+        const result = await cppBackend.moveElement(backendSessionId, moveData) as CppBackendResponse;
         if (result.success && result.data) {
-          sendVisualizationData(agent, sessionId, result.data);
+          sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
         }
         return result;
@@ -411,10 +453,11 @@ const createLinearArrayAction = action({
     }),
     async handler(arrayData, ctx, agent) {
         const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
-        const sessionId = ctx.id;
-        const result = await (cppBackend as any).createLinearArray(sessionId, arrayData) as CppBackendResponse;
+        const agentSessionId = ctx.id;
+        const backendSessionId = agentSessionId.replace('web-chat:', '');
+        const result = await (cppBackend as any).createLinearArray(backendSessionId, arrayData) as CppBackendResponse;
         if (result.success && result.data) {
-          sendVisualizationData(agent, sessionId, result.data);
+          sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
         }
         return result;
@@ -434,10 +477,11 @@ const createMirrorArrayAction = action({
     }),
     async handler(arrayData, ctx, agent) {
         const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
-        const sessionId = ctx.id;
-        const result = await (cppBackend as any).createMirrorArray(sessionId, arrayData) as CppBackendResponse;
+        const agentSessionId = ctx.id;
+        const backendSessionId = agentSessionId.replace('web-chat:', '');
+        const result = await (cppBackend as any).createMirrorArray(backendSessionId, arrayData) as CppBackendResponse;
         if (result.success && result.data) {
-          sendVisualizationData(agent, sessionId, result.data);
+          sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
         }
         return result;
@@ -476,10 +520,11 @@ const performBooleanOperationAction = action({
     }),
     async handler(operation, ctx, agent) {
         const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
-        const sessionId = ctx.id;
-        const result = await cppBackend.performBooleanOperation(sessionId, operation) as CppBackendResponse;
+        const agentSessionId = ctx.id;
+        const backendSessionId = agentSessionId.replace('web-chat:', '');
+        const result = await cppBackend.performBooleanOperation(backendSessionId, operation) as CppBackendResponse;
         if (result.success && result.data) {
-          sendVisualizationData(agent, sessionId, result.data);
+          sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
         }
         return result;
@@ -495,11 +540,12 @@ const tessellateModelAction = action({
     }),
     async handler(tessellationData, ctx, agent) {
         const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
-        const sessionId = ctx.id;
+        const agentSessionId = ctx.id;
+        const backendSessionId = agentSessionId.replace('web-chat:', '');
         const { model_id, tessellation_quality } = tessellationData;
-        const result = await cppBackend.tessellateModel(sessionId, model_id, tessellation_quality) as CppBackendResponse;
+        const result = await cppBackend.tessellateModel(backendSessionId, model_id, tessellation_quality) as CppBackendResponse;
         if (result.success && result.data) {
-          sendVisualizationData(agent, sessionId, result.data);
+          sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
         }
         return result;

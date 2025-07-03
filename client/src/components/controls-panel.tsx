@@ -245,9 +245,26 @@ export function ControlsPanel({
     }, [client, selectedObject, extrudeDistance, createdSketches, onUpdateStatus]);
 
     // New tool functions
+    const addFillet = useCallback(async () => {
+        if (!client || !selectedSketch || !selectedElement1 || !selectedElement2) {
+            onUpdateStatus('Please select two lines for fillet', 'warning');
+            return;
+        }
+        
+        try {
+            onUpdateStatus('Adding fillet...', 'info');
+            const response = await client.addFilletToSketch(selectedSketch, selectedElement1, selectedElement2, filletRadius);
+            if (response.success) {
+                onUpdateStatus('✅ Added fillet', 'success');
+            }
+        } catch (error) {
+            onUpdateStatus(`❌ Error adding fillet: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+        }
+    }, [client, selectedSketch, selectedElement1, selectedElement2, filletRadius, onUpdateStatus]);
+
     const addChamfer = useCallback(async () => {
         if (!client || !selectedSketch || !selectedElement1 || !selectedElement2) {
-            onUpdateStatus('Please select two elements for chamfer', 'warning');
+            onUpdateStatus('Please select two lines for chamfer', 'warning');
             return;
         }
         
@@ -270,7 +287,7 @@ export function ControlsPanel({
         
         try {
             onUpdateStatus('Trimming line...', 'info');
-            const response = await client.trimLineToLine(selectedSketch, selectedElement1, selectedElement2);
+            const response = await client.trimLineToLine(selectedSketch, selectedElement1, selectedElement2, false);
             if (response.success) {
                 onUpdateStatus('✅ Trimmed line', 'success');
             }
@@ -287,7 +304,7 @@ export function ControlsPanel({
         
         try {
             onUpdateStatus('Extending line...', 'info');
-            const response = await client.extendLineToLine(selectedSketch, selectedElement1, selectedElement2);
+            const response = await client.extendLineToLine(selectedSketch, selectedElement1, selectedElement2, false);
             if (response.success) {
                 onUpdateStatus('✅ Extended line', 'success');
             }
@@ -304,7 +321,15 @@ export function ControlsPanel({
         
         try {
             onUpdateStatus('Mirroring element...', 'info');
-            const response = await client.mirrorElement(selectedSketch, selectedElement1, mirrorLine);
+            const response = await client.mirrorElementsByTwoPoints(
+                selectedSketch, 
+                [selectedElement1], 
+                mirrorLine.point1[0], 
+                mirrorLine.point1[1], 
+                mirrorLine.point2[0], 
+                mirrorLine.point2[1], 
+                true
+            );
             if (response.success) {
                 onUpdateStatus('✅ Mirrored element', 'success');
             }
@@ -338,7 +363,10 @@ export function ControlsPanel({
         
         try {
             onUpdateStatus('Copying element...', 'info');
-            const response = await client.copyElement(selectedSketch, selectedElement1, [translation.x, translation.y]);
+            const distance = Math.sqrt(translation.x * translation.x + translation.y * translation.y);
+            const directionX = translation.x / distance;
+            const directionY = translation.y / distance;
+            const response = await client.copyElement(selectedSketch, selectedElement1, 1, directionX, directionY, distance);
             if (response.success) {
                 onUpdateStatus('✅ Copied element', 'success');
             }
@@ -355,7 +383,10 @@ export function ControlsPanel({
         
         try {
             onUpdateStatus('Moving element...', 'info');
-            const response = await client.moveElement(selectedSketch, selectedElement1, [translation.x, translation.y]);
+            const distance = Math.sqrt(translation.x * translation.x + translation.y * translation.y);
+            const directionX = translation.x / distance;
+            const directionY = translation.y / distance;
+            const response = await client.moveElement(selectedSketch, selectedElement1, directionX, directionY, distance);
             if (response.success) {
                 onUpdateStatus('✅ Moved element', 'success');
             }
@@ -777,14 +808,14 @@ export function ControlsPanel({
                                 currentDrawingTool === 'rectangle' ? 'Click and drag corners' :
                                 currentDrawingTool === 'arc' ? 'Click center, drag to set radius' :
                                 currentDrawingTool === 'polygon' ? `Click center, drag to set size (${currentPolygonSides} sides)` :
-                                currentDrawingTool === 'fillet' ? 'Click two lines to fillet' :
-                                currentDrawingTool === 'chamfer' ? 'Click two lines to chamfer' :
-                                currentDrawingTool === 'trim' ? 'Click line to trim, then cutting line' :
-                                currentDrawingTool === 'extend' ? 'Click line to extend, then target' :
-                                currentDrawingTool === 'mirror' ? 'Click element, then mirror line' :
-                                currentDrawingTool === 'offset' ? 'Click element to offset' :
-                                currentDrawingTool === 'copy' ? 'Click element, drag to copy' :
-                                currentDrawingTool === 'move' ? 'Click element, drag to move' :
+                                currentDrawingTool === 'fillet' ? 'Use controls panel below - select two lines and set radius' :
+                                currentDrawingTool === 'chamfer' ? 'Use controls panel below - select two lines and set distance' :
+                                currentDrawingTool === 'trim' ? 'Use controls panel below - select line to trim and cutting line' :
+                                currentDrawingTool === 'extend' ? 'Use controls panel below - select line to extend and target' :
+                                currentDrawingTool === 'mirror' ? 'Use controls panel below - select element and mirror settings' :
+                                currentDrawingTool === 'offset' ? 'Use controls panel below - select element and set distance' :
+                                currentDrawingTool === 'copy' ? 'Use controls panel below - select element and set direction' :
+                                currentDrawingTool === 'move' ? 'Use controls panel below - select element and set direction' :
                                 'Select a tool and draw on the canvas'}
                                 <br />Press ESC to cancel drawing
                             </div>
@@ -858,7 +889,7 @@ export function ControlsPanel({
                                 className="px-2 py-1 border border-gray-300 rounded text-sm"
                             />
                             <button
-                                onClick={() => client?.addFilletToSketch(selectedSketch, selectedElement1, selectedElement2, filletRadius)}
+                                onClick={addFillet}
                                 disabled={!client || !selectedSketch || !selectedElement1 || !selectedElement2}
                                 className="px-2 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 disabled:bg-gray-300"
                             >

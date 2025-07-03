@@ -75,6 +75,9 @@ export class VisualizationManager {
     }
     
     public addSketchElementVisualization(data: SketchElementVisualizationData): void {
+        // If element already exists, remove it first to update it
+        this.removeElementVisualization(data.element_id);
+        
         const group = new THREE.Group();
         group.name = `element-${data.element_id}`;
         

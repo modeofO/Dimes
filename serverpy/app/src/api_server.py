@@ -1250,7 +1250,11 @@ class CADAPIServer:
             raise Exception("Failed to create fillet in geometry engine")
         
         # Get visualization data for the created fillet
-        viz_data = engine.get_sketch_element_visualization_data(request.sketch_id, fillet_id)
+        fillet_viz_data = engine.get_sketch_element_visualization_data(request.sketch_id, fillet_id)
+        
+        # Get updated visualization data for the modified lines
+        line1_viz_data = engine.get_sketch_element_visualization_data(request.sketch_id, request.line1_id)
+        line2_viz_data = engine.get_sketch_element_visualization_data(request.sketch_id, request.line2_id)
         
         response_data = {
             "fillet_id": fillet_id,
@@ -1262,9 +1266,19 @@ class CADAPIServer:
             "message": f"Fillet {fillet_id} created successfully between lines {request.line1_id} and {request.line2_id}"
         }
         
-        # Add visualization data if available
-        if viz_data:
-            response_data["visualization_data"] = viz_data
+        # Add visualization data for fillet and updated lines
+        if fillet_viz_data:
+            response_data["visualization_data"] = fillet_viz_data
+        
+        # Add updated line visualization data
+        updated_elements = []
+        if line1_viz_data:
+            updated_elements.append(line1_viz_data)
+        if line2_viz_data:
+            updated_elements.append(line2_viz_data)
+        
+        if updated_elements:
+            response_data["updated_elements"] = updated_elements
         
         print(f"✅ Fillet created successfully: {fillet_id}")
         return response_data
@@ -1299,7 +1313,11 @@ class CADAPIServer:
             raise Exception("Failed to create chamfer in geometry engine")
         
         # Get visualization data for the created chamfer
-        viz_data = engine.get_sketch_element_visualization_data(request.sketch_id, chamfer_id)
+        chamfer_viz_data = engine.get_sketch_element_visualization_data(request.sketch_id, chamfer_id)
+        
+        # Get updated visualization data for the modified lines
+        line1_viz_data = engine.get_sketch_element_visualization_data(request.sketch_id, request.line1_id)
+        line2_viz_data = engine.get_sketch_element_visualization_data(request.sketch_id, request.line2_id)
         
         response_data = {
             "chamfer_id": chamfer_id,
@@ -1311,9 +1329,19 @@ class CADAPIServer:
             "message": f"Chamfer {chamfer_id} created successfully between lines {request.line1_id} and {request.line2_id}"
         }
         
-        # Add visualization data if available
-        if viz_data:
-            response_data["visualization_data"] = viz_data
+        # Add visualization data for chamfer and updated lines
+        if chamfer_viz_data:
+            response_data["visualization_data"] = chamfer_viz_data
+        
+        # Add updated line visualization data
+        updated_elements = []
+        if line1_viz_data:
+            updated_elements.append(line1_viz_data)
+        if line2_viz_data:
+            updated_elements.append(line2_viz_data)
+        
+        if updated_elements:
+            response_data["updated_elements"] = updated_elements
         
         print(f"✅ Chamfer created successfully: {chamfer_id}")
         return response_data

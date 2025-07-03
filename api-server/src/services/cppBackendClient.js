@@ -286,8 +286,8 @@ export class CppBackendClient {
       const requestBody = {
         session_id: sessionId,
         sketch_id: filletData.sketch_id,
-        line1_id: filletData.line1_id,
-        line2_id: filletData.line2_id,
+        line1_id: filletData.line1_id || filletData.element1_id,
+        line2_id: filletData.line2_id || filletData.element2_id,
         radius: filletData.radius,
       };
       
@@ -322,8 +322,8 @@ export class CppBackendClient {
       const requestBody = {
         session_id: sessionId,
         sketch_id: chamferData.sketch_id,
-        line1_id: chamferData.line1_id,
-        line2_id: chamferData.line2_id,
+        line1_id: chamferData.line1_id || chamferData.element1_id,
+        line2_id: chamferData.line2_id || chamferData.element2_id,
         distance: chamferData.distance,
       };
       
@@ -502,7 +502,7 @@ export class CppBackendClient {
       const requestBody = {
         session_id: sessionId,
         sketch_id: mirrorData.sketch_id,
-        element_ids: mirrorData.element_ids,
+        element_ids: mirrorData.element_ids || (mirrorData.element_id ? [mirrorData.element_id] : []),
         mirror_line_id: mirrorData.mirror_line_id,
         keep_original: mirrorData.keep_original,
       };
@@ -578,7 +578,7 @@ export class CppBackendClient {
         session_id: sessionId,
         sketch_id: offsetData.sketch_id,
         element_id: offsetData.element_id,
-        offset_distance: offsetData.offset_distance,
+        offset_distance: offsetData.offset_distance || offsetData.distance,
       };
       
       console.log('📐 Flattened offset element request body:', requestBody);
@@ -645,14 +645,27 @@ export class CppBackendClient {
     try {
       console.log('📋 Copy element data received:', copyData);
 
+      // Handle translation array format from agent
+      let directionX = copyData.direction_x;
+      let directionY = copyData.direction_y; 
+      let distance = copyData.distance;
+      let numCopies = copyData.num_copies || 1;
+
+      if (copyData.translation && Array.isArray(copyData.translation)) {
+        const [dx, dy] = copyData.translation;
+        distance = Math.sqrt(dx * dx + dy * dy);
+        directionX = distance > 0 ? dx / distance : 1;
+        directionY = distance > 0 ? dy / distance : 0;
+      }
+
       const requestBody = {
         session_id: sessionId,
         sketch_id: copyData.sketch_id,
         element_id: copyData.element_id,
-        num_copies: copyData.num_copies,
-        direction_x: copyData.direction_x,
-        direction_y: copyData.direction_y,
-        distance: copyData.distance,
+        num_copies: numCopies,
+        direction_x: directionX,
+        direction_y: directionY,
+        distance: distance,
       };
       
       console.log('📋 Flattened copy element request body:', requestBody);
@@ -683,13 +696,25 @@ export class CppBackendClient {
     try {
       console.log('➡️ Move element data received:', moveData);
 
+      // Handle translation array format from agent
+      let directionX = moveData.direction_x;
+      let directionY = moveData.direction_y; 
+      let distance = moveData.distance;
+
+      if (moveData.translation && Array.isArray(moveData.translation)) {
+        const [dx, dy] = moveData.translation;
+        distance = Math.sqrt(dx * dx + dy * dy);
+        directionX = distance > 0 ? dx / distance : 1;
+        directionY = distance > 0 ? dy / distance : 0;
+      }
+
       const requestBody = {
         session_id: sessionId,
         sketch_id: moveData.sketch_id,
         element_id: moveData.element_id,
-        direction_x: moveData.direction_x,
-        direction_y: moveData.direction_y,
-        distance: moveData.distance,
+        direction_x: directionX,
+        direction_y: directionY,
+        distance: distance,
       };
       
       console.log('➡️ Flattened move element request body:', requestBody);

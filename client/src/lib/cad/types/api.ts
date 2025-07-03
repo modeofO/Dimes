@@ -139,8 +139,8 @@ export interface ExtrudeFeatureResponse extends CADResponse {
 
 export interface AddFilletRequest {
     sketch_id: string;
-    element1_id: string;
-    element2_id: string;
+    line1_id: string;
+    line2_id: string;
     radius: number;
 }
 
@@ -148,10 +148,11 @@ export interface AddFilletResponse extends CADResponse {
     data: {
         sketch_id: string;
         fillet_id: string;
-        element1_id: string;
-        element2_id: string;
+        line1_id: string;
+        line2_id: string;
         radius: number;
         visualization_data?: SketchElementVisualizationData;
+        updated_elements?: SketchElementVisualizationData[];
     };
 }
 
@@ -159,8 +160,8 @@ export interface AddFilletResponse extends CADResponse {
 
 export interface AddChamferRequest {
     sketch_id: string;
-    element1_id: string;
-    element2_id: string;
+    line1_id: string;
+    line2_id: string;
     distance: number;
 }
 
@@ -168,17 +169,20 @@ export interface AddChamferResponse extends CADResponse {
     data: {
         sketch_id: string;
         chamfer_id: string;
-        element1_id: string;
-        element2_id: string;
+        line1_id: string;
+        line2_id: string;
         distance: number;
         visualization_data?: SketchElementVisualizationData;
+        updated_elements?: SketchElementVisualizationData[];
     };
 }
 
 export interface TrimLineRequest {
     sketch_id: string;
     line_to_trim_id: string;
-    cutting_line_id: string;
+    cutting_line_id?: string;
+    cutting_geometry_id?: string;
+    keep_start: boolean;
 }
 
 export interface TrimLineResponse extends CADResponse {
@@ -192,7 +196,9 @@ export interface TrimLineResponse extends CADResponse {
 export interface ExtendLineRequest {
     sketch_id: string;
     line_to_extend_id: string;
-    target_line_id: string;
+    target_line_id?: string;
+    target_geometry_id?: string;
+    extend_start: boolean;
 }
 
 export interface ExtendLineResponse extends CADResponse {
@@ -205,18 +211,20 @@ export interface ExtendLineResponse extends CADResponse {
 
 export interface MirrorElementRequest {
     sketch_id: string;
-    element_id: string;
-    mirror_line: {
-        point1: [number, number];
-        point2: [number, number];
-    };
+    element_ids: string[];
+    mirror_line_id?: string;
+    x1?: number;
+    y1?: number;
+    x2?: number;
+    y2?: number;
+    keep_original: boolean;
 }
 
 export interface MirrorElementResponse extends CADResponse {
     data: {
         sketch_id: string;
-        mirrored_element_id: string;
-        original_element_id: string;
+        mirrored_element_ids: string[];
+        original_element_ids: string[];
         visualization_data?: SketchElementVisualizationData;
     };
 }
@@ -224,7 +232,8 @@ export interface MirrorElementResponse extends CADResponse {
 export interface OffsetElementRequest {
     sketch_id: string;
     element_id: string;
-    distance: number;
+    offset_distance: number;
+    direction?: 'left' | 'right';
 }
 
 export interface OffsetElementResponse extends CADResponse {
@@ -232,7 +241,7 @@ export interface OffsetElementResponse extends CADResponse {
         sketch_id: string;
         offset_element_id: string;
         original_element_id: string;
-        distance: number;
+        offset_distance: number;
         visualization_data?: SketchElementVisualizationData;
     };
 }
@@ -240,15 +249,21 @@ export interface OffsetElementResponse extends CADResponse {
 export interface CopyElementRequest {
     sketch_id: string;
     element_id: string;
-    translation: [number, number];
+    num_copies: number;
+    direction_x: number;
+    direction_y: number;
+    distance: number;
 }
 
 export interface CopyElementResponse extends CADResponse {
     data: {
         sketch_id: string;
-        copied_element_id: string;
+        copied_element_ids: string[];
         original_element_id: string;
-        translation: [number, number];
+        num_copies: number;
+        direction_x: number;
+        direction_y: number;
+        distance: number;
         visualization_data?: SketchElementVisualizationData;
     };
 }
@@ -256,14 +271,18 @@ export interface CopyElementResponse extends CADResponse {
 export interface MoveElementRequest {
     sketch_id: string;
     element_id: string;
-    translation: [number, number];
+    direction_x: number;
+    direction_y: number;
+    distance: number;
 }
 
 export interface MoveElementResponse extends CADResponse {
     data: {
         sketch_id: string;
         moved_element_id: string;
-        translation: [number, number];
+        direction_x: number;
+        direction_y: number;
+        distance: number;
         visualization_data?: SketchElementVisualizationData;
     };
 }

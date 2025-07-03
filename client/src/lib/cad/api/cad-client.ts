@@ -280,11 +280,11 @@ export class CADClient {
     
     // ==================== MODIFICATION TOOLS ====================
     
-    public async addFilletToSketch(sketchId: string, element1Id: string, element2Id: string, radius: number): Promise<AddFilletResponse> {
-        const request: AddFilletRequest = {
+    public async addFilletToSketch(sketchId: string, line1Id: string, line2Id: string, radius: number): Promise<AddFilletResponse> {
+        const request = {
             sketch_id: sketchId,
-            element1_id: element1Id,
-            element2_id: element2Id,
+            line1_id: line1Id,
+            line2_id: line2Id,
             radius: radius
         };
         
@@ -294,20 +294,29 @@ export class CADClient {
         
         console.log('📨 Received addFilletToSketch response:', response);
         
-        // If visualization data is included, trigger visualization callback
+        // If visualization data is included, trigger visualization callback for the fillet
         if (response.data?.visualization_data && this.elementVisualizationCallback) {
             console.log('🎯 Updating fillet visualization with data:', response.data.visualization_data);
             this.elementVisualizationCallback(response.data.visualization_data);
         }
         
+        // Handle updated elements (the modified lines)
+        if (response.data?.updated_elements && this.elementVisualizationCallback) {
+            console.log('🔄 Processing updated elements after fillet:', response.data.updated_elements);
+            response.data.updated_elements.forEach(elementData => {
+                console.log(`🔄 Updating visualization for modified element: ${elementData.element_id}`);
+                this.elementVisualizationCallback!(elementData);
+            });
+        }
+        
         return response;
     }
     
-    public async addChamferToSketch(sketchId: string, element1Id: string, element2Id: string, distance: number): Promise<AddChamferResponse> {
-        const request: AddChamferRequest = {
+    public async addChamferToSketch(sketchId: string, line1Id: string, line2Id: string, distance: number): Promise<AddChamferResponse> {
+        const request = {
             sketch_id: sketchId,
-            element1_id: element1Id,
-            element2_id: element2Id,
+            line1_id: line1Id,
+            line2_id: line2Id,
             distance: distance
         };
         
@@ -317,8 +326,18 @@ export class CADClient {
         
         console.log('📨 Received addChamferToSketch response:', response);
         
+        // If visualization data is included, trigger visualization callback for the chamfer
         if (response.data?.visualization_data && this.elementVisualizationCallback) {
             this.elementVisualizationCallback(response.data.visualization_data);
+        }
+        
+        // Handle updated elements (the modified lines)
+        if (response.data?.updated_elements && this.elementVisualizationCallback) {
+            console.log('🔄 Processing updated elements after chamfer:', response.data.updated_elements);
+            response.data.updated_elements.forEach(elementData => {
+                console.log(`🔄 Updating visualization for modified element: ${elementData.element_id}`);
+                this.elementVisualizationCallback!(elementData);
+            });
         }
         
         return response;
@@ -326,14 +345,15 @@ export class CADClient {
     
     // ==================== POSITIONING TOOLS ====================
     
-    public async trimLineToLine(sketchId: string, lineToTrimId: string, cuttingLineId: string): Promise<TrimLineResponse> {
-        const request: TrimLineRequest = {
+    public async trimLineToLine(sketchId: string, lineToTrimId: string, cuttingLineId: string, keepStart: boolean = false): Promise<TrimLineResponse> {
+        const request = {
             sketch_id: sketchId,
             line_to_trim_id: lineToTrimId,
-            cutting_line_id: cuttingLineId
+            cutting_line_id: cuttingLineId,
+            keep_start: keepStart
         };
         
-        console.log('✂️ Trimming line:', request);
+        console.log('✂️ Trimming line to line:', request);
         
         const response = await this.makeRequest<TrimLineResponse>('/api/v1/cad/trim-line-to-line', 'POST', request);
         
@@ -344,14 +364,34 @@ export class CADClient {
         return response;
     }
     
-    public async extendLineToLine(sketchId: string, lineToExtendId: string, targetLineId: string): Promise<ExtendLineResponse> {
-        const request: ExtendLineRequest = {
+    public async trimLineToGeometry(sketchId: string, lineToTrimId: string, cuttingGeometryId: string, keepStart: boolean = false): Promise<TrimLineResponse> {
+        const request = {
             sketch_id: sketchId,
-            line_to_extend_id: lineToExtendId,
-            target_line_id: targetLineId
+            line_to_trim_id: lineToTrimId,
+            cutting_geometry_id: cuttingGeometryId,
+            keep_start: keepStart
         };
         
-        console.log('🔗 Extending line:', request);
+        console.log('✂️ Trimming line to geometry:', request);
+        
+        const response = await this.makeRequest<TrimLineResponse>('/api/v1/cad/trim-line-to-geometry', 'POST', request);
+        
+        if (response.data?.visualization_data && this.elementVisualizationCallback) {
+            this.elementVisualizationCallback(response.data.visualization_data);
+        }
+        
+        return response;
+    }
+    
+    public async extendLineToLine(sketchId: string, lineToExtendId: string, targetLineId: string, extendStart: boolean = false): Promise<ExtendLineResponse> {
+        const request = {
+            sketch_id: sketchId,
+            line_to_extend_id: lineToExtendId,
+            target_line_id: targetLineId,
+            extend_start: extendStart
+        };
+        
+        console.log('🔗 Extending line to line:', request);
         
         const response = await this.makeRequest<ExtendLineResponse>('/api/v1/cad/extend-line-to-line', 'POST', request);
         
@@ -362,14 +402,34 @@ export class CADClient {
         return response;
     }
     
-    public async mirrorElement(sketchId: string, elementId: string, mirrorLine: { point1: [number, number]; point2: [number, number] }): Promise<MirrorElementResponse> {
-        const request: MirrorElementRequest = {
+    public async extendLineToGeometry(sketchId: string, lineToExtendId: string, targetGeometryId: string, extendStart: boolean = false): Promise<ExtendLineResponse> {
+        const request = {
             sketch_id: sketchId,
-            element_id: elementId,
-            mirror_line: mirrorLine
+            line_to_extend_id: lineToExtendId,
+            target_geometry_id: targetGeometryId,
+            extend_start: extendStart
         };
         
-        console.log('🪞 Mirroring element:', request);
+        console.log('🔗 Extending line to geometry:', request);
+        
+        const response = await this.makeRequest<ExtendLineResponse>('/api/v1/cad/extend-line-to-geometry', 'POST', request);
+        
+        if (response.data?.visualization_data && this.elementVisualizationCallback) {
+            this.elementVisualizationCallback(response.data.visualization_data);
+        }
+        
+        return response;
+    }
+    
+    public async mirrorElements(sketchId: string, elementIds: string[], mirrorLineId: string, keepOriginal: boolean = true): Promise<MirrorElementResponse> {
+        const request = {
+            sketch_id: sketchId,
+            element_ids: elementIds,
+            mirror_line_id: mirrorLineId,
+            keep_original: keepOriginal
+        };
+        
+        console.log('🪞 Mirroring elements:', request);
         
         const response = await this.makeRequest<MirrorElementResponse>('/api/v1/cad/mirror-elements', 'POST', request);
         
@@ -380,16 +440,38 @@ export class CADClient {
         return response;
     }
     
-    public async offsetElement(sketchId: string, elementId: string, distance: number): Promise<OffsetElementResponse> {
-        const request: OffsetElementRequest = {
+    public async mirrorElementsByTwoPoints(sketchId: string, elementIds: string[], x1: number, y1: number, x2: number, y2: number, keepOriginal: boolean = true): Promise<MirrorElementResponse> {
+        const request = {
+            sketch_id: sketchId,
+            element_ids: elementIds,
+            x1: x1,
+            y1: y1,
+            x2: x2,
+            y2: y2,
+            keep_original: keepOriginal
+        };
+        
+        console.log('🪞 Mirroring elements by two points:', request);
+        
+        const response = await this.makeRequest<MirrorElementResponse>('/api/v1/cad/mirror-elements-by-two-points', 'POST', request);
+        
+        if (response.data?.visualization_data && this.elementVisualizationCallback) {
+            this.elementVisualizationCallback(response.data.visualization_data);
+        }
+        
+        return response;
+    }
+    
+    public async offsetElement(sketchId: string, elementId: string, offsetDistance: number): Promise<OffsetElementResponse> {
+        const request = {
             sketch_id: sketchId,
             element_id: elementId,
-            distance: distance
+            offset_distance: offsetDistance
         };
         
         console.log('↔️ Offsetting element:', request);
         
-        const response = await this.makeRequest<OffsetElementResponse>('/api/v1/cad/offset-elements', 'POST', request);
+        const response = await this.makeRequest<OffsetElementResponse>('/api/v1/cad/offset-element', 'POST', request);
         
         if (response.data?.visualization_data && this.elementVisualizationCallback) {
             this.elementVisualizationCallback(response.data.visualization_data);
@@ -398,16 +480,38 @@ export class CADClient {
         return response;
     }
     
-    public async copyElement(sketchId: string, elementId: string, translation: [number, number]): Promise<CopyElementResponse> {
-        const request: CopyElementRequest = {
+    public async offsetElementDirectional(sketchId: string, elementId: string, offsetDistance: number, direction: 'left' | 'right'): Promise<OffsetElementResponse> {
+        const request = {
             sketch_id: sketchId,
             element_id: elementId,
-            translation: translation
+            offset_distance: offsetDistance,
+            direction: direction
+        };
+        
+        console.log('↔️ Offsetting element directionally:', request);
+        
+        const response = await this.makeRequest<OffsetElementResponse>('/api/v1/cad/offset-element-directional', 'POST', request);
+        
+        if (response.data?.visualization_data && this.elementVisualizationCallback) {
+            this.elementVisualizationCallback(response.data.visualization_data);
+        }
+        
+        return response;
+    }
+    
+    public async copyElement(sketchId: string, elementId: string, numCopies: number, directionX: number, directionY: number, distance: number): Promise<CopyElementResponse> {
+        const request = {
+            sketch_id: sketchId,
+            element_id: elementId,
+            num_copies: numCopies,
+            direction_x: directionX,
+            direction_y: directionY,
+            distance: distance
         };
         
         console.log('📄 Copying element:', request);
         
-        const response = await this.makeRequest<CopyElementResponse>('/api/v1/cad/copy-elements', 'POST', request);
+        const response = await this.makeRequest<CopyElementResponse>('/api/v1/cad/copy-element', 'POST', request);
         
         if (response.data?.visualization_data && this.elementVisualizationCallback) {
             this.elementVisualizationCallback(response.data.visualization_data);
@@ -416,16 +520,18 @@ export class CADClient {
         return response;
     }
     
-    public async moveElement(sketchId: string, elementId: string, translation: [number, number]): Promise<MoveElementResponse> {
-        const request: MoveElementRequest = {
+    public async moveElement(sketchId: string, elementId: string, directionX: number, directionY: number, distance: number): Promise<MoveElementResponse> {
+        const request = {
             sketch_id: sketchId,
             element_id: elementId,
-            translation: translation
+            direction_x: directionX,
+            direction_y: directionY,
+            distance: distance
         };
         
         console.log('🚚 Moving element:', request);
         
-        const response = await this.makeRequest<MoveElementResponse>('/api/v1/cad/move-elements', 'POST', request);
+        const response = await this.makeRequest<MoveElementResponse>('/api/v1/cad/move-element', 'POST', request);
         
         if (response.data?.visualization_data && this.elementVisualizationCallback) {
             this.elementVisualizationCallback(response.data.visualization_data);

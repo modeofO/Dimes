@@ -282,6 +282,16 @@ export function CADApplication() {
                         currentActiveSketchId, start.x, start.y, currentPolygonSides, polygonRadius
                     );
                     break;
+                case 'fillet':
+                case 'chamfer':
+                case 'trim':
+                case 'extend':
+                case 'mirror':
+                case 'offset':
+                case 'copy':
+                case 'move':
+                    updateStatus(`Please use the controls panel for ${tool} operations - select elements first`, 'info');
+                    return;
                 default:
                     updateStatus(`Interactive ${tool} not yet implemented`, 'warning');
                     return;

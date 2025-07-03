@@ -484,9 +484,49 @@ class Sketch:
                 referenced_elements=[line1_id, line2_id]  # Track which lines this fillet connects
             )
             
-            # Modify the existing lines to connect to fillet
-            line1.end_point = new_line1_end
-            line2.start_point = new_line2_start
+            # Properly trim the lines to remove segments extending past the fillet
+            # For each line, determine which endpoint is closer to the intersection and trim that endpoint
+            
+            # Get intersection point for distance calculations
+            l1_start = line1.start_point
+            l1_end = line1.end_point
+            l2_start = line2.start_point  
+            l2_end = line2.end_point
+            
+            # Find intersection point (we know it exists since fillet_result succeeded)
+            intersection = self._find_line_intersection(
+                l1_start.X(), l1_start.Y(), l1_end.X(), l1_end.Y(),
+                l2_start.X(), l2_start.Y(), l2_end.X(), l2_end.Y()
+            )
+            
+            if intersection:
+                int_x, int_y = intersection
+                
+                # Line 1: determine which endpoint is closer to intersection and trim it
+                dist1_to_start = math.sqrt((int_x - l1_start.X())**2 + (int_y - l1_start.Y())**2)
+                dist1_to_end = math.sqrt((int_x - l1_end.X())**2 + (int_y - l1_end.Y())**2)
+                
+                if dist1_to_start < dist1_to_end:
+                    # Start point is closer to intersection, so trim the start
+                    line1.start_point = new_line1_end  # new_line1_end is actually the tangent point
+                    print(f"🔧 Trimmed line1 start point to tangent point")
+                else:
+                    # End point is closer to intersection, so trim the end
+                    line1.end_point = new_line1_end
+                    print(f"🔧 Trimmed line1 end point to tangent point")
+                
+                # Line 2: determine which endpoint is closer to intersection and trim it
+                dist2_to_start = math.sqrt((int_x - l2_start.X())**2 + (int_y - l2_start.Y())**2)
+                dist2_to_end = math.sqrt((int_x - l2_end.X())**2 + (int_y - l2_end.Y())**2)
+                
+                if dist2_to_start < dist2_to_end:
+                    # Start point is closer to intersection, so trim the start
+                    line2.start_point = new_line2_start
+                    print(f"🔧 Trimmed line2 start point to tangent point")
+                else:
+                    # End point is closer to intersection, so trim the end  
+                    line2.end_point = new_line2_start  # new_line2_start is actually the tangent point
+                    print(f"🔧 Trimmed line2 end point to tangent point")
             
             # Add fillet to sketch
             if self.add_element(fillet_element):
@@ -613,36 +653,74 @@ class Sketch:
             # Calculate distance from intersection to tangent points
             tan_dist = radius / math.tan(angle / 2)
             
-            # Calculate tangent points
-            t1_x = int_x - tan_dist * l1_dx
-            t1_y = int_y - tan_dist * l1_dy
-            t2_x = int_x - tan_dist * l2_dx
-            t2_y = int_y - tan_dist * l2_dy
+            # For each line, determine which direction to move from intersection to get inward tangent point
+            # We want to move towards the endpoint that is farther from the intersection
             
-            # Calculate fillet center
-            # Distance from intersection to center
-            center_dist = radius / math.sin(angle / 2)
+            # Line 1: determine direction to move from intersection
+            dist1_to_start = math.sqrt((int_x - l1_x1)**2 + (int_y - l1_y1)**2)
+            dist1_to_end = math.sqrt((int_x - l1_x2)**2 + (int_y - l1_y2)**2)
             
-            # Bisector direction (normalized)
-            bisector_x = l1_dx + l2_dx
-            bisector_y = l1_dy + l2_dy
-            bisector_len = math.sqrt(bisector_x**2 + bisector_y**2)
-            if bisector_len < 1e-10:
-                # Lines are opposite - use perpendicular
-                bisector_x = -l1_dy
-                bisector_y = l1_dx
+            if dist1_to_start > dist1_to_end:
+                # Move towards start point (opposite to line direction)
+                l1_dir_x, l1_dir_y = -l1_dx, -l1_dy
             else:
-                bisector_x /= bisector_len
-                bisector_y /= bisector_len
+                # Move towards end point (same as line direction)
+                l1_dir_x, l1_dir_y = l1_dx, l1_dy
             
-            # Determine which side of the bisector the center should be on
-            # We want the center to be on the "inside" of the angle
-            if cross_product > 0:  # Counter-clockwise turn
-                center_x = int_x - center_dist * bisector_x
-                center_y = int_y - center_dist * bisector_y
-            else:  # Clockwise turn
-                center_x = int_x + center_dist * bisector_x
-                center_y = int_y + center_dist * bisector_y
+            # Line 2: determine direction to move from intersection  
+            dist2_to_start = math.sqrt((int_x - l2_x1)**2 + (int_y - l2_y1)**2)
+            dist2_to_end = math.sqrt((int_x - l2_x2)**2 + (int_y - l2_y2)**2)
+            
+            if dist2_to_start > dist2_to_end:
+                # Move towards start point (opposite to line direction)
+                l2_dir_x, l2_dir_y = -l2_dx, -l2_dy
+            else:
+                # Move towards end point (same as line direction)
+                l2_dir_x, l2_dir_y = l2_dx, l2_dy
+            
+            # Calculate tangent points by moving inward along each line
+            t1_x = int_x + tan_dist * l1_dir_x
+            t1_y = int_y + tan_dist * l1_dir_y
+            t2_x = int_x + tan_dist * l2_dir_x
+            t2_y = int_y + tan_dist * l2_dir_y
+            
+            # Calculate fillet center using the traditional method:
+            # The center is at the intersection of two lines perpendicular to the original lines
+            # and passing through the respective tangent points
+            
+            # Line perpendicular to line1 passing through t1
+            # If line1 direction is (dx1, dy1), perpendicular is (-dy1, dx1)
+            perp1_dx = -l1_dy
+            perp1_dy = l1_dx
+            
+            # Line perpendicular to line2 passing through t2
+            # If line2 direction is (dx2, dy2), perpendicular is (-dy2, dx2)
+            perp2_dx = -l2_dy
+            perp2_dy = l2_dx
+            
+            # Find intersection of the two perpendicular lines
+            # Line 1: t1 + s * perp1_direction
+            # Line 2: t2 + t * perp2_direction
+            # t1_x + s * perp1_dx = t2_x + t * perp2_dx
+            # t1_y + s * perp1_dy = t2_y + t * perp2_dy
+            
+            # Solve the system:
+            # s * perp1_dx - t * perp2_dx = t2_x - t1_x
+            # s * perp1_dy - t * perp2_dy = t2_y - t1_y
+            
+            det = perp1_dx * (-perp2_dy) - perp1_dy * (-perp2_dx)
+            if abs(det) < 1e-10:
+                print("❌ Perpendicular lines are parallel - cannot find center")
+                return None
+            
+            # Solve for s using Cramer's rule
+            rhs_x = t2_x - t1_x
+            rhs_y = t2_y - t1_y
+            s = (rhs_x * (-perp2_dy) - rhs_y * (-perp2_dx)) / det
+            
+            # Calculate center
+            center_x = t1_x + s * perp1_dx
+            center_y = t1_y + s * perp1_dy
             
             # Create result points
             new_line1_end = gp_Pnt2d(t1_x, t1_y)
