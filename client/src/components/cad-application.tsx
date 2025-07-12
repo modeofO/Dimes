@@ -13,6 +13,8 @@ import { MeshData, SketchVisualizationData } from '../../../shared/types/geometr
 import { DrawingTool } from '@/lib/cad/controls/cad-controls';
 import { v4 as uuidv4 } from 'uuid';
 import { TopToolbar } from '@/components/top-toolbar';
+import { Unit } from '@/lib/utils/units';
+
 
 interface CreatedShape {
     id: string;
@@ -60,6 +62,7 @@ export function CADApplication() {
     const [activeSketchId, setActiveSketchId] = useState<string | null>(null);
     const [currentArcType, setCurrentArcType] = useState<'three_points' | 'endpoints_radius'>('endpoints_radius');
     const [currentPolygonSides, setCurrentPolygonSides] = useState(6);
+    const [currentUnit, setCurrentUnit] = useState<Unit>('mm');
 
     // Debug: Track activeSketchId changes
     useEffect(() => {
@@ -580,6 +583,8 @@ export function CADApplication() {
                 activeSketchId={activeSketchId}
                 currentArcType={currentArcType}
                 currentPolygonSides={currentPolygonSides}
+                currentUnit={currentUnit}
+                onUnitChange={setCurrentUnit}
             />
 
             {/* Main Content Area */}

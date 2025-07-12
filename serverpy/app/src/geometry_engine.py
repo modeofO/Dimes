@@ -5,7 +5,7 @@ import json
 import random
 import string
 import math
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any, Union
 from dataclasses import dataclass
 from enum import Enum
 import time
@@ -14,7 +14,7 @@ import time
 from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Fuse, BRepAlgoAPI_Cut, BRepAlgoAPI_Common
 from OCC.Core.BRepMesh import BRepMesh_IncrementalMesh
 from OCC.Core.BRepCheck import BRepCheck_Analyzer
-from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere, BRepPrimAPI_MakeCylinder
+from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeSphere, BRepPrimAPI_MakeCylinder, BRepPrimAPI_MakePrism
 from OCC.Core.TopExp import TopExp_Explorer
 from OCC.Core.TopAbs import TopAbs_FACE, TopAbs_REVERSED
 from OCC.Core.BRep import BRep_Tool
@@ -27,6 +27,11 @@ from OCC.Core.Standard import Standard_Failure
 # For sketch-based modeling
 from OCC.Core.Geom import Geom_Plane
 from OCC.Core.gce import gce_MakePln
+
+# Imports for building shapes from sketches
+from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire, BRepBuilderAPI_MakeFace
+from OCC.Core.Geom import Geom_Circle, Geom_Line
+from OCC.Core.gce import gce_MakeCirc, gce_MakeLin
 
 
 class SketchElementType(Enum):
@@ -2470,7 +2475,7 @@ class OCCTEngine:
         # Sketch-based modeling support
         self.sketch_planes: Dict[str, SketchPlane] = {}
         self.sketches: Dict[str, Sketch] = {}
-        self.extrude_features: Dict[str, Any] = {}
+        self.extrude_features: Dict[str, ExtrudeFeature] = {}
         
         print("OCCT Engine initialized (Python)")
     
@@ -2563,19 +2568,30 @@ class OCCTEngine:
     
     # ==================== TESSELLATION ====================
     
-    def tessellate(self, shape_id: str, deflection: float = 0.1) -> MeshData:
+    def tessellate(self, shape_or_id: Union[str, TopoDS_Shape], deflection: float = 0.1) -> Optional[MeshData]:
         """
         Tessellate shape to mesh - equivalent to C++ tessellate method
+        Can accept either a shape ID or a TopoDS_Shape object.
         """
         mesh_data = MeshData(vertices=[], faces=[], normals=[])
-        
-        if not self.shape_exists(shape_id):
-            print(f"❌ Shape {shape_id} does not exist!")
-            return mesh_data
+        shape = None
+
+        if isinstance(shape_or_id, str):
+            if not self.shape_exists(shape_or_id):
+                print(f"❌ Shape {shape_or_id} does not exist!")
+                return None
+            shape = self.shapes[shape_or_id]
+        elif isinstance(shape_or_id, TopoDS_Shape):
+            shape = shape_or_id
+        else:
+            print(f"❌ Invalid input for tessellation. Must be shape ID or TopoDS_Shape.")
+            return None
+
+        if shape is None or shape.IsNull():
+            print(f"❌ Invalid shape provided for tessellation.")
+            return None
         
         try:
-            shape = self.shapes[shape_id]
-            
             # Perform tessellation
             mesh = BRepMesh_IncrementalMesh(shape, deflection)
             mesh.Perform()
@@ -2642,7 +2658,7 @@ class OCCTEngine:
         except Exception as e:
             print(f"Python error in tessellation: {e}")
         
-        return mesh_data
+        return mesh_data if mesh_data.vertex_count > 0 else None
     
     # ==================== PRIMITIVE CREATION ====================
     
@@ -3873,3 +3889,141 @@ class OCCTEngine:
         except Exception as e:
             print(f"❌ Error moving element in sketch: {e}")
             return False
+
+    # ==================== 3D FEATURE CREATION ====================
+
+    def extrude_feature(self, sketch_id: str, distance: float, element_id: Optional[str] = None, direction: str = 'normal', generate_mesh: bool = False) -> Dict[str, Any]:
+        """
+        Extrude a sketch element to create a 3D feature.
+        """
+        print(f"🚀 Extruding sketch: {sketch_id} distance: {distance}")
+
+        if not self.sketch_exists(sketch_id):
+            raise ValueError(f"Sketch not found: {sketch_id}")
+
+        sketch = self.sketches[sketch_id]
+        
+        # Create a face from the specified sketch element (or the whole sketch if element_id is None)
+        face_to_extrude = self.get_face_from_sketch(sketch, element_id)
+        if not face_to_extrude:
+            raise ValueError(f"Could not create a valid face from sketch {sketch_id} for element {element_id}")
+
+        # Determine extrusion direction from the sketch plane's normal
+        extrude_vec = sketch.sketch_plane.get_normal().to_gp_vec()
+        
+        # Create the prism (extrusion)
+        prism_maker = BRepPrimAPI_MakePrism(face_to_extrude, extrude_vec.Scaled(distance))
+        if not prism_maker.IsDone():
+            raise RuntimeError("Failed to create prism for extrusion")
+        
+        body = prism_maker.Shape()
+        
+        # Create and store the feature
+        feature_id = f"extrude_{int(time.time())}"
+        feature = ExtrudeFeature(
+            feature_id=feature_id,
+            sketch_id=sketch_id,
+            shape=body,
+            distance=distance
+        )
+        self.extrude_features[feature_id] = feature
+        print(f"✅ Extrude feature created: {feature_id}")
+
+        response_data = {
+            "feature_id": feature.feature_id,
+            "message": f"Extrude feature created: {feature.feature_id}"
+        }
+
+        if generate_mesh:
+            # Re-use tessellation logic to generate mesh data for the new feature
+            mesh_data = self.tessellate(body)
+            if mesh_data and mesh_data.vertex_count > 0:
+                response_data["mesh_data"] = {
+                    "vertices": mesh_data.vertices,
+                    "faces": mesh_data.faces,
+                    "normals": mesh_data.normals,
+                    "metadata": {
+                        "vertex_count": mesh_data.vertex_count,
+                        "face_count": mesh_data.face_count,
+                        "tessellation_quality": mesh_data.tessellation_quality
+                    }
+                }
+                
+        return response_data
+
+    def get_face_from_sketch(self, sketch: Sketch, element_id: Optional[str] = None) -> Optional[TopoDS_Face]:
+        """
+        Creates a TopoDS_Face from a single closed element in a sketch.
+        """
+        if element_id is None:
+            # Logic to handle whole-sketch extrusion would go here (more complex)
+            raise NotImplementedError("Extruding an entire sketch is not yet supported. Please specify an element_id.")
+
+        element = sketch.get_element_by_id(element_id)
+        if not element:
+            raise ValueError(f"Element {element_id} not found in sketch {sketch.sketch_id}")
+        
+        plane = sketch.sketch_plane.plane_geometry
+        if not plane:
+            raise ValueError("Sketch plane geometry is not available.")
+
+        wire_builder = BRepBuilderAPI_MakeWire()
+        
+        # Create a wire from the single element
+        if element.element_type == SketchElementType.CIRCLE:
+            center_3d = self._convert_2d_to_3d(element.center_point, sketch.sketch_plane)
+            radius = element.parameters[0]
+            
+            # Create a 3D circle on the sketch plane
+            ax2 = sketch.sketch_plane.coordinate_system.Ax2()
+            circle_geom = Geom_Circle(ax2, radius)
+            circle_geom.SetLocation(center_3d.to_gp_pnt())
+            
+            # Create an edge from the circle geometry
+            edge = BRepBuilderAPI_MakeEdge(circle_geom).Edge()
+            wire_builder.Add(edge)
+            
+        elif element.element_type == SketchElementType.RECTANGLE:
+            # Create 4 edges for the rectangle
+            corner = element.start_point
+            width = element.parameters[0]
+            height = element.parameters[1]
+            
+            p1 = corner
+            p2 = gp_Pnt2d(corner.X() + width, corner.Y())
+            p3 = gp_Pnt2d(corner.X() + width, corner.Y() + height)
+            p4 = gp_Pnt2d(corner.X(), corner.Y() + height)
+            
+            points_2d = [p1, p2, p3, p4]
+            points_3d = [self._convert_2d_to_3d(p, sketch.sketch_plane).to_gp_pnt() for p in points_2d]
+            
+            # Create edges and add to wire
+            for i in range(4):
+                edge = BRepBuilderAPI_MakeEdge(points_3d[i], points_3d[(i + 1) % 4]).Edge()
+                wire_builder.Add(edge)
+
+        else:
+            raise NotImplementedError(f"Extrusion for element type '{element.element_type.value}' is not yet supported.")
+
+        if not wire_builder.IsDone():
+            print("❌ Failed to build wire from sketch element")
+            return None
+        
+        wire = wire_builder.Wire()
+
+        # Create a face from the wire
+        face_builder = BRepBuilderAPI_MakeFace(plane, wire)
+        if not face_builder.IsDone():
+            print("❌ Failed to build face from wire")
+            return None
+            
+        return face_builder.Face()
+
+
+@dataclass
+class ExtrudeFeature:
+    """Dataclass for storing extrude feature data"""
+    feature_id: str
+    sketch_id: str
+    shape: TopoDS_Shape
+    distance: float

@@ -743,25 +743,29 @@ export class CppBackendClient {
    */
   async extrudeFeature(sessionId, extrudeData) {
     try {
+      console.log('🔧 Extrude feature data received:', extrudeData);
+
       const requestBody = {
         session_id: sessionId,
         sketch_id: extrudeData.sketch_id,
         distance: extrudeData.distance,
         direction: extrudeData.direction || 'normal',
+        element_id: extrudeData.element_id,
       };
-
-      if (extrudeData.element_id) {
-        requestBody.element_id = extrudeData.element_id;
-      }
-
-      logger.debug('Extruding feature:', requestBody);
+      
+      console.log('🔧 Flattened extrude feature request body:', requestBody);
+      
+      const jsonString = JSON.stringify(requestBody);
+      
+      console.log('🔧 Node.js sending extrude feature request to C++:');
+      console.log('📋 JSON string:', jsonString);
 
       const response = await this.makeRequest('/api/v1/extrude', {
         method: 'POST',
         headers: {
           'X-Session-ID': sessionId,
         },
-        body: JSON.stringify(requestBody),
+        body: jsonString,
       });
       return response;
     } catch (error) {

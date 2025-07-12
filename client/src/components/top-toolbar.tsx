@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { CADClient } from '@/lib/cad/api/cad-client';
 import { DrawingTool, ArcType } from '@/lib/cad/controls/cad-controls';
+import { Unit, toMillimeters } from '@/lib/utils/units';
 
 interface CreatedShape {
     id: string;
@@ -45,6 +46,8 @@ interface TopToolbarProps {
     activeSketchId?: string | null;
     currentArcType?: ArcType;
     currentPolygonSides?: number;
+    currentUnit: Unit;
+    onUnitChange: (unit: Unit) => void;
 }
 
 export function TopToolbar({
@@ -65,7 +68,9 @@ export function TopToolbar({
     currentDrawingTool = 'select',
     activeSketchId,
     currentArcType = 'endpoints_radius',
-    currentPolygonSides = 6
+    currentPolygonSides = 6,
+    currentUnit,
+    onUnitChange
 }: TopToolbarProps) {
     // Form states (only for sections 1-4)
     const [planeType, setPlaneType] = useState('XZ');
@@ -145,7 +150,8 @@ export function TopToolbar({
             
             onUpdateStatus(`Extruding ${elementId ? `element ${elementId}` : `sketch ${sketchId}`}...`, 'info');
             
-            const response = await client.extrudeFeature(sketchId, extrudeDistance, elementId);
+            const distanceInMm = toMillimeters(extrudeDistance, currentUnit);
+            const response = await client.extrudeFeature(sketchId, distanceInMm, elementId);
             
             if (response.success && response.data) {
                 onUpdateStatus(`✅ Extruded object: ${response.data.feature_id}`, 'success');
@@ -154,10 +160,25 @@ export function TopToolbar({
             console.error('Failed to extrude feature:', error);
             onUpdateStatus(`❌ Error extruding: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
         }
-    }, [client, selectedObject, extrudeDistance, createdSketches, onUpdateStatus]);
+    }, [client, selectedObject, extrudeDistance, createdSketches, onUpdateStatus, currentUnit]);
 
     return (
         <div className="flex items-center space-x-4 p-2 bg-white border-b border-gray-200 shadow-sm w-full">
+            {/* Unit Selection */}
+            <div className="flex items-center space-x-2">
+                <label htmlFor="unit-select" className="text-sm font-medium text-gray-700">Unit:</label>
+                <select
+                    id="unit-select"
+                    value={currentUnit}
+                    onChange={(e) => onUnitChange(e.target.value as Unit)}
+                    className="px-2 py-1 border border-gray-300 rounded-md text-sm text-gray-800 bg-white"
+                >
+                    <option value="mm">mm</option>
+                    <option value="cm">cm</option>
+                    <option value="m">m</option>
+                    <option value="in">in</option>
+                </select>
+            </div>
             {/* Section 1: Create Sketch Plane */}
             <div className="flex items-center space-x-2">
                 <select

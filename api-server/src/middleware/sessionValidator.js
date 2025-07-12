@@ -103,4 +103,7 @@ export const requireExistingSession = (req, res, next) => {
   
   // Additional validation could be added here to check if session exists in database/cache
   next();
-}; 
+};
+
+// Default export for backward compatibility
+export default validateSession; 

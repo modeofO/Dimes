@@ -9,13 +9,7 @@
 4. Extend
 5. Mirror
 
-*Divide 2d geometry creation into separate lines for editing*
-
 *Interactive dimension numbers*
-
-*Select vertices (frontend)*
-
-*Compress side panel*
 
 *Remove object tool*
 

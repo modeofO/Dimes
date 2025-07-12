@@ -681,11 +681,21 @@ export class CADClient {
             console.log('🔷 Triggering element visualization callback');
             this.elementVisualizationCallback(data);
         } else if (data.sketch_id && !data.element_id && this.sketchVisualizationCallback) {
-            console.log('📐 Triggering sketch visualization callback for agent-created sketch');
-            this.sketchVisualizationCallback(data);
+            // Validate that the data has the expected structure for sketch visualization
+            if (data.origin && data.normal && data.u_axis && data.v_axis) {
+                console.log('📐 Triggering sketch visualization callback for agent-created sketch');
+                this.sketchVisualizationCallback(data);
+            } else {
+                console.log('⚠️ Sketch data missing required properties (origin, normal, u_axis, v_axis):', data);
+            }
         } else if (data.plane_id && !data.sketch_id && this.planeVisualizationCallback) {
-            console.log('✈️ Triggering plane visualization callback');
-            this.planeVisualizationCallback(data);
+            // Validate that the data has the expected structure for plane visualization
+            if (data.origin && data.normal && data.u_axis && data.v_axis) {
+                console.log('✈️ Triggering plane visualization callback');
+                this.planeVisualizationCallback(data);
+            } else {
+                console.log('⚠️ Plane data missing required properties (origin, normal, u_axis, v_axis):', data);
+            }
         } else {
             console.log('⚠️ No matching visualization callback found for data:', data);
         }

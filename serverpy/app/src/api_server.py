@@ -159,6 +159,7 @@ class ExtrudeRequest(BaseModel):
     sketch_id: str = Field(..., description="Sketch ID")
     distance: float = Field(..., description="Extrude distance")
     direction: str = Field(default="normal", description="Extrude direction")
+    element_id: Optional[str] = Field(None, description="Element ID to extrude (if extruding specific element)")
 
 
 class FilletRequest(BaseModel):
@@ -1202,22 +1203,41 @@ class CADAPIServer:
         return response_data
     
     async def _handle_extrude_feature(self, request: ExtrudeRequest) -> Dict[str, Any]:
-        """Handle extrude feature - equivalent to C++ handleExtrudeFeature"""
+        """Handle extrude feature - Real implementation using geometry engine"""
         print(f"🚀 Extruding sketch: {request.sketch_id} distance: {request.distance}")
         
-        # Placeholder implementation
-        feature_id = f"extrude_{int(time.time())}"
+        session_manager = SessionManager.get_instance()
+        engine = session_manager.get_or_create_session(request.session_id)
         
-        response_data = {
-            "feature_id": feature_id,
-            "sketch_id": request.sketch_id,
-            "distance": request.distance,
-            "direction": request.direction,
-            "session_id": request.session_id,
-            "message": "Extrude feature created (placeholder implementation)"
-        }
+        if engine is None:
+            raise Exception("Failed to get session")
         
-        print(f"✅ Extrude feature created: {feature_id}")
+        # Validate that the sketch exists
+        if not engine.sketch_exists(request.sketch_id):
+            raise Exception(f"Sketch '{request.sketch_id}' does not exist")
+        
+        # Get element_id from request if provided
+        element_id = request.element_id
+        
+        # Create extrude feature using geometry engine
+        response_data = engine.extrude_feature(
+            request.sketch_id,
+            request.distance,
+            element_id,
+            request.direction,
+            generate_mesh=True  # Generate mesh data for visualization
+        )
+        
+        if not response_data:
+            raise Exception("Failed to create extrude feature in geometry engine")
+        
+        # Add session info to response
+        response_data["session_id"] = request.session_id
+        response_data["sketch_id"] = request.sketch_id
+        response_data["distance"] = request.distance
+        response_data["direction"] = request.direction
+        
+        print(f"✅ Extrude feature created: {response_data.get('feature_id')}")
         return response_data
     
     async def _handle_add_fillet(self, request: FilletRequest) -> Dict[str, Any]:

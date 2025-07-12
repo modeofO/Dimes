@@ -3,6 +3,7 @@ import { body, param, query, validationResult } from 'express-validator';
 import { CppBackendClient } from '../services/cppBackendClient.js';
 import { logger } from '../utils/logger.js';
 import { ApiError } from '../utils/errors.js';
+import sessionValidator from '../middleware/sessionValidator.js';
 
 export default function(webSocketManager) {
   const router = express.Router();
@@ -803,26 +804,27 @@ export default function(webSocketManager) {
 
       const result = await cppBackend.extrudeFeature(sessionId, extrudeData);
 
-      // Send WebSocket notifications for real-time updates
+      console.log('🔍 Raw C++ backend extrudeFeature result:', JSON.stringify(result, null, 2));
+
+      // Send WebSocket notification for real-time updates
       if (webSocketManager && result.success && result.data) {
-        // Send geometry update if mesh data is available
-        if (result.data.mesh_data) {
-          console.log('🔊 Sending WebSocket geometry update for extrusion');
-          webSocketManager.sendToClient(sessionId, {
-            type: 'geometry_update',
-            data: result.data.mesh_data,
-            timestamp: Date.now(),
-          });
-        }
-        
-        // Send visualization data if available
+        // Only send visualization data if the backend returned actual mesh/visualization data
         if (result.data.visualization_data) {
-          console.log('🔊 Sending WebSocket visualization data for extrusion');
+          console.log('🔊 Sending WebSocket notification for extrude operation');
           webSocketManager.sendToClient(sessionId, {
             type: 'visualization_data',
             payload: result.data.visualization_data,
             timestamp: Date.now(),
           });
+        } else if (result.data.mesh_data) {
+          console.log('🔊 Sending WebSocket geometry update for extrude operation');
+          webSocketManager.sendToClient(sessionId, {
+            type: 'geometry_update',
+            payload: result.data.mesh_data,
+            timestamp: Date.now(),
+          });
+        } else {
+          console.log('🔊 No visualization data available for extrude operation');
         }
       }
 
