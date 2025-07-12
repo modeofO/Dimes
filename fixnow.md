@@ -4,6 +4,11 @@
 
 *Implement Tooling on frontend:*
 1. Fillet - fix 
+✅ Parent Rectangle: Appears in scene tree, can be selected and extruded
+✅ Child Line Elements: Available for individual operations like fillets
+✅ Dual Access: Users can work with both the composite shape AND individual elements
+✅ Agent Compatibility: Agent can create fillets on lines AND extrude the whole rectangle
+✅ Manual User Support: Manual users have full control over both levels of the geometry
 2. Chamfer
 3. Trim
 4. Extend
