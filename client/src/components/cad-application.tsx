@@ -12,6 +12,7 @@ import { StatusBar } from '@/components/status-bar';
 import { MeshData, SketchVisualizationData } from '../../../shared/types/geometry';
 import { DrawingTool } from '@/lib/cad/controls/cad-controls';
 import { v4 as uuidv4 } from 'uuid';
+import { TopToolbar } from '@/components/top-toolbar';
 
 interface CreatedShape {
     id: string;
@@ -558,79 +559,80 @@ export function CADApplication() {
     }, [updateStatus]);
 
     return (
-        <div className="flex h-screen w-screen bg-gray-100">
-            {/* Left Sidebar */}
-            <div className="w-[350px] bg-white border-r border-gray-300 shadow-lg flex flex-col">
-                <ControlsPanel 
-                    client={clientRef.current}
-                    createdShapes={createdShapes}
-                    createdPlanes={createdPlanes}
-                    createdSketches={createdSketches}
-                    selectedObject={selectedObject}
-                    onUpdateShapes={setCreatedShapes}
-                    onUpdatePlanes={setCreatedPlanes}
-                    onUpdateSketches={setCreatedSketches}
-                    onUpdateStatus={updateStatus}
-                    onClearRenderer={clearRenderer}
-                    onSetDrawingTool={handleSetDrawingTool}
-                    onSetActiveSketch={handleSetActiveSketch}
-                    onSetArcType={handleSetArcType}
-                    onSetPolygonSides={handleSetPolygonSides}
-                    currentDrawingTool={currentDrawingTool}
-                    activeSketchId={activeSketchId}
-                    currentArcType={currentArcType}
-                    currentPolygonSides={currentPolygonSides}
-                />
-            </div>
+        <div className="flex flex-col h-screen w-screen bg-gray-100">
+            {/* Top Toolbar */}
+            <TopToolbar 
+                client={clientRef.current}
+                createdShapes={createdShapes}
+                createdPlanes={createdPlanes}
+                createdSketches={createdSketches}
+                selectedObject={selectedObject}
+                onUpdateShapes={setCreatedShapes}
+                onUpdatePlanes={setCreatedPlanes}
+                onUpdateSketches={setCreatedSketches}
+                onUpdateStatus={updateStatus}
+                onClearRenderer={clearRenderer}
+                onSetDrawingTool={handleSetDrawingTool}
+                onSetActiveSketch={handleSetActiveSketch}
+                onSetArcType={handleSetArcType}
+                onSetPolygonSides={handleSetPolygonSides}
+                currentDrawingTool={currentDrawingTool}
+                activeSketchId={activeSketchId}
+                currentArcType={currentArcType}
+                currentPolygonSides={currentPolygonSides}
+            />
 
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col">
-                <div 
-                    ref={viewportRef} 
-                    className={`flex-1 relative bg-white transition-all duration-300 ${
-                        activeSketchId 
-                            ? 'border-4 border-blue-400 shadow-lg shadow-blue-200' 
-                            : 'border border-gray-200'
-                    }`}
-                >
-                    {/* The 3D viewport will be mounted here */}
-                    {activeSketchId && (
-                        <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
-                            <div className="bg-blue-500 text-white px-3 py-1 rounded-md text-sm font-medium shadow-md">
-                                ✏️ Editing Sketch: {activeSketchId}
+            {/* Main Content Area */}
+            <div className="flex flex-1">
+                {/* Center Viewport */}
+                <div className="flex-1 flex flex-col">
+                    <div 
+                        ref={viewportRef} 
+                        className={`flex-1 relative bg-white transition-all duration-300 ${
+                            activeSketchId 
+                                ? 'border-4 border-blue-400 shadow-lg shadow-blue-200' 
+                                : 'border border-gray-200'
+                        }`}
+                    >
+                        {/* The 3D viewport will be mounted here */}
+                        {activeSketchId && (
+                            <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
+                                <div className="bg-blue-500 text-white px-3 py-1 rounded-md text-sm font-medium shadow-md">
+                                    ✏️ Editing Sketch: {activeSketchId}
+                                </div>
+                                <button
+                                    onClick={exitSketchMode}
+                                    className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded-md text-xs font-medium shadow-md transition-colors duration-200"
+                                    title="Exit sketch editing mode"
+                                >
+                                    🚪 Exit Sketch
+                                </button>
                             </div>
-                            <button
-                                onClick={exitSketchMode}
-                                className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded-md text-xs font-medium shadow-md transition-colors duration-200"
-                                title="Exit sketch editing mode"
-                            >
-                                🚪 Exit Sketch
-                            </button>
-                        </div>
-                    )}
+                        )}
+                    </div>
+                    <StatusBar status={status} />
                 </div>
-                <StatusBar status={status} />
-            </div>
 
-            {/* Right Sidebar */}
-            <div className="w-[350px] bg-white border-l border-gray-300 shadow-lg flex flex-col h-full">
-                {/* Scene Tree - Scrollable container with fixed height */}
-                <div className="flex-1 overflow-y-auto">
-                    <UIManager 
-                        createdPlanes={createdPlanes}
-                        createdSketches={createdSketches}
-                        createdShapes={createdShapes}
-                        selectedObject={selectedObject}
-                        onSelection={handleSelection}
-                    />
-                </div>
-                
-                {/* Spacer */}
-                <div className="h-2 bg-gray-100 border-t border-b border-gray-300"></div>
+                {/* Right Sidebar */}
+                <div className="w-[350px] bg-white border-l border-gray-300 shadow-lg flex flex-col h-full">
+                    {/* Scene Tree - Scrollable container with fixed height */}
+                    <div className="flex-1 overflow-y-auto">
+                        <UIManager 
+                            createdPlanes={createdPlanes}
+                            createdSketches={createdSketches}
+                            createdShapes={createdShapes}
+                            selectedObject={selectedObject}
+                            onSelection={handleSelection}
+                        />
+                    </div>
+                    
+                    {/* Spacer */}
+                    <div className="h-2 bg-gray-100 border-t border-b border-gray-300"></div>
 
-                {/* Agent Chat - Fixed height at bottom */}
-                <div className="h-80 flex-shrink-0">
-                    <ChatPanel messages={chatMessages} onSendMessage={handleChatMessage} />
+                    {/* Agent Chat - Fixed height at bottom */}
+                    <div className="h-80 flex-shrink-0">
+                        <ChatPanel messages={chatMessages} onSendMessage={handleChatMessage} />
+                    </div>
                 </div>
             </div>
         </div>

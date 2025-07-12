@@ -79,7 +79,7 @@ export class VisualizationManager {
         this.removeElementVisualization(data.element_id);
         
         const group = new THREE.Group();
-        group.name = `element-${data.element_id}`;
+        group.name = `element-${data.sketch_id}-${data.element_id}`;
         
         if (data.element_type === 'line') {
             const lineGeometry = new THREE.BufferGeometry();
@@ -107,6 +107,10 @@ export class VisualizationManager {
             const circle = new THREE.LineLoop(circleGeometry, circleMaterial);
             group.add(circle);
             
+            // For snapping, add userData with center if available
+            if (data.parameters_2d?.center) {
+                group.userData.center = new THREE.Vector3(...data.parameters_2d.center);
+            }
         } else if (data.element_type === 'arc') {
             const arcGeometry = new THREE.BufferGeometry();
             const positions = new Float32Array(data.points_3d);

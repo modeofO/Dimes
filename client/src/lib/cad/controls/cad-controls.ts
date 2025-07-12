@@ -43,6 +43,9 @@ export class CADControls extends OrbitControls {
     private mouse = new THREE.Vector2();
     private camera: THREE.Camera;
     private scene: THREE.Scene;
+    private snapPoints: THREE.Vector3[] = [];
+    private snapThreshold: number = 0.5; // Adjust as needed
+    private snapHighlight?: THREE.Mesh;
     
     // Callbacks
     public onDrawingComplete?: (tool: DrawingTool, points: THREE.Vector2[], arcType?: ArcType) => void;
@@ -142,8 +145,55 @@ export class CADControls extends OrbitControls {
             v_axis: v_axis.clone()
         };
         console.log(`Set active sketch plane: ${sketch_id}`);
+        this.computeSnapPoints(sketch_id);
     }
     
+    private computeSnapPoints(sketch_id: string): void {
+        this.snapPoints = [];
+        const addedPoints = new Set<string>();
+    
+        const addPoint = (p: THREE.Vector3) => {
+            const key = `${p.x.toFixed(4)},${p.y.toFixed(4)},${p.z.toFixed(4)}`;
+            if (!addedPoints.has(key)) {
+                this.snapPoints.push(p);
+                addedPoints.add(key);
+            }
+        };
+    
+        this.scene.traverse((object) => {
+            if (object instanceof THREE.Group && object.name.startsWith(`element-${sketch_id}-`)) {
+                object.traverse((child) => {
+                    if (child instanceof THREE.Line && child.geometry?.attributes.position) {
+                        const positions = child.geometry.attributes.position;
+                        const vertices: THREE.Vector3[] = [];
+                        for (let i = 0; i < positions.count; i++) {
+                            vertices.push(new THREE.Vector3().fromBufferAttribute(positions, i));
+                        }
+    
+                        if (vertices.length === 0) return;
+    
+                        // Add vertices
+                        vertices.forEach(v => addPoint(v));
+    
+                        // Add midpoints
+                        for (let i = 0; i < vertices.length - 1; i++) {
+                            const start = vertices[i];
+                            const end = vertices[i+1];
+                            if (!start.equals(end)) {
+                                 addPoint(start.clone().add(end).multiplyScalar(0.5));
+                            }
+                        }
+                    }
+                });
+            }
+        });
+        console.log(`Computed ${this.snapPoints.length} snap points for sketch ${sketch_id}`);
+    }
+    
+    public recomputeSnapPoints(sketch_id: string): void {
+        this.computeSnapPoints(sketch_id);
+    }
+
     private onPointerDown(event: PointerEvent): void {
         if (this.drawingState.tool === 'select' || !this.drawingState.activeSketchPlane) {
             return;
@@ -195,18 +245,23 @@ export class CADControls extends OrbitControls {
     }
     
     private onPointerMove(event: PointerEvent): void {
-        if (!this.drawingState.isDrawing || !this.drawingState.startPoint || !this.drawingState.activeSketchPlane) {
+        if (!this.drawingState.activeSketchPlane) {
+            this.removeSnapHighlight();
             return;
         }
-        
-        const worldPoint = this.getWorldPointOnSketchPlane(event);
+
+    // Always get the world point on move to check for snapping.
+    const worldPoint = this.getWorldPointOnSketchPlane(event);
+
         if (!worldPoint) {
-            console.log('❌ onPointerMove: Failed to get world point on sketch plane');
             return;
+            }
+
+        // If we are actively drawing, update the current point and preview geometry.
+        if (this.drawingState.isDrawing && this.drawingState.startPoint) {
+            this.drawingState.currentPoint = worldPoint;
+            this.updatePreviewGeometry();
         }
-        
-        this.drawingState.currentPoint = worldPoint;
-        this.updatePreviewGeometry();
     }
     
     private onPointerUp(event: PointerEvent): void {
@@ -331,10 +386,27 @@ export class CADControls extends OrbitControls {
             -this.drawingState.activeSketchPlane.normal.dot(this.drawingState.activeSketchPlane.origin)
         );
         
-        const intersection = new THREE.Vector3();
+        let intersection = new THREE.Vector3();
         const intersected = this.raycaster.ray.intersectPlane(plane, intersection);
-        
-        return intersected ? intersection : null;
+        if (!intersected) return null;
+
+        // Now snap if close to a snap point
+        let closestSnap: THREE.Vector3 | null = null;
+        let minDist = Infinity;
+        for (const snap of this.snapPoints) {
+            const dist = intersection.distanceTo(snap);
+            if (dist < minDist && dist < this.snapThreshold) {
+                minDist = dist;
+                closestSnap = snap;
+            }
+        }
+        if (closestSnap) {
+            this.highlightSnapPoint(closestSnap);
+            return closestSnap.clone();
+        }
+
+        this.removeSnapHighlight();
+        return intersection;
     }
     
     private worldToSketch2D(worldPoint: THREE.Vector3): THREE.Vector2 | null {
@@ -554,7 +626,7 @@ export class CADControls extends OrbitControls {
         return new THREE.LineLoop(geometry, material);
     }
     
-        private finishDrawing(): void {
+    private finishDrawing(): void {
         // Clean up preview geometry
         if (this.drawingState.previewGeometry) {
             this.scene.remove(this.drawingState.previewGeometry);
@@ -578,7 +650,24 @@ export class CADControls extends OrbitControls {
         return { ...this.drawingState };
     }
     
+    private highlightSnapPoint(point: THREE.Vector3): void {
+        this.removeSnapHighlight();
+        const geometry = new THREE.SphereGeometry(0.1, 8, 8);
+        const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        this.snapHighlight = new THREE.Mesh(geometry, material);
+        this.snapHighlight.position.copy(point);
+        this.scene.add(this.snapHighlight);
+    }
+    
+    private removeSnapHighlight(): void {
+        if (this.snapHighlight) {
+            this.scene.remove(this.snapHighlight);
+            this.snapHighlight = undefined;
+        }
+    }
+    
     public dispose(): void {
+        this.removeSnapHighlight();
         if (this.domElement) {
             this.domElement.removeEventListener('pointerdown', this.onPointerDown);
             this.domElement.removeEventListener('pointermove', this.onPointerMove);

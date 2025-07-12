@@ -245,6 +245,9 @@ export class CADRenderer {
     
     public addSketchElementVisualization(data: SketchElementVisualizationData): void {
         this.visualizationManager.addSketchElementVisualization(data);
+        if (this.activeSketchPlane?.sketch_id === data.sketch_id) {
+            this.controls.recomputeSnapPoints(data.sketch_id);
+        }
     }
     
     public removePlaneVisualization(planeId: string): void {
