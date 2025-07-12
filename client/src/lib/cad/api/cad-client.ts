@@ -210,10 +210,21 @@ export class CADClient {
         
         console.log('📨 Received addRectangleToSketch response:', response);
         
-        // If visualization data is included, trigger visualization callback
+        // Always process parent visualization data first
         if (response.data?.visualization_data && this.elementVisualizationCallback) {
-            console.log('🎯 Updating element visualization with data:', response.data.visualization_data);
+            console.log('🎯 Updating parent element visualization with data:', response.data.visualization_data);
             this.elementVisualizationCallback(response.data.visualization_data);
+        }
+        
+        // Handle composite shapes with child elements (in addition to parent)
+        if (response.data?.is_composite && response.data?.child_elements && this.elementVisualizationCallback) {
+            console.log('📐 Composite rectangle created - processing child elements');
+            response.data.child_elements.forEach((childElement: any) => {
+                if (childElement.visualization_data) {
+                    console.log('🎯 Updating child element visualization:', childElement.element_id);
+                    this.elementVisualizationCallback!(childElement.visualization_data);
+                }
+            });
         }
         
         return response;
@@ -271,8 +282,21 @@ export class CADClient {
         
         console.log('📨 Received addPolygonToSketch response:', response);
         
+        // Always process parent visualization data first
         if (response.data?.visualization_data && this.elementVisualizationCallback) {
+            console.log('🎯 Updating parent element visualization with data:', response.data.visualization_data);
             this.elementVisualizationCallback(response.data.visualization_data);
+        }
+        
+        // Handle composite shapes with child elements (in addition to parent)
+        if (response.data?.is_composite && response.data?.child_elements && this.elementVisualizationCallback) {
+            console.log('⬡ Composite polygon created - processing child elements');
+            response.data.child_elements.forEach((childElement: any) => {
+                if (childElement.visualization_data) {
+                    console.log('🎯 Updating child element visualization:', childElement.element_id);
+                    this.elementVisualizationCallback!(childElement.visualization_data);
+                }
+            });
         }
         
         return response;

@@ -1183,8 +1183,9 @@ class CADAPIServer:
         else:
             raise Exception(f"Element type '{request.element_type}' not yet implemented")
         
-        # Get visualization data for the created element
-        viz_data = engine.get_sketch_element_visualization_data(request.sketch_id, element_id)
+        # Get the created element to check if it's composite
+        sketch = engine.get_sketch_by_id(request.sketch_id)
+        element = sketch.get_element_by_id(element_id) if sketch else None
         
         response_data = {
             "element_id": element_id,
@@ -1195,9 +1196,29 @@ class CADAPIServer:
             "message": f"Sketch element {element_id} added successfully"
         }
         
-        # Add visualization data if available
+        # Get visualization data for the created element (both composite and simple)
+        viz_data = engine.get_sketch_element_visualization_data(request.sketch_id, element_id)
         if viz_data:
             response_data["visualization_data"] = viz_data
+        
+        # Handle composite shapes (rectangles, polygons) with child elements
+        if element and element.is_composite_parent and element.child_ids:
+            print(f"📐 Composite shape created with {len(element.child_ids)} child elements")
+            
+            # Get visualization data for each child element
+            child_elements = []
+            for child_id in element.child_ids:
+                child_viz_data = engine.get_sketch_element_visualization_data(request.sketch_id, child_id)
+                if child_viz_data:
+                    child_elements.append({
+                        "element_id": child_id,
+                        "visualization_data": child_viz_data
+                    })
+            
+            if child_elements:
+                response_data["child_elements"] = child_elements
+                response_data["is_composite"] = True
+                print(f"✅ Added parent + {len(child_elements)} child visualizations to response")
         
         print(f"✅ Sketch element added: {element_id}")
         return response_data

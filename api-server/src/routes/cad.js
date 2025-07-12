@@ -328,11 +328,29 @@ export default function(webSocketManager) {
       // Send WebSocket notification for real-time updates
       if (webSocketManager && result.success && result.data) {
         console.log('🔊 Sending WebSocket notification for sketch element addition');
-        webSocketManager.sendToClient(sessionId, {
-          type: 'visualization_data',
-          payload: result.data.visualization_data || result.data,
-          timestamp: Date.now(),
-        });
+        
+        // Handle composite shapes with child elements
+        if (result.data.child_elements && Array.isArray(result.data.child_elements)) {
+          console.log('📐 Composite shape detected - sending child element visualizations');
+          
+          // Send visualization data for each child element
+          result.data.child_elements.forEach(childElement => {
+            if (childElement.visualization_data) {
+              webSocketManager.sendToClient(sessionId, {
+                type: 'visualization_data',
+                payload: childElement.visualization_data,
+                timestamp: Date.now(),
+              });
+            }
+          });
+        } else if (result.data.visualization_data) {
+          // Send single element visualization data
+          webSocketManager.sendToClient(sessionId, {
+            type: 'visualization_data',
+            payload: result.data.visualization_data,
+            timestamp: Date.now(),
+          });
+        }
       }
 
       res.json({

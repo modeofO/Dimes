@@ -56,11 +56,18 @@ class SketchElement:
     parameters: Optional[List[float]] = None
     referenced_elements: Optional[List[str]] = None
     
+    # Parent-child relationships for composite shapes
+    parent_id: Optional[str] = None  # ID of parent element (if this is a child)
+    child_ids: Optional[List[str]] = None  # IDs of child elements (if this is a parent)
+    is_composite_parent: bool = False  # True if this is a parent of decomposed elements
+    
     def __post_init__(self):
         if self.parameters is None:
             self.parameters = []
         if self.referenced_elements is None:
             self.referenced_elements = []
+        if self.child_ids is None:
+            self.child_ids = []
 
 
 @dataclass
@@ -195,22 +202,55 @@ class Sketch:
             return ""
     
     def add_rectangle(self, corner_point: gp_Pnt2d, width: float, height: float) -> str:
-        """Add rectangle to sketch - matching C++ version"""
+        """Add rectangle to sketch - automatically decomposed into individual line elements"""
         try:
-            # Generate unique element ID
+            # Generate unique element ID for the parent rectangle
             element_id = f"rectangle_{len(self.elements) + 1}_{int(time.time() * 1000) % 10000}"
             
-            # Create rectangle element
+            # Calculate the four corner points
+            p1 = corner_point  # Bottom-left
+            p2 = gp_Pnt2d(corner_point.X() + width, corner_point.Y())  # Bottom-right
+            p3 = gp_Pnt2d(corner_point.X() + width, corner_point.Y() + height)  # Top-right
+            p4 = gp_Pnt2d(corner_point.X(), corner_point.Y() + height)  # Top-left
+            
+            # Create individual line elements for each edge
+            line_ids = []
+            edges = [
+                (p1, p2, "bottom"),  # Bottom edge
+                (p2, p3, "right"),   # Right edge  
+                (p3, p4, "top"),     # Top edge
+                (p4, p1, "left")     # Left edge
+            ]
+            
+            for i, (start_pt, end_pt, edge_name) in enumerate(edges):
+                line_id = f"{element_id}_line_{edge_name}"
+                line_element = SketchElement(
+                    id=line_id,
+                    element_type=SketchElementType.LINE,
+                    start_point=start_pt,
+                    end_point=end_pt,
+                    parent_id=element_id  # Reference to parent rectangle
+                )
+                
+                if self.add_element(line_element):
+                    line_ids.append(line_id)
+                    print(f"✅ Added rectangle edge {line_id}: ({start_pt.X():.2f},{start_pt.Y():.2f}) to ({end_pt.X():.2f},{end_pt.Y():.2f})")
+                else:
+                    print(f"❌ Failed to add rectangle edge {line_id}")
+            
+            # Create parent rectangle element that references the individual lines
             rectangle_element = SketchElement(
                 id=element_id,
                 element_type=SketchElementType.RECTANGLE,
                 start_point=corner_point,  # Use start_point for corner
-                parameters=[width, height]  # Store dimensions as parameters
+                parameters=[width, height],  # Store dimensions as parameters
+                child_ids=line_ids,  # Reference to child line elements
+                is_composite_parent=True  # Mark as composite parent
             )
             
-            # Add to sketch
+            # Add parent rectangle to sketch
             if self.add_element(rectangle_element):
-                print(f"✅ Added rectangle {element_id}: corner({corner_point.X():.2f},{corner_point.Y():.2f}) size={width:.2f}x{height:.2f}")
+                print(f"✅ Added rectangle {element_id}: corner({corner_point.X():.2f},{corner_point.Y():.2f}) size={width:.2f}x{height:.2f} with {len(line_ids)} child lines")
                 return element_id
             else:
                 print(f"❌ Failed to add rectangle element to sketch")
@@ -299,26 +339,58 @@ class Sketch:
             return ""
     
     def add_polygon(self, center_point: gp_Pnt2d, sides: int, radius: float) -> str:
-        """Add regular polygon to sketch - matching C++ version"""
+        """Add regular polygon to sketch - automatically decomposed into individual line elements"""
         try:
             if sides < 3:
                 print(f"❌ Polygon must have at least 3 sides, got {sides}")
                 return ""
             
-            # Generate unique element ID
+            # Generate unique element ID for the parent polygon
             element_id = f"polygon_{len(self.elements) + 1}_{int(time.time() * 1000) % 10000}"
             
-            # Create polygon element
+            # Calculate polygon vertices
+            vertices = []
+            angle_step = 2 * math.pi / sides
+            for i in range(sides):
+                angle = i * angle_step
+                x = center_point.X() + radius * math.cos(angle)
+                y = center_point.Y() + radius * math.sin(angle)
+                vertices.append(gp_Pnt2d(x, y))
+            
+            # Create individual line elements for each edge
+            line_ids = []
+            for i in range(sides):
+                start_pt = vertices[i]
+                end_pt = vertices[(i + 1) % sides]  # Connect to next vertex (wrap around)
+                
+                line_id = f"{element_id}_line_{i}"
+                line_element = SketchElement(
+                    id=line_id,
+                    element_type=SketchElementType.LINE,
+                    start_point=start_pt,
+                    end_point=end_pt,
+                    parent_id=element_id  # Reference to parent polygon
+                )
+                
+                if self.add_element(line_element):
+                    line_ids.append(line_id)
+                    print(f"✅ Added polygon edge {line_id}: ({start_pt.X():.2f},{start_pt.Y():.2f}) to ({end_pt.X():.2f},{end_pt.Y():.2f})")
+                else:
+                    print(f"❌ Failed to add polygon edge {line_id}")
+            
+            # Create parent polygon element that references the individual lines
             polygon_element = SketchElement(
                 id=element_id,
                 element_type=SketchElementType.POLYGON,
                 center_point=center_point,
-                parameters=[radius, float(sides)]  # Store radius and number of sides
+                parameters=[radius, float(sides)],  # Store radius and number of sides
+                child_ids=line_ids,  # Reference to child line elements
+                is_composite_parent=True  # Mark as composite parent
             )
             
-            # Add to sketch
+            # Add parent polygon to sketch
             if self.add_element(polygon_element):
-                print(f"✅ Added polygon {element_id}: center({center_point.X():.2f},{center_point.Y():.2f}) {sides} sides, radius={radius:.2f}")
+                print(f"✅ Added polygon {element_id}: center({center_point.X():.2f},{center_point.Y():.2f}) {sides} sides, radius={radius:.2f} with {len(line_ids)} child lines")
                 return element_id
             else:
                 print(f"❌ Failed to add polygon element to sketch")
@@ -2862,6 +2934,17 @@ class OCCTEngine:
         except Exception as e:
             print(f"❌ Error getting sketch info: {e}")
             return None
+
+    def get_sketch_by_id(self, sketch_id: str) -> Optional['Sketch']:
+        """Get sketch by ID - equivalent to C++ getSketchById"""
+        if not self.sketch_exists(sketch_id):
+            return None
+        
+        try:
+            return self.sketches[sketch_id]
+        except Exception as e:
+            print(f"❌ Error getting sketch by ID: {e}")
+            return None
     
     # ==================== SKETCH ELEMENT CREATION METHODS ====================
     
@@ -3345,6 +3428,9 @@ class OCCTEngine:
                 print(f"❌ Element not found: {element_id}")
                 return None
             
+            # For composite parents, we still want to visualize them so they appear in the scene tree
+            # and can be selected for operations like extrusion, while child elements provide line-level access
+            
             # Get sketch plane for coordinate conversion
             plane = sketch.sketch_plane
             
@@ -3575,6 +3661,109 @@ class OCCTEngine:
         except Exception as e:
             print(f"❌ Error converting 2D to 3D point: {e}")
             return Vector3d()
+    
+    def _find_closed_boundary_for_composite(self, sketch: 'Sketch', composite_element: SketchElement) -> List[SketchElement]:
+        """
+        Find all elements that form a closed boundary for a composite shape.
+        This includes child elements and any connected elements like fillets/arcs.
+        """
+        try:
+            print(f"🔍 Finding closed boundary for composite element {composite_element.id}")
+            
+            # Get all child elements
+            child_elements = []
+            for child_id in composite_element.child_ids:
+                child = sketch.get_element_by_id(child_id)
+                if child:
+                    child_elements.append(child)
+            
+            if not child_elements:
+                print(f"❌ No child elements found for composite {composite_element.id}")
+                return []
+            
+            # Find all elements that are topologically connected to the child elements
+            # This includes fillets, arcs, and other elements that share endpoints
+            connected_elements = set()
+            
+            # Add all child elements
+            for child in child_elements:
+                connected_elements.add(child.id)
+            
+            # Find elements connected to child endpoints
+            tolerance = 1e-6
+            for child in child_elements:
+                if child.element_type == SketchElementType.LINE and child.start_point and child.end_point:
+                    # Check all other elements in the sketch to find connections
+                    for element in sketch.get_elements():
+                        if element.id in connected_elements or element.id == composite_element.id:
+                            continue
+                        
+                        # Check if this element connects to any child element endpoint
+                        if self._elements_are_connected(child, element, tolerance):
+                            connected_elements.add(element.id)
+                            print(f"🔗 Found connected element: {element.id} (type: {element.element_type.value})")
+            
+            # Build ordered list of boundary elements
+            boundary_elements = []
+            element_ids = list(connected_elements)
+            
+            # Sort elements to form a logical boundary traversal
+            # For now, use a simple approach: start with the first child and find connected elements
+            if child_elements:
+                boundary_elements = self._order_boundary_elements(sketch, element_ids, tolerance)
+            
+            print(f"✅ Found {len(boundary_elements)} boundary elements for composite {composite_element.id}")
+            return boundary_elements
+            
+        except Exception as e:
+            print(f"❌ Error finding closed boundary for composite: {e}")
+            return []
+    
+    def _elements_are_connected(self, elem1: SketchElement, elem2: SketchElement, tolerance: float = 1e-6) -> bool:
+        """Check if two elements share an endpoint within tolerance"""
+        if not (elem1.start_point and elem1.end_point and elem2.start_point and elem2.end_point):
+            return False
+        
+        def points_close(p1: gp_Pnt2d, p2: gp_Pnt2d) -> bool:
+            return abs(p1.X() - p2.X()) < tolerance and abs(p1.Y() - p2.Y()) < tolerance
+        
+        # Check all combinations of endpoints
+        return (points_close(elem1.start_point, elem2.start_point) or
+                points_close(elem1.start_point, elem2.end_point) or
+                points_close(elem1.end_point, elem2.start_point) or
+                points_close(elem1.end_point, elem2.end_point))
+    
+    def _order_boundary_elements(self, sketch: 'Sketch', element_ids: List[str], tolerance: float = 1e-6) -> List[SketchElement]:
+        """Order elements to form a continuous boundary path"""
+        if not element_ids:
+            return []
+        
+        elements = [sketch.get_element_by_id(eid) for eid in element_ids if sketch.get_element_by_id(eid)]
+        if not elements:
+            return []
+        
+        # Simple ordering: start with first element and find connected ones
+        ordered = [elements[0]]
+        remaining = elements[1:]
+        
+        while remaining:
+            last_element = ordered[-1]
+            found_next = False
+            
+            for i, elem in enumerate(remaining):
+                if self._elements_are_connected(last_element, elem, tolerance):
+                    ordered.append(elem)
+                    remaining.pop(i)
+                    found_next = True
+                    break
+            
+            if not found_next:
+                # If we can't find a connected element, add the next available one
+                # This handles cases where the boundary might have gaps or multiple components
+                if remaining:
+                    ordered.append(remaining.pop(0))
+        
+        return ordered
     
     # ==================== UTILITY METHODS ====================
     
@@ -3953,7 +4142,7 @@ class OCCTEngine:
 
     def get_face_from_sketch(self, sketch: Sketch, element_id: Optional[str] = None) -> Optional[TopoDS_Face]:
         """
-        Creates a TopoDS_Face from a single closed element in a sketch.
+        Creates a TopoDS_Face from a single closed element or composite shape in a sketch.
         """
         if element_id is None:
             # Logic to handle whole-sketch extrusion would go here (more complex)
@@ -3969,7 +4158,7 @@ class OCCTEngine:
 
         wire_builder = BRepBuilderAPI_MakeWire()
         
-        # Create a wire from the single element
+        # Handle different element types
         if element.element_type == SketchElementType.CIRCLE:
             center_3d = self._convert_2d_to_3d(element.center_point, sketch.sketch_plane)
             radius = element.parameters[0]
@@ -3983,8 +4172,74 @@ class OCCTEngine:
             edge = BRepBuilderAPI_MakeEdge(circle_geom).Edge()
             wire_builder.Add(edge)
             
-        elif element.element_type == SketchElementType.RECTANGLE:
-            # Create 4 edges for the rectangle
+        elif element.element_type == SketchElementType.RECTANGLE and element.is_composite_parent:
+            # Handle decomposed rectangle: build closed boundary from all connected elements
+            if not element.child_ids:
+                raise ValueError(f"Composite rectangle {element_id} has no child elements")
+            
+            # Build a closed boundary by traversing connected elements (lines + fillets/arcs)
+            boundary_elements = self._find_closed_boundary_for_composite(sketch, element)
+            if not boundary_elements:
+                raise ValueError(f"Could not find closed boundary for composite rectangle {element_id}")
+            
+            # Create edges from all boundary elements in order
+            for boundary_element in boundary_elements:
+                if boundary_element.element_type == SketchElementType.LINE:
+                    start_3d = self._convert_2d_to_3d(boundary_element.start_point, sketch.sketch_plane).to_gp_pnt()
+                    end_3d = self._convert_2d_to_3d(boundary_element.end_point, sketch.sketch_plane).to_gp_pnt()
+                    edge = BRepBuilderAPI_MakeEdge(start_3d, end_3d).Edge()
+                    wire_builder.Add(edge)
+                elif boundary_element.element_type == SketchElementType.ARC:
+                    # Create arc edge
+                    center_3d = self._convert_2d_to_3d(boundary_element.center_point, sketch.sketch_plane).to_gp_pnt()
+                    start_3d = self._convert_2d_to_3d(boundary_element.start_point, sketch.sketch_plane).to_gp_pnt()
+                    end_3d = self._convert_2d_to_3d(boundary_element.end_point, sketch.sketch_plane).to_gp_pnt()
+                    
+                    # Create arc geometry
+                    radius = boundary_element.parameters[0]
+                    ax2 = sketch.sketch_plane.coordinate_system.Ax2()
+                    ax2.SetLocation(center_3d)
+                    circle_geom = Geom_Circle(ax2, radius)
+                    
+                    # Create arc edge from start to end
+                    edge = BRepBuilderAPI_MakeEdge(circle_geom, start_3d, end_3d).Edge()
+                    wire_builder.Add(edge)
+                
+        elif element.element_type == SketchElementType.POLYGON and element.is_composite_parent:
+            # Handle decomposed polygon: build closed boundary from all connected elements
+            if not element.child_ids:
+                raise ValueError(f"Composite polygon {element_id} has no child elements")
+            
+            # Build a closed boundary by traversing connected elements (lines + fillets/arcs)
+            boundary_elements = self._find_closed_boundary_for_composite(sketch, element)
+            if not boundary_elements:
+                raise ValueError(f"Could not find closed boundary for composite polygon {element_id}")
+            
+            # Create edges from all boundary elements in order
+            for boundary_element in boundary_elements:
+                if boundary_element.element_type == SketchElementType.LINE:
+                    start_3d = self._convert_2d_to_3d(boundary_element.start_point, sketch.sketch_plane).to_gp_pnt()
+                    end_3d = self._convert_2d_to_3d(boundary_element.end_point, sketch.sketch_plane).to_gp_pnt()
+                    edge = BRepBuilderAPI_MakeEdge(start_3d, end_3d).Edge()
+                    wire_builder.Add(edge)
+                elif boundary_element.element_type == SketchElementType.ARC:
+                    # Create arc edge
+                    center_3d = self._convert_2d_to_3d(boundary_element.center_point, sketch.sketch_plane).to_gp_pnt()
+                    start_3d = self._convert_2d_to_3d(boundary_element.start_point, sketch.sketch_plane).to_gp_pnt()
+                    end_3d = self._convert_2d_to_3d(boundary_element.end_point, sketch.sketch_plane).to_gp_pnt()
+                    
+                    # Create arc geometry
+                    radius = boundary_element.parameters[0]
+                    ax2 = sketch.sketch_plane.coordinate_system.Ax2()
+                    ax2.SetLocation(center_3d)
+                    circle_geom = Geom_Circle(ax2, radius)
+                    
+                    # Create arc edge from start to end
+                    edge = BRepBuilderAPI_MakeEdge(circle_geom, start_3d, end_3d).Edge()
+                    wire_builder.Add(edge)
+                
+        elif element.element_type == SketchElementType.RECTANGLE and not element.is_composite_parent:
+            # Legacy rectangle handling (if not decomposed)
             corner = element.start_point
             width = element.parameters[0]
             height = element.parameters[1]

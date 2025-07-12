@@ -116,6 +116,11 @@ export interface AddSketchElementResponse extends CADResponse {
         element_type: SketchElementType;
         element_id: string;
         visualization_data?: SketchElementVisualizationData;
+        is_composite?: boolean;
+        child_elements?: Array<{
+            element_id: string;
+            visualization_data: SketchElementVisualizationData;
+        }>;
     };
 }
 
