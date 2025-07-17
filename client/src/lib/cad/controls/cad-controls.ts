@@ -35,6 +35,12 @@ export interface DrawingState {
         u_axis: THREE.Vector3;
         v_axis: THREE.Vector3;
     };
+    // Line selection state for fillet/chamfer tools
+    selectedLines?: {
+        firstLineId?: string;
+        secondLineId?: string;
+        awaitingSecondLine?: boolean;
+    };
 }
 
 export class CADControls extends OrbitControls {
@@ -52,6 +58,9 @@ export class CADControls extends OrbitControls {
     public onDrawingPreview?: (tool: DrawingTool, points: THREE.Vector2[], previewGeometry: THREE.Object3D) => void;
     public onToolChanged?: (tool: DrawingTool) => void;
     public onArcTypeChanged?: (arcType: ArcType) => void;
+    public onLineSelected?: (lineId: string, isFirstLine: boolean) => void;
+    public onChamferRequested?: (sketchId: string, line1Id: string, line2Id: string) => void;
+    public onFilletRequested?: (sketchId: string, line1Id: string, line2Id: string) => void;
 
     constructor(camera: THREE.Camera, domElement: HTMLElement, scene: THREE.Scene) {
         super(camera, domElement);
@@ -99,6 +108,15 @@ export class CADControls extends OrbitControls {
             this.drawingState.polygonSides = 6;
         }
         
+        // Initialize line selection state for fillet/chamfer tools
+        if (tool === 'fillet' || tool === 'chamfer') {
+            this.drawingState.selectedLines = {
+                firstLineId: undefined,
+                secondLineId: undefined,
+                awaitingSecondLine: false
+            };
+        }
+        
         // Disable/enable orbit controls based on tool
         const isInteractiveTool = tool !== 'select';
         this.enablePan = !isInteractiveTool;
@@ -110,6 +128,72 @@ export class CADControls extends OrbitControls {
         }
         
         console.log(`Selected drawing tool: ${tool}`);
+    }
+    
+    public selectLine(lineId: string): void {
+        if (!this.drawingState.selectedLines) return;
+        
+        if (!this.drawingState.selectedLines.firstLineId) {
+            // Select first line
+            this.drawingState.selectedLines.firstLineId = lineId;
+            this.drawingState.selectedLines.awaitingSecondLine = true;
+            console.log(`🔵 Selected first line: ${lineId}`);
+            
+            if (this.onLineSelected) {
+                this.onLineSelected(lineId, true);
+            }
+        } else if (!this.drawingState.selectedLines.secondLineId && lineId !== this.drawingState.selectedLines.firstLineId) {
+            // Select second line (different from first)
+            this.drawingState.selectedLines.secondLineId = lineId;
+            this.drawingState.selectedLines.awaitingSecondLine = false;
+            console.log(`🔵 Selected second line: ${lineId}`);
+            
+            if (this.onLineSelected) {
+                this.onLineSelected(lineId, false);
+            }
+            
+            // Trigger fillet/chamfer operation
+            this.triggerLineOperation();
+        } else if (lineId === this.drawingState.selectedLines.firstLineId) {
+            console.log(`⚠️ Cannot select the same line twice`);
+        }
+    }
+    
+    private triggerLineOperation(): void {
+        if (!this.drawingState.selectedLines?.firstLineId || 
+            !this.drawingState.selectedLines?.secondLineId ||
+            !this.drawingState.activeSketchPlane) {
+            return;
+        }
+        
+        const sketchId = this.drawingState.activeSketchPlane.sketch_id;
+        const line1Id = this.drawingState.selectedLines.firstLineId;
+        const line2Id = this.drawingState.selectedLines.secondLineId;
+        
+        if (this.drawingState.tool === 'chamfer' && this.onChamferRequested) {
+            console.log(`🔶 Triggering chamfer: sketch=${sketchId}, lines=${line1Id}, ${line2Id}`);
+            this.onChamferRequested(sketchId, line1Id, line2Id);
+        } else if (this.drawingState.tool === 'fillet' && this.onFilletRequested) {
+            console.log(`🔵 Triggering fillet: sketch=${sketchId}, lines=${line1Id}, ${line2Id}`);
+            this.onFilletRequested(sketchId, line1Id, line2Id);
+        }
+        
+        // Reset line selection state
+        this.drawingState.selectedLines = {
+            firstLineId: undefined,
+            secondLineId: undefined,
+            awaitingSecondLine: false
+        };
+    }
+    
+    public clearLineSelection(): void {
+        if (this.drawingState.selectedLines) {
+            this.drawingState.selectedLines = {
+                firstLineId: undefined,
+                secondLineId: undefined,
+                awaitingSecondLine: false
+            };
+        }
     }
     
     public setArcType(arcType: ArcType): void {
@@ -637,6 +721,9 @@ export class CADControls extends OrbitControls {
         this.drawingState.startPoint = undefined;
         this.drawingState.currentPoint = undefined;
         this.drawingState.points = undefined;
+        
+        // Clear line selection state when finishing drawing
+        this.clearLineSelection();
         
         console.log(`Finished drawing ${this.drawingState.tool}`);
     }

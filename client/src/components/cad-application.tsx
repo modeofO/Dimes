@@ -117,6 +117,64 @@ export function CADApplication() {
         updateStatus('Exited sketch editing mode', 'info');
     }, [updateStatus]);
 
+    const handleInteractiveChamfer = useCallback(async (sketchId: string, line1Id: string, line2Id: string) => {
+        if (!clientRef.current) return;
+        
+        try {
+            // Prompt user for chamfer distance
+            const distanceStr = prompt('Enter chamfer distance:', '1');
+            if (!distanceStr) return; // User cancelled
+            
+            const distance = parseFloat(distanceStr);
+            if (isNaN(distance) || distance <= 0) {
+                updateStatus('❌ Invalid chamfer distance', 'error');
+                return;
+            }
+            
+            updateStatus(`Creating chamfer between lines (distance: ${distance})...`, 'info');
+            
+            const response = await clientRef.current.addChamferToSketch(sketchId, line1Id, line2Id, distance);
+            
+            if (response.success) {
+                updateStatus(`✅ Created chamfer with distance ${distance}`, 'success');
+            } else {
+                updateStatus('❌ Failed to create chamfer', 'error');
+            }
+        } catch (error) {
+            console.error('Interactive chamfer failed:', error);
+            updateStatus(`❌ Chamfer error: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+        }
+    }, [updateStatus]);
+
+    const handleInteractiveFillet = useCallback(async (sketchId: string, line1Id: string, line2Id: string) => {
+        if (!clientRef.current) return;
+        
+        try {
+            // Prompt user for fillet radius
+            const radiusStr = prompt('Enter fillet radius:', '1');
+            if (!radiusStr) return; // User cancelled
+            
+            const radius = parseFloat(radiusStr);
+            if (isNaN(radius) || radius <= 0) {
+                updateStatus('❌ Invalid fillet radius', 'error');
+                return;
+            }
+            
+            updateStatus(`Creating fillet between lines (radius: ${radius})...`, 'info');
+            
+            const response = await clientRef.current.addFilletToSketch(sketchId, line1Id, line2Id, radius);
+            
+            if (response.success) {
+                updateStatus(`✅ Created fillet with radius ${radius}`, 'success');
+            } else {
+                updateStatus('❌ Failed to create fillet', 'error');
+            }
+        } catch (error) {
+            console.error('Interactive fillet failed:', error);
+            updateStatus(`❌ Fillet error: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+        }
+    }, [updateStatus]);
+
     const handleSetDrawingTool = useCallback((tool: DrawingTool) => {
         setCurrentDrawingTool(tool);
         if (rendererRef.current) {
@@ -330,6 +388,11 @@ export function CADApplication() {
                 updateStatus('Setting up 3D viewport...', 'info');
                 const renderer = new CADRenderer(viewportRef.current);
                 renderer.onObjectSelected = handleSelection;
+                
+                // Set up interactive chamfer/fillet callbacks
+                renderer.onChamferRequested = handleInteractiveChamfer;
+                renderer.onFilletRequested = handleInteractiveFillet;
+                
                 rendererRef.current = renderer;
 
                 // Initialize CAD client

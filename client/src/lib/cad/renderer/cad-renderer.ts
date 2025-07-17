@@ -22,6 +22,11 @@ export class CADRenderer {
     private selectionBox: THREE.BoxHelper | null = null;
     public onObjectSelected: ((id: string | null, type: string | null) => void) | null = null;
     public onDrawingComplete: ((tool: DrawingTool, points: THREE.Vector2[], arcType?: 'three_points' | 'endpoints_radius') => void) | null = null;
+    public onChamferRequested: ((sketchId: string, line1Id: string, line2Id: string) => void) | null = null;
+    public onFilletRequested: ((sketchId: string, line1Id: string, line2Id: string) => void) | null = null;
+    
+    // Visual feedback for selected lines
+    private selectedLineHighlights: { [lineId: string]: THREE.LineSegments } = {};
     
     // Current active sketch plane for drawing
     private activeSketchPlane: {
@@ -92,6 +97,27 @@ export class CADRenderer {
         
         this.controls.onToolChanged = (tool: DrawingTool) => {
             console.log(`Tool changed to: ${tool}`);
+            // Clear line highlights when switching tools
+            this.clearLineHighlights();
+        };
+        
+        // Set up line selection callbacks
+        this.controls.onLineSelected = (lineId: string, isFirstLine: boolean) => {
+            this.highlightSelectedLine(lineId, isFirstLine);
+        };
+        
+        this.controls.onChamferRequested = (sketchId: string, line1Id: string, line2Id: string) => {
+            this.clearLineHighlights();
+            if (this.onChamferRequested) {
+                this.onChamferRequested(sketchId, line1Id, line2Id);
+            }
+        };
+        
+        this.controls.onFilletRequested = (sketchId: string, line1Id: string, line2Id: string) => {
+            this.clearLineHighlights();
+            if (this.onFilletRequested) {
+                this.onFilletRequested(sketchId, line1Id, line2Id);
+            }
         };
     }
     
@@ -195,10 +221,6 @@ export class CADRenderer {
                             selectedType = 'sketch';
                             break;
                         case 'element':
-                            // For elements, we need to determine if it's a line, circle, etc.
-                            // The 'type' is stored in the element's user data, but that's not easily accessible here.
-                            // For now, we'll just use a generic 'element' type.
-                            // The logic in main.ts can handle this.
                             selectedType = 'element';
                             break;
                         default:
@@ -219,9 +241,46 @@ export class CADRenderer {
             }
         }
         
+        // Handle line selection for fillet/chamfer tools
+        const currentTool = this.controls.getDrawingState().tool;
+        if ((currentTool === 'fillet' || currentTool === 'chamfer') && 
+            selectedType === 'element' && selectedId) {
+            
+            // Check if this is a line element by looking at the object's userData or geometry
+            if (this.isLineElement(selectedId)) {
+                this.controls.selectLine(selectedId);
+                return; // Don't trigger normal object selection
+            }
+        }
+        
         if (this.onObjectSelected) {
             this.onObjectSelected(selectedId, selectedType);
         }
+    }
+    
+    private isLineElement(elementId: string): boolean {
+        // Find the element and check if it's a line
+        const elementName = `element-${elementId}`;
+        const elementObject = this.scene.getObjectByName(elementName);
+        
+        if (elementObject) {
+            // Check userData for element type if available
+            let isLine = false;
+            elementObject.traverse((child) => {
+                if (child.userData && child.userData.elementType === 'line') {
+                    isLine = true;
+                }
+                // Also check if it's a THREE.Line object (most line elements should be)
+                if (child instanceof THREE.Line) {
+                    isLine = true;
+                }
+            });
+            return isLine;
+        }
+        
+        // Default assumption: if we can't determine, assume it might be a line
+        // This is a fallback since element type detection is best-effort
+        return true;
     }
 
     public clearAllGeometry(): void {
@@ -313,6 +372,61 @@ export class CADRenderer {
     // Interactive drawing methods
     public setDrawingTool(tool: DrawingTool): void {
         this.controls.setDrawingTool(tool);
+    }
+    
+    public highlightSelectedLine(lineId: string, isFirstLine: boolean): void {
+        // Find the line element in the scene
+        const elementName = `element-${lineId}`;
+        const lineObject = this.scene.getObjectByName(elementName);
+        
+        if (lineObject) {
+            // Create highlight geometry around the line
+            const highlight = this.createLineHighlight(lineObject, isFirstLine);
+            if (highlight) {
+                this.selectedLineHighlights[lineId] = highlight;
+                this.scene.add(highlight);
+                console.log(`🔶 Highlighted ${isFirstLine ? 'first' : 'second'} line: ${lineId}`);
+            }
+        } else {
+            console.warn(`⚠️ Could not find line element: ${elementName}`);
+        }
+    }
+    
+    public clearLineHighlights(): void {
+        Object.values(this.selectedLineHighlights).forEach(highlight => {
+            this.scene.remove(highlight);
+        });
+        this.selectedLineHighlights = {};
+        console.log('🧹 Cleared line highlights');
+    }
+    
+    private createLineHighlight(lineObject: THREE.Object3D, isFirstLine: boolean): THREE.LineSegments | null {
+        // Create a highlight around the line using EdgesGeometry
+        let geometry: THREE.BufferGeometry | null = null;
+        
+        lineObject.traverse((child) => {
+            if (child instanceof THREE.Line && child.geometry) {
+                geometry = child.geometry;
+            }
+        });
+        
+        if (!geometry) return null;
+        
+        // Create highlight with different colors for first/second line
+        const color = isFirstLine ? 0xff4400 : 0x44ff00; // Orange for first, green for second
+        const material = new THREE.LineBasicMaterial({
+            color: color,
+            linewidth: 4,
+            transparent: true,
+            opacity: 0.8
+        });
+        
+        const highlight = new THREE.LineSegments(geometry, material);
+        highlight.position.copy(lineObject.position);
+        highlight.rotation.copy(lineObject.rotation);
+        highlight.scale.copy(lineObject.scale);
+        
+        return highlight;
     }
     
     public setArcType(arcType: 'three_points' | 'endpoints_radius'): void {

@@ -884,11 +884,36 @@ class Sketch:
             int_x, int_y = intersection
             
             # Calculate chamfer points at specified distance from intersection
-            # Move back along each line by the chamfer distance
-            c1_x = int_x - distance * l1_dx
-            c1_y = int_y - distance * l1_dy
-            c2_x = int_x - distance * l2_dx
-            c2_y = int_y - distance * l2_dy
+            # For each line, determine which direction to move from intersection to get inward chamfer point
+            # We want to move towards the endpoint that is farther from the intersection
+            
+            # Line 1: determine direction to move from intersection
+            dist1_to_start = math.sqrt((int_x - l1_x1)**2 + (int_y - l1_y1)**2)
+            dist1_to_end = math.sqrt((int_x - l1_x2)**2 + (int_y - l1_y2)**2)
+            
+            if dist1_to_start > dist1_to_end:
+                # Move towards start point (opposite to line direction)
+                l1_chamfer_dir_x, l1_chamfer_dir_y = -l1_dx, -l1_dy
+            else:
+                # Move towards end point (same as line direction)
+                l1_chamfer_dir_x, l1_chamfer_dir_y = l1_dx, l1_dy
+            
+            # Line 2: determine direction to move from intersection  
+            dist2_to_start = math.sqrt((int_x - l2_x1)**2 + (int_y - l2_y1)**2)
+            dist2_to_end = math.sqrt((int_x - l2_x2)**2 + (int_y - l2_y2)**2)
+            
+            if dist2_to_start > dist2_to_end:
+                # Move towards start point (opposite to line direction)
+                l2_chamfer_dir_x, l2_chamfer_dir_y = -l2_dx, -l2_dy
+            else:
+                # Move towards end point (same as line direction)
+                l2_chamfer_dir_x, l2_chamfer_dir_y = l2_dx, l2_dy
+            
+            # Calculate chamfer points by moving inward along each line
+            c1_x = int_x + distance * l1_chamfer_dir_x
+            c1_y = int_y + distance * l1_chamfer_dir_y
+            c2_x = int_x + distance * l2_chamfer_dir_x
+            c2_y = int_y + distance * l2_chamfer_dir_y
             
             # Create result points
             new_line1_end = gp_Pnt2d(c1_x, c1_y)
