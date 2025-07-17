@@ -60,6 +60,7 @@ class SketchElement:
     parent_id: Optional[str] = None  # ID of parent element (if this is a child)
     child_ids: Optional[List[str]] = None  # IDs of child elements (if this is a parent)
     is_composite_parent: bool = False  # True if this is a parent of decomposed elements
+    is_container_only: bool = False  # True if this should not be visualized (container for organization only)
     
     def __post_init__(self):
         if self.parameters is None:
@@ -245,7 +246,8 @@ class Sketch:
                 start_point=corner_point,  # Use start_point for corner
                 parameters=[width, height],  # Store dimensions as parameters
                 child_ids=line_ids,  # Reference to child line elements
-                is_composite_parent=True  # Mark as composite parent
+                is_composite_parent=True,  # Mark as composite parent
+                is_container_only=True  # Don't visualize this - only show child lines
             )
             
             # Add parent rectangle to sketch
@@ -385,7 +387,8 @@ class Sketch:
                 center_point=center_point,
                 parameters=[radius, float(sides)],  # Store radius and number of sides
                 child_ids=line_ids,  # Reference to child line elements
-                is_composite_parent=True  # Mark as composite parent
+                is_composite_parent=True,  # Mark as composite parent
+                is_container_only=True  # Don't visualize this - only show child lines
             )
             
             # Add parent polygon to sketch
@@ -3453,8 +3456,39 @@ class OCCTEngine:
                 print(f"❌ Element not found: {element_id}")
                 return None
             
-            # For composite parents, we still want to visualize them so they appear in the scene tree
-            # and can be selected for operations like extrusion, while child elements provide line-level access
+            # Handle container-only elements (composite parents)
+            # They exist in the scene tree for organization but are not rendered
+            if element.is_container_only:
+                print(f"📦 Generating metadata for container-only element: {element_id}")
+                
+                # Return basic element metadata for scene tree (without 3D visualization data)
+                container_data = {
+                    "element_id": element_id,
+                    "sketch_id": sketch_id,
+                    "element_type": element.element_type.value,
+                    "is_container_only": True,
+                    "child_ids": element.child_ids or [],
+                    "points_3d": [],  # Empty array for containers (no visualization)
+                    "parameters_2d": {}  # Empty dict for containers
+                }
+                
+                # Add container-specific parameters for scene tree display
+                if element.element_type == SketchElementType.RECTANGLE and element.start_point and element.parameters:
+                    container_data["parameters_2d"] = {
+                        "x": element.start_point.X(),
+                        "y": element.start_point.Y(),
+                        "width": element.parameters[0] if len(element.parameters) > 0 else 0,
+                        "height": element.parameters[1] if len(element.parameters) > 1 else 0
+                    }
+                elif element.element_type == SketchElementType.POLYGON and element.center_point and element.parameters:
+                    container_data["parameters_2d"] = {
+                        "center_x": element.center_point.X(),
+                        "center_y": element.center_point.Y(),
+                        "radius": element.parameters[0] if len(element.parameters) > 0 else 0,
+                        "sides": int(element.parameters[1]) if len(element.parameters) > 1 else 0
+                    }
+                
+                return container_data
             
             # Get sketch plane for coordinate conversion
             plane = sketch.sketch_plane

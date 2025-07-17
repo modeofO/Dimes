@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface CreatedShape {
     id: string;
@@ -18,6 +18,9 @@ interface CreatedPlane {
 interface SketchElementInfo {
     id: string;
     type: string;
+    is_container_only?: boolean;  // For composite shapes that are logical containers only
+    parent_id?: string;  // ID of parent element (if this is a child)
+    child_ids?: string[];  // IDs of child elements (if this is a parent)
 }
 
 interface CreatedSketch {
@@ -41,12 +44,158 @@ export function UIManager({
     selectedObject, 
     onSelection 
 }: UIManagerProps) {
+    // State for collapsed/expanded containers (default to expanded for better UX)
+    const [expandedContainers, setExpandedContainers] = useState<Set<string>>(new Set());
+    const [seenContainers, setSeenContainers] = useState<Set<string>>(new Set());
+
+    // Auto-expand new containers for better UX
+    useEffect(() => {
+        const allContainerIds = new Set<string>();
+        const newContainerIds = new Set<string>();
+        
+        createdSketches.forEach(sketch => {
+            sketch.elements.forEach(element => {
+                if (element.is_container_only) {
+                    allContainerIds.add(element.id);
+                    if (!seenContainers.has(element.id)) {
+                        newContainerIds.add(element.id);
+                    }
+                }
+            });
+        });
+        
+        if (newContainerIds.size > 0) {
+            console.log('🆕 Auto-expanding new containers:', Array.from(newContainerIds));
+            setExpandedContainers(prev => new Set([...prev, ...newContainerIds]));
+            setSeenContainers(prev => new Set([...prev, ...newContainerIds]));
+        }
+    }, [createdSketches, seenContainers]);
+
     const handleItemClick = (id: string, type: string) => {
         onSelection(id, type);
     };
 
     const isSelected = (id: string, type: string) => {
         return selectedObject?.id === id && selectedObject?.type === type;
+    };
+
+    const toggleContainer = (elementId: string) => {
+        console.log('🔄 Toggle container clicked:', elementId);
+        setExpandedContainers(prev => {
+            const next = new Set(prev);
+            const wasExpanded = next.has(elementId);
+            if (wasExpanded) {
+                next.delete(elementId);
+                console.log('📁 Collapsed container:', elementId);
+            } else {
+                next.add(elementId);
+                console.log('📂 Expanded container:', elementId);
+            }
+            console.log('📊 Updated expanded containers:', Array.from(next));
+            return next;
+        });
+    };
+
+    const getElementIcon = (element: SketchElementInfo) => {
+        if (element.is_container_only) {
+            // Different icons for container elements
+            switch (element.type) {
+                case 'rectangle': return '▭';
+                case 'polygon': return '⬢';
+                default: return '📁';
+            }
+        } else {
+            // Regular icons for rendered elements
+            switch (element.type) {
+                case 'line': return '📏';
+                case 'circle': return '⭕';
+                case 'rectangle': return '▭';
+                case 'polygon': return '⬢';
+                case 'arc': return '🌙';
+                case 'chamfer': return '📏';
+                case 'fillet': return '📏';
+                default: return '◾';
+            }
+        }
+    };
+
+    // Helper function to determine if an element belongs to a container
+    const getElementContainer = (element: SketchElementInfo, allElements: SketchElementInfo[]): string | null => {
+        // If element has explicit parent_id, use that
+        if (element.parent_id) {
+            console.log('📎 Using explicit parent_id for', element.id, '→', element.parent_id);
+            return element.parent_id;
+        }
+
+        // Check if element is a direct child of a container based on naming pattern
+        // e.g., "rectangle_1_8122_line_bottom" belongs to "rectangle_1_8122"
+        const containers = allElements.filter(el => el.is_container_only);
+        for (const container of containers) {
+            if (element.id.startsWith(container.id + '_line_')) {
+                console.log('🔗 Found direct child', element.id, 'of container', container.id);
+                return container.id;
+            }
+        }
+
+        // For chamfer/fillet lines, try to find the parent rectangle/polygon they belong to
+        if (element.type === 'line' && (element.id.includes('chamfer_') || element.id.includes('fillet_'))) {
+            // Look for container elements that have child lines from the same base shape
+            for (const container of containers) {
+                // Check if there are any child lines from this container in the sketch
+                const hasChildLines = allElements.some(el => 
+                    el.id.startsWith(container.id + '_line_') && el.type === 'line'
+                );
+                
+                if (hasChildLines) {
+                    console.log('🔗 Associating chamfer/fillet', element.id, 'with container', container.id);
+                    return container.id;
+                }
+            }
+            
+            console.log('❓ No container found for chamfer/fillet', element.id);
+        }
+
+        return null;
+    };
+
+    // Helper function to build hierarchical structure
+    const buildElementHierarchy = (elements: SketchElementInfo[]) => {
+        const containers: SketchElementInfo[] = [];
+        const orphans: SketchElementInfo[] = [];
+        const childMap = new Map<string, SketchElementInfo[]>();
+
+        console.log('🏗️ Building hierarchy for', elements.length, 'elements:', elements.map(e => `${e.id}(${e.type}${e.is_container_only ? ', container' : ''})`));
+
+        // First pass: identify containers and build child map
+        for (const element of elements) {
+            if (element.is_container_only) {
+                containers.push(element);
+                childMap.set(element.id, []);
+                console.log('📦 Found container:', element.id, 'type:', element.type);
+            }
+        }
+
+        // Second pass: assign children to containers or mark as orphans
+        for (const element of elements) {
+            if (!element.is_container_only) {
+                const containerId = getElementContainer(element, elements);
+                if (containerId && childMap.has(containerId)) {
+                    childMap.get(containerId)!.push(element);
+                    console.log('👶 Assigned child', element.id, 'to container', containerId);
+                } else {
+                    orphans.push(element);
+                    console.log('🏠 Orphan element:', element.id);
+                }
+            }
+        }
+
+        console.log('📊 Hierarchy result:', {
+            containers: containers.length,
+            orphans: orphans.length,
+            childMappings: Array.from(childMap.entries()).map(([id, children]) => ({ containerId: id, childCount: children.length }))
+        });
+
+        return { containers, childMap, orphans };
     };
 
     return (
@@ -103,18 +252,72 @@ export function UIManager({
                                                 {sketch.sketch_id} - {sketch.elements.length} elements
                                             </div>
 
-                                            {/* Elements in this sketch */}
-                                            {sketch.elements.map((element) => (
-                                                <div
-                                                    key={`element-${element.id}`}
-                                                    className={`ml-4 px-2 py-1 text-sm cursor-pointer rounded hover:bg-gray-100 ${
-                                                        isSelected(element.id, 'element') ? 'bg-blue-100 text-blue-800' : 'text-gray-900'
-                                                    }`}
-                                                    onClick={() => handleItemClick(element.id, 'element')}
-                                                >
-                                                    {element.type === 'line' ? '📏' : '⭕'} {element.type.charAt(0).toUpperCase() + element.type.slice(1)} ({element.id})
-                                                </div>
-                                            ))}
+                                            {/* Elements in this sketch - hierarchical view */}
+                                            {(() => {
+                                                const { containers, childMap, orphans } = buildElementHierarchy(sketch.elements);
+
+                                                return (
+                                                    <>
+                                                        {/* Container elements with their children */}
+                                                        {containers.map((container) => {
+                                                            const isExpanded = expandedContainers.has(container.id);
+                                                            const children = childMap.get(container.id) || [];
+
+                                                            return (
+                                                                <div key={`container-${container.id}`} className="ml-4">
+                                                                    {/* Container header */}
+                                                                    <div
+                                                                        className={`px-2 py-1 text-sm cursor-pointer rounded hover:bg-gray-100 flex items-center ${
+                                                                            isSelected(container.id, 'element') ? 'bg-blue-100 text-blue-800' : 'text-gray-900'
+                                                                        } ${container.is_container_only ? 'italic text-gray-600' : ''}`}
+                                                                        onClick={() => handleItemClick(container.id, 'element')}
+                                                                        title={container.is_container_only ? 'Container (not rendered)' : undefined}
+                                                                    >
+                                                                        {/* Expand/collapse button */}
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                toggleContainer(container.id);
+                                                                            }}
+                                                                            className="mr-1 w-4 h-4 flex items-center justify-center hover:bg-gray-200 rounded"
+                                                                        >
+                                                                            {isExpanded ? '▼' : '▶'}
+                                                                        </button>
+                                                                        {getElementIcon(container)} {container.type.charAt(0).toUpperCase() + container.type.slice(1)} ({container.id})
+                                                                        <span className="ml-1 text-xs text-gray-500">({children.length} items)</span>
+                                                                    </div>
+
+                                                                    {/* Children elements (collapsible) */}
+                                                                    {isExpanded && children.map((child) => (
+                                                                        <div
+                                                                            key={`child-${child.id}`}
+                                                                            className={`ml-6 px-2 py-1 text-sm cursor-pointer rounded hover:bg-gray-100 ${
+                                                                                isSelected(child.id, 'element') ? 'bg-blue-100 text-blue-800' : 'text-gray-900'
+                                                                            }`}
+                                                                            onClick={() => handleItemClick(child.id, 'element')}
+                                                                        >
+                                                                            {getElementIcon(child)} {child.type.charAt(0).toUpperCase() + child.type.slice(1)} ({child.id})
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            );
+                                                        })}
+
+                                                        {/* Orphan elements (no container) */}
+                                                        {orphans.map((element) => (
+                                                            <div
+                                                                key={`orphan-${element.id}`}
+                                                                className={`ml-4 px-2 py-1 text-sm cursor-pointer rounded hover:bg-gray-100 ${
+                                                                    isSelected(element.id, 'element') ? 'bg-blue-100 text-blue-800' : 'text-gray-900'
+                                                                }`}
+                                                                onClick={() => handleItemClick(element.id, 'element')}
+                                                            >
+                                                                {getElementIcon(element)} {element.type.charAt(0).toUpperCase() + element.type.slice(1)} ({element.id})
+                                                            </div>
+                                                        ))}
+                                                    </>
+                                                );
+                                            })()}
                                         </div>
                                     ))}
                             </div>

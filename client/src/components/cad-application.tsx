@@ -32,6 +32,9 @@ interface CreatedPlane {
 interface SketchElementInfo {
     id: string;
     type: string;
+    is_container_only?: boolean;  // For composite shapes that are logical containers only
+    parent_id?: string;  // ID of parent element (if this is a child)
+    child_ids?: string[];  // IDs of child elements (if this is a parent)
 }
 
 interface CreatedSketch {
@@ -484,7 +487,15 @@ export function CADApplication() {
                 });
                 
                 client.onElementVisualization((data) => {
-                    console.log('Received element visualization:', data);
+                    console.log('🔍 Received element visualization:', data);
+                    console.log('🔍 Element processing details:', {
+                        element_id: data.element_id,
+                        element_type: data.element_type,
+                        is_container_only: data.is_container_only,
+                        is_composite: data.is_composite,
+                        has_child_elements: !!data.child_elements,
+                        child_count: data.child_elements?.length || 0
+                    });
                     renderer.addSketchElementVisualization(data);
                     
                     // Update frontend state for agent-created elements
@@ -493,9 +504,115 @@ export function CADApplication() {
                             sketch.sketch_id === data.sketch_id
                                 ? {
                                     ...sketch,
-                                    elements: sketch.elements.some(e => e.id === data.element_id)
-                                        ? sketch.elements
-                                        : [...sketch.elements, { id: data.element_id, type: data.element_type }]
+                                    elements: (() => {
+                                        // Check if this element already exists
+                                        const existingElementIndex = sketch.elements.findIndex(e => e.id === data.element_id);
+                                        
+                                        if (existingElementIndex >= 0) {
+                                            // Update existing element while preserving parent-child relationships
+                                            const updated = [...sketch.elements];
+                                            const existingElement = updated[existingElementIndex];
+                                            
+                                            // Only update if this is actually new information
+                                            const hasSignificantChanges = (
+                                                existingElement.type !== data.element_type ||
+                                                existingElement.is_container_only !== data.is_container_only
+                                            );
+                                            
+                                            if (hasSignificantChanges) {
+                                                updated[existingElementIndex] = {
+                                                    ...existingElement,
+                                                    type: data.element_type,
+                                                    is_container_only: data.is_container_only,
+                                                    // Preserve existing parent_id and child_ids if they exist
+                                                    parent_id: existingElement.parent_id || undefined,
+                                                    child_ids: existingElement.child_ids || undefined
+                                                };
+                                                
+                                                console.log('🔄 Updated existing element while preserving hierarchy:', {
+                                                    id: data.element_id,
+                                                    parent_id: updated[existingElementIndex].parent_id,
+                                                    child_ids: updated[existingElementIndex].child_ids,
+                                                    changes: { type: data.element_type, container: data.is_container_only }
+                                                });
+                                            } else {
+                                                console.log('⏭️ Skipping redundant update for element:', data.element_id);
+                                            }
+                                            
+                                            return updated;
+                                        } else {
+                                            // Add new element with hierarchy info
+                                            const newElement: SketchElementInfo = {
+                                                id: data.element_id,
+                                                type: data.element_type,
+                                                is_container_only: data.is_container_only
+                                            };
+                                            
+                                            // Handle parent-child relationships for composite elements
+                                            if (data.is_composite && data.child_elements) {
+                                                console.log('🏗️ Processing composite element:', data.element_id, 'with', data.child_elements.length, 'children');
+                                                
+                                                // This is a parent element
+                                                newElement.child_ids = data.child_elements.map(child => child.element_id);
+                                                
+                                                // Add the parent element first
+                                                const updatedElements = [...sketch.elements, newElement];
+                                                
+                                                // Add all child elements and mark their parent
+                                                const childElements: SketchElementInfo[] = data.child_elements.map(child => ({
+                                                    id: child.element_id,
+                                                    type: child.visualization_data.element_type,
+                                                    parent_id: data.element_id
+                                                }));
+                                                
+                                                // Add children to the elements array
+                                                updatedElements.push(...childElements);
+                                                
+                                                console.log('📋 Added container + children to state:', {
+                                                    container: newElement.id,
+                                                    children: childElements.map(c => c.id),
+                                                    totalElements: updatedElements.length
+                                                });
+                                                
+                                                return updatedElements;
+                                            } else {
+                                                // Check if this is a chamfer/fillet that should be associated with a container
+                                                if ((data.element_type === 'line') && 
+                                                    (data.element_id.includes('chamfer_') || data.element_id.includes('fillet_'))) {
+                                                    // Extract rectangle/polygon ID from existing elements
+                                                    // Chamfers are created between lines like "rectangle_1_2663_line_bottom" and "rectangle_1_2663_line_right"
+                                                    // So we look for any container that matches the pattern
+                                                    const containerIds = sketch.elements
+                                                        .filter(el => el.is_container_only)
+                                                        .map(el => el.id);
+                                                    
+                                                    // Find a container ID that appears in the existing line elements
+                                                    const parentContainerId = containerIds.find(containerId => 
+                                                        sketch.elements.some(el => 
+                                                            el.id.startsWith(containerId + '_line_')
+                                                        )
+                                                    );
+                                                    
+                                                    if (parentContainerId) {
+                                                        newElement.parent_id = parentContainerId;
+                                                        console.log('🔗 Associated chamfer/fillet', data.element_id, 'with container', parentContainerId);
+                                                    } else {
+                                                        console.log('❓ Could not find parent container for chamfer/fillet', data.element_id, 'available containers:', containerIds);
+                                                    }
+                                                }
+                                                
+                                                // Regular element or child being added individually
+                                                console.log('📝 Added regular element to state:', {
+                                                    id: newElement.id,
+                                                    type: newElement.type,
+                                                    is_container_only: newElement.is_container_only,
+                                                    parent_id: newElement.parent_id
+                                                });
+                                                
+                                                return [...sketch.elements, newElement];
+                                            }
+                                        }
+                                    })()
                                 }
                                 : sketch
                         ));

@@ -51,6 +51,16 @@ export interface SketchElementVisualizationData {
     element_type: SketchElementType;
     sketch_id: string;
     
+    // Container flag for composite shapes (rectangles, polygons)
+    is_container_only?: boolean; // If true, this element is a logical container and should not be rendered
+    
+    // Composite element properties
+    is_composite?: boolean; // If true, this element has child elements
+    child_elements?: Array<{
+        element_id: string;
+        visualization_data: SketchElementVisualizationData;
+    }>; // Child elements for composite shapes
+    
     // 3D coordinates for visualization (converted from 2D sketch space)
     points_3d: number[]; // Flat array of 3D points for lines/curves
     

@@ -1197,9 +1197,15 @@ class CADAPIServer:
         }
         
         # Get visualization data for the created element (both composite and simple)
+        # Note: For container elements, this returns metadata without 3D visualization
         viz_data = engine.get_sketch_element_visualization_data(request.sketch_id, element_id)
         if viz_data:
             response_data["visualization_data"] = viz_data
+            print(f"✅ Generated element visualization data for: {element_id} (container: {viz_data.get('is_container_only', False)})")
+        
+        # Add container flag for frontend
+        if element:
+            response_data["is_container_only"] = element.is_container_only
         
         # Handle composite shapes (rectangles, polygons) with child elements
         if element and element.is_composite_parent and element.child_ids:

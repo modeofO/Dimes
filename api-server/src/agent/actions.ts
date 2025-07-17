@@ -490,10 +490,10 @@ const createMirrorArrayAction = action({
 
 const extrudeFeatureAction = action({
     name: "extrudeFeature",
-    description: "Extrude a sketch or a specific element from a sketch to create a 3D feature.",
+    description: "Extrude a specific element from a sketch to create a 3D feature. IMPORTANT: You must always specify an element_id - extruding entire sketches is not supported. For composite shapes like rectangles or polygons, use the container element's ID (e.g., 'rectangle_1_1881' not the individual line IDs).",
     schema: z.object({
-        sketch_id: z.string().describe("The ID of the sketch to extrude."),
-        element_id: z.string().optional().describe("Optional ID of a specific element within the sketch to extrude."),
+        sketch_id: z.string().describe("The ID of the sketch containing the element to extrude."),
+        element_id: z.string().describe("REQUIRED: The ID of the specific element to extrude. For composite shapes (rectangles, polygons), use the parent container ID, not individual line IDs."),
         distance: z.number().gt(0).describe("The distance to extrude."),
         direction: z.enum(['normal', 'custom']).optional().describe("The direction of the extrusion.")
     }),
@@ -501,6 +501,18 @@ const extrudeFeatureAction = action({
         const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
         const agentSessionId = ctx.id;
         const backendSessionId = agentSessionId.replace('web-chat:', '');
+        
+        // Validate that element_id is provided
+        if (!extrudeData.element_id) {
+            const errorMessage = "❌ Error: element_id is required for extrude operations. Extruding entire sketches is not supported. Please specify the ID of the element to extrude (e.g., for rectangles, use the rectangle container ID like 'rectangle_1_1881').";
+            console.log(errorMessage);
+            return {
+                success: false,
+                error: errorMessage,
+                data: null
+            };
+        }
+        
         const result = await cppBackend.extrudeFeature(backendSessionId, extrudeData) as CppBackendResponse;
         if (result.success && result.data) {
           sendVisualizationData(agent, agentSessionId, result.data);
