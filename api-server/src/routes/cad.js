@@ -203,6 +203,24 @@ export default function(webSocketManager) {
     handleValidationErrors,
   ];
 
+  // Linear array validation
+  const validateLinearArray = [
+    body('sketch_id').isString().notEmpty().withMessage('Sketch ID is required'),
+    body('element_id').isString().notEmpty().withMessage('Element ID is required'),
+    body('direction').isArray({ min: 2, max: 2 }).withMessage('Direction must be an array of 2 numbers [x, y]'),
+    body('count').isInt({ min: 2, max: 100 }).withMessage('Count must be an integer between 2 and 100'),
+    handleValidationErrors,
+  ];
+
+  // Mirror array validation
+  const validateMirrorArray = [
+    body('sketch_id').isString().notEmpty().withMessage('Sketch ID is required'),
+    body('element_id').isString().notEmpty().withMessage('Element ID is required'),
+    body('mirror_line.point1').isArray({ min: 2, max: 2 }).withMessage('Mirror line point1 must be an array of 2 numbers'),
+    body('mirror_line.point2').isArray({ min: 2, max: 2 }).withMessage('Mirror line point2 must be an array of 2 numbers'),
+    handleValidationErrors,
+  ];
+
   /**
    * POST /api/v1/cad/models
    * Create a new 3D model
@@ -806,6 +824,104 @@ export default function(webSocketManager) {
 
     } catch (error) {
       next(new ApiError(500, 'Failed to move element', error.message));
+    }
+  });
+
+  /**
+   * POST /api/v1/cad/linear-arrays
+   * Create linear array of elements
+   */
+  router.post('/linear-arrays', validateLinearArray, async (req, res, next) => {
+    try {
+      const sessionId = req.sessionId;
+      const arrayData = req.body;
+
+      logger.info(`Creating linear array for session ${sessionId}`, { arrayData });
+
+      const result = await cppBackend.createLinearArray(sessionId, arrayData);
+
+      console.log('🔍 Raw backend createLinearArray result:', JSON.stringify(result, null, 2));
+
+      // Send WebSocket notification for real-time updates
+      if (webSocketManager && result.success && result.data) {
+        console.log('🔊 Sending WebSocket notification for linear array operation');
+
+        // Handle multiple visualization data items
+        if (result.data.visualization_data && Array.isArray(result.data.visualization_data)) {
+          result.data.visualization_data.forEach(vizData => {
+            webSocketManager.sendToClient(sessionId, {
+              type: 'visualization_data',
+              payload: vizData,
+              timestamp: Date.now(),
+            });
+          });
+        } else if (result.data.visualization_data) {
+          webSocketManager.sendToClient(sessionId, {
+            type: 'visualization_data',
+            payload: result.data.visualization_data,
+            timestamp: Date.now(),
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        session_id: sessionId,
+        timestamp: Date.now(),
+        data: result.data || result,
+      });
+
+    } catch (error) {
+      next(new ApiError(500, 'Failed to create linear array', error.message));
+    }
+  });
+
+  /**
+   * POST /api/v1/cad/mirror-arrays
+   * Create mirror array of elements
+   */
+  router.post('/mirror-arrays', validateMirrorArray, async (req, res, next) => {
+    try {
+      const sessionId = req.sessionId;
+      const arrayData = req.body;
+
+      logger.info(`Creating mirror array for session ${sessionId}`, { arrayData });
+
+      const result = await cppBackend.createMirrorArray(sessionId, arrayData);
+
+      console.log('🔍 Raw backend createMirrorArray result:', JSON.stringify(result, null, 2));
+
+      // Send WebSocket notification for real-time updates
+      if (webSocketManager && result.success && result.data) {
+        console.log('🔊 Sending WebSocket notification for mirror array operation');
+
+        // Handle multiple visualization data items
+        if (result.data.visualization_data && Array.isArray(result.data.visualization_data)) {
+          result.data.visualization_data.forEach(vizData => {
+            webSocketManager.sendToClient(sessionId, {
+              type: 'visualization_data',
+              payload: vizData,
+              timestamp: Date.now(),
+            });
+          });
+        } else if (result.data.visualization_data) {
+          webSocketManager.sendToClient(sessionId, {
+            type: 'visualization_data',
+            payload: result.data.visualization_data,
+            timestamp: Date.now(),
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        session_id: sessionId,
+        timestamp: Date.now(),
+        data: result.data || result,
+      });
+
+    } catch (error) {
+      next(new ApiError(500, 'Failed to create mirror array', error.message));
     }
   });
 

@@ -23,6 +23,8 @@ from OCC.Core.Poly import Poly_Triangulation
 from OCC.Core.TopLoc import TopLoc_Location
 from OCC.Core.gp import gp_Pnt, gp_Vec, gp_Dir, gp_Ax3, gp_Pln, gp_Pnt2d, gp_Lin2d
 from OCC.Core.Standard import Standard_Failure
+from OCC.Core.Bnd import Bnd_Box
+from OCC.Core.BRepBndLib import brepbndlib_Add
 
 # For sketch-based modeling
 from OCC.Core.Geom import Geom_Plane
@@ -3829,7 +3831,60 @@ class OCCTEngine:
     def shape_exists(self, shape_id: str) -> bool:
         """Check if shape exists - equivalent to C++ shapeExists"""
         return shape_id in self.shapes
-    
+
+    def get_bounding_box(self, shape_id: str) -> Optional[Dict[str, List[float]]]:
+        """
+        Calculate the bounding box of a shape.
+
+        Args:
+            shape_id: The ID of the shape to calculate bounds for
+
+        Returns:
+            Dictionary with 'min' and 'max' coordinates, or None if shape doesn't exist
+        """
+        if shape_id not in self.shapes:
+            return None
+
+        try:
+            shape = self.shapes[shape_id]
+            bbox = Bnd_Box()
+            brepbndlib_Add(shape, bbox)
+
+            xmin, ymin, zmin, xmax, ymax, zmax = bbox.Get()
+
+            return {
+                "min": [xmin, ymin, zmin],
+                "max": [xmax, ymax, zmax]
+            }
+        except Exception as e:
+            print(f"❌ Error calculating bounding box for {shape_id}: {e}")
+            return None
+
+    def get_all_shapes_bounding_box(self) -> Dict[str, List[float]]:
+        """
+        Calculate the bounding box encompassing all shapes in the session.
+
+        Returns:
+            Dictionary with 'min' and 'max' coordinates for all shapes
+        """
+        if not self.shapes:
+            return {"min": [0.0, 0.0, 0.0], "max": [0.0, 0.0, 0.0]}
+
+        try:
+            combined_bbox = Bnd_Box()
+            for shape in self.shapes.values():
+                brepbndlib_Add(shape, combined_bbox)
+
+            xmin, ymin, zmin, xmax, ymax, zmax = combined_bbox.Get()
+
+            return {
+                "min": [xmin, ymin, zmin],
+                "max": [xmax, ymax, zmax]
+            }
+        except Exception as e:
+            print(f"❌ Error calculating combined bounding box: {e}")
+            return {"min": [0.0, 0.0, 0.0], "max": [0.0, 0.0, 0.0]}
+
     def remove_shape(self, shape_id: str) -> None:
         """Remove shape - equivalent to C++ removeShape"""
         if shape_id in self.shapes:
@@ -4138,6 +4193,140 @@ class OCCTEngine:
             print(f"❌ Error moving element in sketch: {e}")
             return False
 
+    # ==================== ARRAY/PATTERN OPERATIONS ====================
+
+    def create_linear_array_in_sketch(self, sketch_id: str, element_id: str, direction_x: float, direction_y: float, count: int, spacing: float) -> Dict[str, Any]:
+        """
+        Create a linear array of elements - copy element multiple times in a direction.
+
+        Args:
+            sketch_id: Sketch identifier
+            element_id: ID of element to array
+            direction_x: X component of direction vector
+            direction_y: Y component of direction vector
+            count: Total number of elements in array (including original)
+            spacing: Distance between array elements
+
+        Returns:
+            Dict with array_id and element_ids of all created copies
+        """
+        print(f"📊 Creating linear array of {element_id} with {count} elements in sketch {sketch_id}")
+
+        if not self.sketch_exists(sketch_id):
+            raise ValueError(f"Sketch not found: {sketch_id}")
+
+        if count < 2:
+            raise ValueError(f"Array count must be at least 2, got {count}")
+
+        if spacing <= 0:
+            raise ValueError(f"Array spacing must be positive, got {spacing}")
+
+        try:
+            sketch = self.sketches[sketch_id]
+
+            # Normalize direction vector
+            magnitude = math.sqrt(direction_x**2 + direction_y**2)
+            if magnitude < 1e-10:
+                raise ValueError("Direction vector cannot be zero")
+            norm_x = direction_x / magnitude
+            norm_y = direction_y / magnitude
+
+            # Use existing copy_element method to create copies
+            # count-1 because original already exists
+            copied_ids = sketch.copy_element(element_id, count - 1, norm_x, norm_y, spacing)
+
+            if not copied_ids:
+                raise RuntimeError(f"Failed to create linear array copies")
+
+            array_id = f"linear_array_{int(time.time() * 1000) % 100000}"
+
+            # Collect visualization data for all new elements
+            visualization_data_list = []
+            for copied_id in copied_ids:
+                viz_data = self.get_sketch_element_visualization_data(sketch_id, copied_id)
+                if viz_data:
+                    visualization_data_list.append(viz_data)
+
+            print(f"✅ Linear array created: {array_id} with {len(copied_ids)} copies")
+
+            return {
+                "array_id": array_id,
+                "original_element_id": element_id,
+                "element_ids": [element_id] + copied_ids,
+                "count": count,
+                "spacing": spacing,
+                "direction": {"x": norm_x, "y": norm_y},
+                "visualization_data": visualization_data_list,
+                "message": f"Linear array created with {count} elements"
+            }
+
+        except Exception as e:
+            print(f"❌ Error creating linear array in sketch: {e}")
+            raise
+
+    def create_mirror_array_in_sketch(self, sketch_id: str, element_ids: List[str], mirror_x1: float, mirror_y1: float, mirror_x2: float, mirror_y2: float, keep_original: bool = True) -> Dict[str, Any]:
+        """
+        Create a mirror array - mirror elements across a line defined by two points.
+
+        Args:
+            sketch_id: Sketch identifier
+            element_ids: List of element IDs to mirror
+            mirror_x1, mirror_y1: First point of mirror line
+            mirror_x2, mirror_y2: Second point of mirror line
+            keep_original: Whether to keep original elements
+
+        Returns:
+            Dict with array_id and mirrored element IDs
+        """
+        print(f"🪞 Creating mirror array of {len(element_ids)} elements in sketch {sketch_id}")
+
+        if not self.sketch_exists(sketch_id):
+            raise ValueError(f"Sketch not found: {sketch_id}")
+
+        if not element_ids:
+            raise ValueError("No elements specified for mirror array")
+
+        try:
+            # Use existing mirror_elements_by_two_points method
+            mirrored_ids = self.mirror_elements_by_two_points_in_sketch(
+                sketch_id,
+                element_ids,
+                mirror_x1, mirror_y1,
+                mirror_x2, mirror_y2,
+                keep_original
+            )
+
+            if not mirrored_ids:
+                raise RuntimeError("Failed to create mirror array")
+
+            array_id = f"mirror_array_{int(time.time() * 1000) % 100000}"
+
+            # Collect visualization data for all mirrored elements
+            visualization_data_list = []
+            for mirrored_id in mirrored_ids:
+                viz_data = self.get_sketch_element_visualization_data(sketch_id, mirrored_id)
+                if viz_data:
+                    visualization_data_list.append(viz_data)
+
+            print(f"✅ Mirror array created: {array_id} with {len(mirrored_ids)} mirrored elements")
+
+            return {
+                "array_id": array_id,
+                "original_element_ids": element_ids,
+                "mirrored_element_ids": mirrored_ids,
+                "mirror_line": {
+                    "point1": {"x": mirror_x1, "y": mirror_y1},
+                    "point2": {"x": mirror_x2, "y": mirror_y2}
+                },
+                "keep_original": keep_original,
+                "visualization_data": visualization_data_list,
+                "message": f"Mirror array created with {len(mirrored_ids)} mirrored elements"
+            }
+
+        except Exception as e:
+            print(f"❌ Error creating mirror array in sketch: {e}")
+            raise
+
     # ==================== 3D FEATURE CREATION ====================
 
     def extrude_feature(self, sketch_id: str, distance: float, element_id: Optional[str] = None, direction: str = 'normal', generate_mesh: bool = False) -> Dict[str, Any]:
@@ -4175,6 +4364,10 @@ class OCCTEngine:
             distance=distance
         )
         self.extrude_features[feature_id] = feature
+
+        # CRITICAL FIX: Also store in main shapes dict for boolean ops and tessellation
+        self.shapes[feature_id] = body
+
         print(f"✅ Extrude feature created: {feature_id}")
 
         response_data = {

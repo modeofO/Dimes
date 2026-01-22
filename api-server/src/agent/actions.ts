@@ -10,28 +10,51 @@ interface CppBackendResponse {
 
 function sendVisualizationData(agent: AnyAgent, agentSessionId: string, data: any) {
   const webSocketManager = agent.container.resolve<WebSocketManager>("webSocketManager");
-  
+
   // Extract the actual WebSocket session ID from the agent context ID
   // Agent context ID format: "web-chat:ws-session-xxx" or "web-chat:session_xxx"
   const actualSessionId = agentSessionId.replace('web-chat:', '');
-  
+
   if (data && data.visualization_data) {
     console.log(`🎨 Sending visualization data from agent session ${agentSessionId} to frontend session ${actualSessionId}`);
-    
+
     webSocketManager.sendToClient(actualSessionId, {
       type: 'visualization_data',
       payload: data.visualization_data,
     });
   }
-  
+
   // Also send mesh data for geometry updates
   if (data && data.mesh_data) {
     console.log(`🎯 Sending mesh data from agent session ${agentSessionId} to frontend session ${actualSessionId}`);
-    
+
     webSocketManager.sendToClient(actualSessionId, {
       type: 'geometry_update',
       data: data.mesh_data,
     });
+  }
+}
+
+/**
+ * Send error messages to the client via WebSocket for real-time feedback
+ */
+function sendErrorToClient(agent: AnyAgent, agentSessionId: string, operation: string, error: string) {
+  try {
+    const webSocketManager = agent.container.resolve<WebSocketManager>("webSocketManager");
+    const actualSessionId = agentSessionId.replace('web-chat:', '');
+
+    console.log(`❌ Sending error to client for operation '${operation}': ${error}`);
+
+    webSocketManager.sendToClient(actualSessionId, {
+      type: 'operation_error',
+      payload: {
+        operation,
+        error,
+        timestamp: Date.now(),
+      },
+    });
+  } catch (wsError) {
+    console.error('Failed to send error via WebSocket:', wsError);
   }
 }
 
@@ -448,16 +471,29 @@ const createLinearArrayAction = action({
     schema: z.object({
         sketch_id: z.string().describe("The ID of the sketch containing the element to array."),
         element_id: z.string().describe("The ID of the element to array."),
-        direction: z.array(z.number()).length(2).describe("Direction vector [dx, dy] for the array spacing."),
-        count: z.number().int().min(2).describe("Number of copies in the array (minimum 2).")
+        direction: z.array(z.number()).length(2).describe("Direction vector [dx, dy] for the array (e.g., [1, 0] for horizontal)."),
+        count: z.number().int().min(2).max(100).describe("Total number of elements in the array including original (2-100)."),
+        spacing: z.number().gt(0).describe("Distance between array elements.")
     }),
     async handler(arrayData, ctx, agent) {
         const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
         const agentSessionId = ctx.id;
         const backendSessionId = agentSessionId.replace('web-chat:', '');
-        const result = await (cppBackend as any).createLinearArray(backendSessionId, arrayData) as CppBackendResponse;
+        const result = await cppBackend.createLinearArray(backendSessionId, arrayData) as CppBackendResponse;
         if (result.success && result.data) {
-          sendVisualizationData(agent, agentSessionId, result.data);
+          // Send visualization for each created element
+          if (result.data.visualization_data && Array.isArray(result.data.visualization_data)) {
+            const webSocketManager = agent.container.resolve<WebSocketManager>("webSocketManager");
+            const actualSessionId = agentSessionId.replace('web-chat:', '');
+            result.data.visualization_data.forEach((vizData: any) => {
+              webSocketManager.sendToClient(actualSessionId, {
+                type: 'visualization_data',
+                payload: vizData,
+              });
+            });
+          } else {
+            sendVisualizationData(agent, agentSessionId, result.data);
+          }
           return result.data;
         }
         return result;
@@ -466,22 +502,35 @@ const createLinearArrayAction = action({
 
 const createMirrorArrayAction = action({
     name: "createMirrorArray",
-    description: "Create a mirror array (symmetrical pattern) of a sketch element across a line of symmetry.",
+    description: "Create a mirror array (symmetrical pattern) of sketch elements across a line of symmetry.",
     schema: z.object({
-        sketch_id: z.string().describe("The ID of the sketch containing the element to array."),
-        element_id: z.string().describe("The ID of the element to array."),
+        sketch_id: z.string().describe("The ID of the sketch containing the elements to mirror."),
+        element_id: z.string().describe("The ID of the element to mirror (for single element)."),
         mirror_line: z.object({
             point1: z.array(z.number()).length(2).describe("First point [x, y] defining the mirror line."),
             point2: z.array(z.number()).length(2).describe("Second point [x, y] defining the mirror line.")
-        }).describe("The line of symmetry for the mirror array.")
+        }).describe("The line of symmetry for the mirror array."),
+        keep_original: z.boolean().optional().default(true).describe("Whether to keep the original elements.")
     }),
     async handler(arrayData, ctx, agent) {
         const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
         const agentSessionId = ctx.id;
         const backendSessionId = agentSessionId.replace('web-chat:', '');
-        const result = await (cppBackend as any).createMirrorArray(backendSessionId, arrayData) as CppBackendResponse;
+        const result = await cppBackend.createMirrorArray(backendSessionId, arrayData) as CppBackendResponse;
         if (result.success && result.data) {
-          sendVisualizationData(agent, agentSessionId, result.data);
+          // Send visualization for each mirrored element
+          if (result.data.visualization_data && Array.isArray(result.data.visualization_data)) {
+            const webSocketManager = agent.container.resolve<WebSocketManager>("webSocketManager");
+            const actualSessionId = agentSessionId.replace('web-chat:', '');
+            result.data.visualization_data.forEach((vizData: any) => {
+              webSocketManager.sendToClient(actualSessionId, {
+                type: 'visualization_data',
+                payload: vizData,
+              });
+            });
+          } else {
+            sendVisualizationData(agent, agentSessionId, result.data);
+          }
           return result.data;
         }
         return result;
@@ -501,24 +550,36 @@ const extrudeFeatureAction = action({
         const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
         const agentSessionId = ctx.id;
         const backendSessionId = agentSessionId.replace('web-chat:', '');
-        
+
         // Validate that element_id is provided
         if (!extrudeData.element_id) {
-            const errorMessage = "❌ Error: element_id is required for extrude operations. Extruding entire sketches is not supported. Please specify the ID of the element to extrude (e.g., for rectangles, use the rectangle container ID like 'rectangle_1_1881').";
-            console.log(errorMessage);
+            const errorMessage = "element_id is required for extrude operations. Extruding entire sketches is not supported. Please specify the ID of the element to extrude.";
+            console.log(`❌ Error: ${errorMessage}`);
+            sendErrorToClient(agent, agentSessionId, 'extrudeFeature', errorMessage);
             return {
                 success: false,
                 error: errorMessage,
                 data: null
             };
         }
-        
-        const result = await cppBackend.extrudeFeature(backendSessionId, extrudeData) as CppBackendResponse;
-        if (result.success && result.data) {
-          sendVisualizationData(agent, agentSessionId, result.data);
-          return result.data;
+
+        try {
+            const result = await cppBackend.extrudeFeature(backendSessionId, extrudeData) as CppBackendResponse;
+            if (result.success && result.data) {
+              sendVisualizationData(agent, agentSessionId, result.data);
+              return result.data;
+            }
+            // Send error if operation failed
+            if (!result.success) {
+              const errorMsg = (result as any).error || 'Extrude operation failed';
+              sendErrorToClient(agent, agentSessionId, 'extrudeFeature', errorMsg);
+            }
+            return result;
+        } catch (error: any) {
+            const errorMsg = error.message || 'Unknown error during extrude operation';
+            sendErrorToClient(agent, agentSessionId, 'extrudeFeature', errorMsg);
+            throw error;
         }
-        return result;
     }
 });
 
