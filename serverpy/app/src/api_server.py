@@ -3,14 +3,33 @@ CAD API Server using FastAPI - Python version of CADController
 """
 import json
 import time
+import os
+import logging
 from typing import Dict, Any, Optional, List
 from fastapi import FastAPI, HTTPException, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 import uvicorn
 
 from session_manager import SessionManager
 from geometry_engine import Vector3d, MeshData
+
+# Configure logging
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+logger = logging.getLogger("cad-api")
+
+# Constants for input validation bounds
+MAX_COORDINATE = 10000.0  # Maximum coordinate value
+MIN_COORDINATE = -10000.0  # Minimum coordinate value
+MAX_DIMENSION = 1000.0  # Maximum dimension (width, height, radius)
+MIN_POSITIVE_VALUE = 0.0001  # Minimum positive value for dimensions
+MAX_POLYGON_SIDES = 100  # Maximum sides for polygon
+MIN_POLYGON_SIDES = 3  # Minimum sides for polygon
 
 
 # ==================== REQUEST/RESPONSE MODELS ====================
@@ -66,15 +85,15 @@ class AddSketchElementRequest(BaseModel):
     y2: Optional[float] = Field(None, description="Line end Y (flattened format)")
     
     # Circle parameters
-    center_x: Optional[float] = Field(None, description="Circle center X (flattened format)")
-    center_y: Optional[float] = Field(None, description="Circle center Y (flattened format)")
-    radius: Optional[float] = Field(None, description="Circle/Arc radius (flattened format)")
+    center_x: Optional[float] = Field(None, ge=MIN_COORDINATE, le=MAX_COORDINATE, description="Circle center X (flattened format)")
+    center_y: Optional[float] = Field(None, ge=MIN_COORDINATE, le=MAX_COORDINATE, description="Circle center Y (flattened format)")
+    radius: Optional[float] = Field(None, gt=0, le=MAX_DIMENSION, description="Circle/Arc radius (flattened format)")
     
     # Rectangle parameters
-    x: Optional[float] = Field(None, description="Rectangle corner X (flattened format)")
-    y: Optional[float] = Field(None, description="Rectangle corner Y (flattened format)")
-    width: Optional[float] = Field(None, description="Rectangle width (flattened format)")
-    height: Optional[float] = Field(None, description="Rectangle height (flattened format)")
+    x: Optional[float] = Field(None, ge=MIN_COORDINATE, le=MAX_COORDINATE, description="Rectangle corner X (flattened format)")
+    y: Optional[float] = Field(None, ge=MIN_COORDINATE, le=MAX_COORDINATE, description="Rectangle corner Y (flattened format)")
+    width: Optional[float] = Field(None, gt=0, le=MAX_DIMENSION, description="Rectangle width (flattened format)")
+    height: Optional[float] = Field(None, gt=0, le=MAX_DIMENSION, description="Rectangle height (flattened format)")
     
     # Arc parameters (flattened)
     arc_type: Optional[str] = Field(None, description="Arc type: 'three_points' or 'endpoints_radius'")
@@ -83,7 +102,7 @@ class AddSketchElementRequest(BaseModel):
     large_arc: Optional[bool] = Field(None, description="Large arc flag for endpoints_radius type")
     
     # Polygon parameters (flattened)
-    sides: Optional[int] = Field(None, description="Number of polygon sides (flattened format)")
+    sides: Optional[int] = Field(None, ge=MIN_POLYGON_SIDES, le=MAX_POLYGON_SIDES, description="Number of polygon sides (flattened format)")
     
     def get_parameters(self) -> Dict[str, Any]:
         """Get parameters in unified format, handling both nested and flattened formats"""
@@ -157,7 +176,7 @@ class ExtrudeRequest(BaseModel):
     """Request model for extrude operations"""
     session_id: str = Field(..., description="Session ID")
     sketch_id: str = Field(..., description="Sketch ID")
-    distance: float = Field(..., description="Extrude distance")
+    distance: float = Field(..., gt=0, le=MAX_DIMENSION, description="Extrude distance")
     direction: str = Field(default="normal", description="Extrude direction")
     element_id: Optional[str] = Field(None, description="Element ID to extrude (if extruding specific element)")
 
@@ -168,7 +187,7 @@ class FilletRequest(BaseModel):
     sketch_id: str = Field(..., description="Sketch ID")
     line1_id: str = Field(..., description="First line element ID")
     line2_id: str = Field(..., description="Second line element ID")
-    radius: float = Field(..., description="Fillet radius")
+    radius: float = Field(..., gt=0, le=MAX_DIMENSION, description="Fillet radius")
 
 
 class ChamferRequest(BaseModel):
@@ -177,7 +196,7 @@ class ChamferRequest(BaseModel):
     sketch_id: str = Field(..., description="Sketch ID")
     line1_id: str = Field(..., description="First line element ID")
     line2_id: str = Field(..., description="Second line element ID")
-    distance: float = Field(..., description="Chamfer distance")
+    distance: float = Field(..., gt=0, le=MAX_DIMENSION, description="Chamfer distance")
 
 
 class TrimLineToLineRequest(BaseModel):
@@ -275,6 +294,29 @@ class MoveElementRequest(BaseModel):
     distance: float = Field(..., description="Distance to move")
 
 
+class CreateLinearArrayRequest(BaseModel):
+    """Request model for linear array operations"""
+    session_id: str = Field(..., description="Session ID")
+    sketch_id: str = Field(..., description="Sketch ID")
+    element_id: str = Field(..., description="ID of element to array")
+    direction_x: float = Field(default=1.0, description="X component of direction vector")
+    direction_y: float = Field(default=0.0, description="Y component of direction vector")
+    count: int = Field(..., ge=2, description="Total number of elements in array (including original)")
+    spacing: float = Field(..., gt=0, description="Distance between array elements")
+
+
+class CreateMirrorArrayRequest(BaseModel):
+    """Request model for mirror array operations"""
+    session_id: str = Field(..., description="Session ID")
+    sketch_id: str = Field(..., description="Sketch ID")
+    element_ids: List[str] = Field(..., description="List of element IDs to mirror")
+    x1: float = Field(..., description="First point X of mirror line")
+    y1: float = Field(..., description="First point Y of mirror line")
+    x2: float = Field(..., description="Second point X of mirror line")
+    y2: float = Field(..., description="Second point Y of mirror line")
+    keep_original: bool = Field(default=True, description="Whether to keep original elements")
+
+
 class APIResponse(BaseModel):
     """Standard API response format"""
     success: bool
@@ -300,19 +342,32 @@ class CADAPIServer:
             version="1.0.0"
         )
         
-        # Setup CORS middleware
+        # Setup CORS middleware with configurable origins
+        # Default to localhost for development; set CORS_ORIGINS env var for production
+        cors_origins_env = os.environ.get("CORS_ORIGINS", "")
+        if cors_origins_env:
+            allowed_origins = [origin.strip() for origin in cors_origins_env.split(",")]
+        else:
+            # Default development origins
+            allowed_origins = [
+                "http://localhost:3000",   # Node.js API server
+                "http://localhost:3001",   # Next.js frontend
+                "http://127.0.0.1:3000",
+                "http://127.0.0.1:3001",
+            ]
+
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=["*"],
+            allow_origins=allowed_origins,
             allow_credentials=True,
-            allow_methods=["*"],
+            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             allow_headers=["*"],
         )
         
         # Setup routes
         self._setup_routes()
         
-        print("CAD API Server initialized (Python)")
+        logger.info("CAD API Server initialized (Python)")
     
     def _setup_routes(self):
         """Setup HTTP routes - equivalent to C++ setupRoutes"""
@@ -723,7 +778,49 @@ class CADAPIServer:
                     timestamp=int(time.time()),
                     error=str(e)
                 )
-        
+
+        # ==================== ARRAY/PATTERN ENDPOINTS ====================
+
+        @self.app.post("/api/v1/linear-arrays")
+        async def create_linear_array(request: CreateLinearArrayRequest):
+            """Create linear array endpoint - handles creating element arrays in a direction"""
+            try:
+                response_data = await self._handle_create_linear_array(request)
+
+                return APIResponse(
+                    success=True,
+                    timestamp=int(time.time()),
+                    data=response_data
+                )
+
+            except Exception as e:
+                print(f"❌ Error in create_linear_array: {e}")
+                return APIResponse(
+                    success=False,
+                    timestamp=int(time.time()),
+                    error=str(e)
+                )
+
+        @self.app.post("/api/v1/mirror-arrays")
+        async def create_mirror_array(request: CreateMirrorArrayRequest):
+            """Create mirror array endpoint - handles mirroring elements across a line"""
+            try:
+                response_data = await self._handle_create_mirror_array(request)
+
+                return APIResponse(
+                    success=True,
+                    timestamp=int(time.time()),
+                    data=response_data
+                )
+
+            except Exception as e:
+                print(f"❌ Error in create_mirror_array: {e}")
+                return APIResponse(
+                    success=False,
+                    timestamp=int(time.time()),
+                    error=str(e)
+                )
+
         # ==================== SESSION MANAGEMENT ENDPOINTS ====================
         
         @self.app.get("/api/v1/sessions/{session_id}")
@@ -835,10 +932,7 @@ class CADAPIServer:
                     "tessellation_quality": mesh_data.tessellation_quality
                 }
             },
-            "bounding_box": {
-                "min": [0.0, 0.0, 0.0],  # TODO: Calculate actual bounding box
-                "max": [10.0, 10.0, 10.0]
-            }
+            "bounding_box": engine.get_bounding_box(shape_id) or {"min": [0.0, 0.0, 0.0], "max": [1.0, 1.0, 1.0]}
         }
         
         print(f"✅ Model created successfully: {shape_id}")
@@ -1820,7 +1914,77 @@ class CADAPIServer:
         
         print(f"✅ Element moved successfully")
         return response_data
-    
+
+    # ==================== ARRAY/PATTERN HANDLERS ====================
+
+    async def _handle_create_linear_array(self, request: CreateLinearArrayRequest) -> Dict[str, Any]:
+        """Handle linear array creation - Real implementation using geometry engine"""
+        print(f"📊 Creating linear array of element: {request.element_id}")
+
+        session_manager = SessionManager.get_instance()
+        engine = session_manager.get_or_create_session(request.session_id)
+
+        if engine is None:
+            raise Exception("Failed to get session")
+
+        # Validate that the sketch exists
+        if not engine.sketch_exists(request.sketch_id):
+            raise Exception(f"Sketch '{request.sketch_id}' does not exist")
+
+        # Validate that the element exists
+        if not engine.element_exists(request.element_id):
+            raise Exception(f"Element '{request.element_id}' does not exist")
+
+        # Create linear array using geometry engine
+        response_data = engine.create_linear_array_in_sketch(
+            request.sketch_id,
+            request.element_id,
+            request.direction_x,
+            request.direction_y,
+            request.count,
+            request.spacing
+        )
+
+        response_data["session_id"] = request.session_id
+        response_data["sketch_id"] = request.sketch_id
+
+        print(f"✅ Linear array created successfully")
+        return response_data
+
+    async def _handle_create_mirror_array(self, request: CreateMirrorArrayRequest) -> Dict[str, Any]:
+        """Handle mirror array creation - Real implementation using geometry engine"""
+        print(f"🪞 Creating mirror array of {len(request.element_ids)} elements")
+
+        session_manager = SessionManager.get_instance()
+        engine = session_manager.get_or_create_session(request.session_id)
+
+        if engine is None:
+            raise Exception("Failed to get session")
+
+        # Validate that the sketch exists
+        if not engine.sketch_exists(request.sketch_id):
+            raise Exception(f"Sketch '{request.sketch_id}' does not exist")
+
+        # Validate that all elements exist
+        for element_id in request.element_ids:
+            if not engine.element_exists(element_id):
+                raise Exception(f"Element '{element_id}' does not exist")
+
+        # Create mirror array using geometry engine
+        response_data = engine.create_mirror_array_in_sketch(
+            request.sketch_id,
+            request.element_ids,
+            request.x1, request.y1,
+            request.x2, request.y2,
+            request.keep_original
+        )
+
+        response_data["session_id"] = request.session_id
+        response_data["sketch_id"] = request.sketch_id
+
+        print(f"✅ Mirror array created successfully")
+        return response_data
+
     # ==================== UTILITY METHODS ====================
     
     def _get_session_id(self, body_session_id: Optional[str], header_session_id: Optional[str]) -> str:
@@ -1830,12 +1994,12 @@ class CADAPIServer:
     
     def start(self):
         """Start the server - equivalent to C++ start"""
-        print(f"🚀 Starting CAD API Server on {self.host}:{self.port}")
+        logger.info(f"Starting CAD API Server on {self.host}:{self.port}")
         uvicorn.run(self.app, host=self.host, port=self.port)
-    
+
     def stop(self):
         """Stop the server - equivalent to C++ stop"""
-        print("🛑 Stopping CAD API Server...")
+        logger.info("Stopping CAD API Server...")
         # FastAPI/uvicorn handles this automatically
 
 

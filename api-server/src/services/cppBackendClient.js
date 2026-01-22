@@ -739,6 +739,110 @@ export class CppBackendClient {
   }
 
   /**
+   * Create linear array of elements in the backend
+   */
+  async createLinearArray(sessionId, arrayData) {
+    try {
+      console.log('📊 Linear array data received:', arrayData);
+
+      // Handle direction array format from frontend
+      let directionX = arrayData.direction_x || 1;
+      let directionY = arrayData.direction_y || 0;
+
+      if (arrayData.direction && Array.isArray(arrayData.direction)) {
+        directionX = arrayData.direction[0] || 1;
+        directionY = arrayData.direction[1] || 0;
+      }
+
+      const requestBody = {
+        session_id: sessionId,
+        sketch_id: arrayData.sketch_id,
+        element_id: arrayData.element_id,
+        direction_x: directionX,
+        direction_y: directionY,
+        count: arrayData.count || 3,
+        spacing: arrayData.spacing || arrayData.distance || 10,
+      };
+
+      console.log('📊 Flattened linear array request body:', requestBody);
+
+      const jsonString = JSON.stringify(requestBody);
+
+      console.log('🔧 Node.js sending linear array request to backend:');
+      console.log('📋 JSON string:', jsonString);
+
+      const response = await this.makeRequest('/api/v1/linear-arrays', {
+        method: 'POST',
+        headers: {
+          'X-Session-ID': sessionId,
+        },
+        body: jsonString,
+      });
+      return response;
+    } catch (error) {
+      logger.error('Failed to create linear array in backend:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Create mirror array of elements in the backend
+   */
+  async createMirrorArray(sessionId, arrayData) {
+    try {
+      console.log('🪞 Mirror array data received:', arrayData);
+
+      // Handle mirror_line object format from frontend
+      let x1, y1, x2, y2;
+
+      if (arrayData.mirror_line && arrayData.mirror_line.point1 && arrayData.mirror_line.point2) {
+        x1 = arrayData.mirror_line.point1[0];
+        y1 = arrayData.mirror_line.point1[1];
+        x2 = arrayData.mirror_line.point2[0];
+        y2 = arrayData.mirror_line.point2[1];
+      } else {
+        x1 = arrayData.x1;
+        y1 = arrayData.y1;
+        x2 = arrayData.x2;
+        y2 = arrayData.y2;
+      }
+
+      // Handle single element_id or element_ids array
+      const elementIds = arrayData.element_ids || (arrayData.element_id ? [arrayData.element_id] : []);
+
+      const requestBody = {
+        session_id: sessionId,
+        sketch_id: arrayData.sketch_id,
+        element_ids: elementIds,
+        x1: x1,
+        y1: y1,
+        x2: x2,
+        y2: y2,
+        keep_original: arrayData.keep_original !== false,
+      };
+
+      console.log('🪞 Flattened mirror array request body:', requestBody);
+
+      const jsonString = JSON.stringify(requestBody);
+
+      console.log('🔧 Node.js sending mirror array request to backend:');
+      console.log('📋 JSON string:', jsonString);
+
+      const response = await this.makeRequest('/api/v1/mirror-arrays', {
+        method: 'POST',
+        headers: {
+          'X-Session-ID': sessionId,
+        },
+        body: jsonString,
+      });
+      return response;
+    } catch (error) {
+      logger.error('Failed to create mirror array in backend:', error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Extrude sketch or element in the C++ backend
    */
   async extrudeFeature(sessionId, extrudeData) {
