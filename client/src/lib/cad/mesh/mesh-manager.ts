@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { MeshData } from '../../../../../shared/types/geometry';
+import { MeshData } from '@/types/geometry';
 
 export class MeshManager {
     private scene: THREE.Scene;

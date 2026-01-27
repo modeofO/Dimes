@@ -9,7 +9,7 @@ import { UIManager } from '@/components/ui-manager';
 import { ChatPanel } from '@/components/chat-panel';
 import { ControlsPanel } from '@/components/controls-panel';
 import { StatusBar } from '@/components/status-bar';
-import { MeshData, SketchVisualizationData } from '../../../shared/types/geometry';
+import { MeshData, SketchVisualizationData } from '@/types/geometry';
 import { DrawingTool } from '@/lib/cad/controls/cad-controls';
 import { v4 as uuidv4 } from 'uuid';
 import { TopToolbar } from '@/components/top-toolbar';

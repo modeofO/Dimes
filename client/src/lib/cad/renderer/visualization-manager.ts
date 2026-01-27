@@ -3,7 +3,7 @@ import {
     PlaneVisualizationData, 
     SketchVisualizationData, 
     SketchElementVisualizationData 
-} from '../../../../../shared/types/geometry';
+} from '@/types/geometry';
 
 export class VisualizationManager {
     private scene: THREE.Scene;
