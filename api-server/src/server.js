@@ -22,6 +22,7 @@ dotenv.config();
 
 // Basic security and performance middleware
 const app = express();
+app.set('trust proxy', 1); // Trust first proxy (Railway reverse proxy)
 app.use(helmet());
 app.use(cors({
   origin: [

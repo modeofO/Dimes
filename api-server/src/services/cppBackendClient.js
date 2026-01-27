@@ -25,11 +25,11 @@ export class CppBackendClient {
     const requestOptions = {
       timeout: this.timeout,
       agent: httpAgent,
+      ...options,
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
       },
-      ...options,
     };
 
     for (let attempt = 1; attempt <= this.retryAttempts; attempt++) {
