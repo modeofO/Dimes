@@ -3,7 +3,7 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Install bun for faster builds
+# Install bun for faster dependency installation
 RUN npm install -g bun
 
 # Copy package files
@@ -14,7 +14,6 @@ RUN bun install --frozen-lockfile
 
 # Copy source code
 COPY src ./src
-COPY .env* ./
 
 # Expose port
 EXPOSE 3000
@@ -22,5 +21,5 @@ EXPOSE 3000
 # Set environment variables
 ENV NODE_ENV=production
 
-# Run the server
-CMD ["bun", "run", "src/server.js"]
+# Run the server using tsx (supports TypeScript imports)
+CMD ["npx", "tsx", "src/server.js"]
