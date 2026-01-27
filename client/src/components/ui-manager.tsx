@@ -18,9 +18,9 @@ interface CreatedPlane {
 interface SketchElementInfo {
     id: string;
     type: string;
-    is_container_only?: boolean;  // For composite shapes that are logical containers only
-    parent_id?: string;  // ID of parent element (if this is a child)
-    child_ids?: string[];  // IDs of child elements (if this is a parent)
+    is_container_only?: boolean;
+    parent_id?: string;
+    child_ids?: string[];
 }
 
 interface CreatedSketch {
@@ -37,39 +37,80 @@ interface UIManagerProps {
     onSelection: (id: string | null, type: string | null) => void;
 }
 
-export function UIManager({ 
-    createdPlanes, 
-    createdSketches, 
-    createdShapes, 
-    selectedObject, 
-    onSelection 
+export function UIManager({
+    createdPlanes,
+    createdSketches,
+    createdShapes,
+    selectedObject,
+    onSelection
 }: UIManagerProps) {
-    // State for collapsed/expanded containers (default to expanded for better UX)
     const [expandedContainers, setExpandedContainers] = useState<Set<string>>(new Set());
     const [seenContainers, setSeenContainers] = useState<Set<string>>(new Set());
 
-    // Auto-expand new containers for better UX
+    // Auto-expand new containers
     useEffect(() => {
-        const allContainerIds = new Set<string>();
         const newContainerIds = new Set<string>();
-        
         createdSketches.forEach(sketch => {
             sketch.elements.forEach(element => {
-                if (element.is_container_only) {
-                    allContainerIds.add(element.id);
-                    if (!seenContainers.has(element.id)) {
-                        newContainerIds.add(element.id);
-                    }
+                if (element.is_container_only && !seenContainers.has(element.id)) {
+                    newContainerIds.add(element.id);
                 }
             });
         });
-        
         if (newContainerIds.size > 0) {
-            console.log('🆕 Auto-expanding new containers:', Array.from(newContainerIds));
             setExpandedContainers(prev => new Set([...prev, ...newContainerIds]));
             setSeenContainers(prev => new Set([...prev, ...newContainerIds]));
         }
     }, [createdSketches, seenContainers]);
+
+    // --- Display name helpers ---
+
+    const formatShapeName = (shape: CreatedShape, index: number) => {
+        if (shape.type === 'CAD Model') return `Model ${index + 1}`;
+        return `${shape.type} ${index + 1}`;
+    };
+
+    const formatPlaneName = (plane: CreatedPlane) => {
+        const sameType = createdPlanes.filter(p => p.plane_type === plane.plane_type);
+        if (sameType.length > 1) {
+            return `${plane.plane_type} Plane ${sameType.indexOf(plane) + 1}`;
+        }
+        return `${plane.plane_type} Plane`;
+    };
+
+    const formatSketchName = (sketch: CreatedSketch) => {
+        const sketches = createdSketches.filter(s => s.plane_id === sketch.plane_id);
+        const sketchIndex = sketches.indexOf(sketch) + 1;
+        return `Sketch ${sketchIndex}`;
+    };
+
+    const formatElementName = (element: SketchElementInfo): string => {
+        const id = element.id;
+
+        if (element.is_container_only) {
+            return element.type.charAt(0).toUpperCase() + element.type.slice(1);
+        }
+
+        // Rectangle children: "xxx_line_bottom" → "Bottom Edge"
+        const rectSide = id.match(/_line_(top|bottom|left|right)$/);
+        if (rectSide) {
+            return `${rectSide[1].charAt(0).toUpperCase() + rectSide[1].slice(1)} Edge`;
+        }
+
+        // Polygon children: "xxx_line_0" → "Side 1"
+        const polySide = id.match(/_line_(\d+)$/);
+        if (polySide) {
+            return `Side ${parseInt(polySide[1]) + 1}`;
+        }
+
+        // Chamfer/fillet
+        if (id.includes('chamfer_')) return 'Chamfer';
+        if (id.includes('fillet_')) return 'Fillet';
+
+        return element.type.charAt(0).toUpperCase() + element.type.slice(1);
+    };
+
+    // --- Interaction ---
 
     const handleItemClick = (id: string, type: string) => {
         onSelection(id, type);
@@ -80,239 +121,180 @@ export function UIManager({
     };
 
     const toggleContainer = (elementId: string) => {
-        console.log('🔄 Toggle container clicked:', elementId);
         setExpandedContainers(prev => {
             const next = new Set(prev);
-            const wasExpanded = next.has(elementId);
-            if (wasExpanded) {
+            if (next.has(elementId)) {
                 next.delete(elementId);
-                console.log('📁 Collapsed container:', elementId);
             } else {
                 next.add(elementId);
-                console.log('📂 Expanded container:', elementId);
             }
-            console.log('📊 Updated expanded containers:', Array.from(next));
             return next;
         });
     };
 
-    const getElementIcon = (element: SketchElementInfo) => {
-        if (element.is_container_only) {
-            // Different icons for container elements
-            switch (element.type) {
-                case 'rectangle': return '▭';
-                case 'polygon': return '⬢';
-                default: return '📁';
-            }
-        } else {
-            // Regular icons for rendered elements
-            switch (element.type) {
-                case 'line': return '📏';
-                case 'circle': return '⭕';
-                case 'rectangle': return '▭';
-                case 'polygon': return '⬢';
-                case 'arc': return '🌙';
-                case 'chamfer': return '📏';
-                case 'fillet': return '📏';
-                default: return '◾';
-            }
-        }
-    };
+    // --- Hierarchy builder ---
 
-    // Helper function to determine if an element belongs to a container
     const getElementContainer = (element: SketchElementInfo, allElements: SketchElementInfo[]): string | null => {
-        // If element has explicit parent_id, use that
-        if (element.parent_id) {
-            console.log('📎 Using explicit parent_id for', element.id, '→', element.parent_id);
-            return element.parent_id;
-        }
+        if (element.parent_id) return element.parent_id;
 
-        // Check if element is a direct child of a container based on naming pattern
-        // e.g., "rectangle_1_8122_line_bottom" belongs to "rectangle_1_8122"
         const containers = allElements.filter(el => el.is_container_only);
         for (const container of containers) {
             if (element.id.startsWith(container.id + '_line_')) {
-                console.log('🔗 Found direct child', element.id, 'of container', container.id);
                 return container.id;
             }
         }
 
-        // For chamfer/fillet lines, try to find the parent rectangle/polygon they belong to
         if (element.type === 'line' && (element.id.includes('chamfer_') || element.id.includes('fillet_'))) {
-            // Look for container elements that have child lines from the same base shape
             for (const container of containers) {
-                // Check if there are any child lines from this container in the sketch
-                const hasChildLines = allElements.some(el => 
+                const hasChildLines = allElements.some(el =>
                     el.id.startsWith(container.id + '_line_') && el.type === 'line'
                 );
-                
-                if (hasChildLines) {
-                    console.log('🔗 Associating chamfer/fillet', element.id, 'with container', container.id);
-                    return container.id;
-                }
+                if (hasChildLines) return container.id;
             }
-            
-            console.log('❓ No container found for chamfer/fillet', element.id);
         }
 
         return null;
     };
 
-    // Helper function to build hierarchical structure
     const buildElementHierarchy = (elements: SketchElementInfo[]) => {
         const containers: SketchElementInfo[] = [];
         const orphans: SketchElementInfo[] = [];
         const childMap = new Map<string, SketchElementInfo[]>();
 
-        console.log('🏗️ Building hierarchy for', elements.length, 'elements:', elements.map(e => `${e.id}(${e.type}${e.is_container_only ? ', container' : ''})`));
-
-        // First pass: identify containers and build child map
         for (const element of elements) {
             if (element.is_container_only) {
                 containers.push(element);
                 childMap.set(element.id, []);
-                console.log('📦 Found container:', element.id, 'type:', element.type);
             }
         }
 
-        // Second pass: assign children to containers or mark as orphans
         for (const element of elements) {
             if (!element.is_container_only) {
                 const containerId = getElementContainer(element, elements);
                 if (containerId && childMap.has(containerId)) {
                     childMap.get(containerId)!.push(element);
-                    console.log('👶 Assigned child', element.id, 'to container', containerId);
                 } else {
                     orphans.push(element);
-                    console.log('🏠 Orphan element:', element.id);
                 }
             }
         }
 
-        console.log('📊 Hierarchy result:', {
-            containers: containers.length,
-            orphans: orphans.length,
-            childMappings: Array.from(childMap.entries()).map(([id, children]) => ({ containerId: id, childCount: children.length }))
-        });
-
         return { containers, childMap, orphans };
     };
+
+    // --- Shared styles ---
+
+    const itemBase = 'px-2 py-0.5 text-xs cursor-pointer rounded transition-colors';
+    const itemHover = 'hover:bg-zinc-700/50';
+    const itemSelected = 'bg-blue-900/50 text-blue-300';
+    const itemDefault = 'text-zinc-300';
+
+    const itemClass = (id: string, type: string) =>
+        `${itemBase} ${itemHover} ${isSelected(id, type) ? itemSelected : itemDefault}`;
 
     return (
         <div className="h-full flex flex-col">
             {/* Header */}
-            <div className="p-3 border-b border-zinc-700 bg-zinc-800">
-                <h3 className="font-semibold text-zinc-200">Scene Tree</h3>
+            <div className="px-3 py-2 border-b border-zinc-700 bg-zinc-800">
+                <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Scene Tree</h3>
             </div>
 
             {/* Tree Content */}
-            <div className="flex-1 overflow-y-auto p-3">
+            <div className="flex-1 overflow-y-auto px-2 py-1.5">
                 {createdPlanes.length === 0 && createdShapes.length === 0 ? (
-                    <div className="text-zinc-500 text-center text-sm">
+                    <div className="text-zinc-600 text-center text-xs py-4">
                         No objects in scene
                     </div>
                 ) : (
-                    <div className="space-y-1">
-                        {/* Shapes */}
-                        {createdShapes.map((shape) => (
+                    <div className="space-y-px">
+                        {/* Shapes (3D models) */}
+                        {createdShapes.map((shape, index) => (
                             <div
                                 key={`shape-${shape.id}`}
-                                className={`px-2 py-1 text-sm cursor-pointer rounded hover:bg-zinc-700 ${
-                                    isSelected(shape.id, 'feature') ? 'bg-blue-900/50 text-blue-300' : 'text-zinc-200'
-                                }`}
+                                className={itemClass(shape.id, 'feature')}
                                 onClick={() => handleItemClick(shape.id, 'feature')}
                             >
-                                📦 {shape.type} ({shape.id})
+                                {formatShapeName(shape, index)}
                             </div>
                         ))}
 
-                        {/* Planes and their children */}
+                        {/* Planes */}
                         {createdPlanes.map((plane) => (
-                            <div key={`plane-${plane.plane_id}`} className="space-y-1">
+                            <div key={`plane-${plane.plane_id}`}>
                                 <div
-                                    className={`px-2 py-1 text-sm cursor-pointer rounded hover:bg-zinc-700 ${
-                                        isSelected(plane.plane_id, 'plane') ? 'bg-blue-900/50 text-blue-300' : 'text-zinc-200'
-                                    }`}
+                                    className={itemClass(plane.plane_id, 'plane')}
                                     onClick={() => handleItemClick(plane.plane_id, 'plane')}
                                 >
-                                    🗂️ {plane.plane_type} Plane ({plane.plane_id})
+                                    {formatPlaneName(plane)}
                                 </div>
 
                                 {/* Sketches on this plane */}
                                 {createdSketches
                                     .filter((sketch) => sketch.plane_id === plane.plane_id)
                                     .map((sketch) => (
-                                        <div key={`sketch-${sketch.sketch_id}`} className="ml-4 space-y-1">
+                                        <div key={`sketch-${sketch.sketch_id}`} className="ml-3">
                                             <div
-                                                className={`px-2 py-1 text-sm cursor-pointer rounded hover:bg-zinc-700 ${
-                                                    isSelected(sketch.sketch_id, 'sketch') ? 'bg-blue-900/50 text-blue-300' : 'text-zinc-200'
-                                                }`}
+                                                className={itemClass(sketch.sketch_id, 'sketch')}
                                                 onClick={() => handleItemClick(sketch.sketch_id, 'sketch')}
                                             >
-                                                {sketch.sketch_id} - {sketch.elements.length} elements
+                                                <span>{formatSketchName(sketch)}</span>
+                                                <span className="text-zinc-600 ml-1">
+                                                    · {sketch.elements.length} el
+                                                </span>
                                             </div>
 
-                                            {/* Elements in this sketch - hierarchical view */}
+                                            {/* Elements hierarchy */}
                                             {(() => {
                                                 const { containers, childMap, orphans } = buildElementHierarchy(sketch.elements);
-
                                                 return (
                                                     <>
-                                                        {/* Container elements with their children */}
+                                                        {/* Containers */}
                                                         {containers.map((container) => {
                                                             const isExpanded = expandedContainers.has(container.id);
                                                             const children = childMap.get(container.id) || [];
 
                                                             return (
-                                                                <div key={`container-${container.id}`} className="ml-4">
-                                                                    {/* Container header */}
+                                                                <div key={`c-${container.id}`} className="ml-3">
                                                                     <div
-                                                                        className={`px-2 py-1 text-sm cursor-pointer rounded hover:bg-zinc-700 flex items-center ${
-                                                                            isSelected(container.id, 'element') ? 'bg-blue-900/50 text-blue-300' : 'text-zinc-200'
-                                                                        } ${container.is_container_only ? 'italic text-zinc-400' : ''}`}
+                                                                        className={`${itemBase} ${itemHover} flex items-center gap-1 ${
+                                                                            isSelected(container.id, 'element') ? itemSelected : 'text-zinc-400'
+                                                                        }`}
                                                                         onClick={() => handleItemClick(container.id, 'element')}
-                                                                        title={container.is_container_only ? 'Container (not rendered)' : undefined}
                                                                     >
-                                                                        {/* Expand/collapse button */}
                                                                         <button
                                                                             onClick={(e) => {
                                                                                 e.stopPropagation();
                                                                                 toggleContainer(container.id);
                                                                             }}
-                                                                            className="mr-1 w-4 h-4 flex items-center justify-center hover:bg-zinc-600 rounded"
+                                                                            className="w-3 h-3 flex items-center justify-center text-[10px] text-zinc-500 hover:text-zinc-300"
                                                                         >
-                                                                            {isExpanded ? '▼' : '▶'}
+                                                                            {isExpanded ? '▾' : '▸'}
                                                                         </button>
-                                                                        {getElementIcon(container)} {container.type.charAt(0).toUpperCase() + container.type.slice(1)} ({container.id})
-                                                                        <span className="ml-1 text-xs text-zinc-500">({children.length} items)</span>
+                                                                        <span>{formatElementName(container)}</span>
+                                                                        <span className="text-zinc-600 text-[10px]">({children.length})</span>
                                                                     </div>
 
-                                                                    {/* Children elements (collapsible) */}
                                                                     {isExpanded && children.map((child) => (
                                                                         <div
-                                                                            key={`child-${child.id}`}
-                                                                            className={`ml-6 px-2 py-1 text-sm cursor-pointer rounded hover:bg-zinc-700 ${
-                                                                                isSelected(child.id, 'element') ? 'bg-blue-900/50 text-blue-300' : 'text-zinc-200'
-                                                                            }`}
+                                                                            key={`ch-${child.id}`}
+                                                                            className={`ml-4 ${itemClass(child.id, 'element')}`}
                                                                             onClick={() => handleItemClick(child.id, 'element')}
                                                                         >
-                                                                            {getElementIcon(child)} {child.type.charAt(0).toUpperCase() + child.type.slice(1)} ({child.id})
+                                                                            {formatElementName(child)}
                                                                         </div>
                                                                     ))}
                                                                 </div>
                                                             );
                                                         })}
 
-                                                        {/* Orphan elements (no container) */}
-                                                        {orphans.map((element) => (
+                                                        {/* Orphan elements */}
+                                                        {orphans.map((element, i) => (
                                                             <div
-                                                                key={`orphan-${element.id}`}
-                                                                className={`ml-4 px-2 py-1 text-sm cursor-pointer rounded hover:bg-zinc-700 ${
-                                                                    isSelected(element.id, 'element') ? 'bg-blue-900/50 text-blue-300' : 'text-zinc-200'
-                                                                }`}
+                                                                key={`o-${element.id}`}
+                                                                className={`ml-3 ${itemClass(element.id, 'element')}`}
                                                                 onClick={() => handleItemClick(element.id, 'element')}
                                                             >
-                                                                {getElementIcon(element)} {element.type.charAt(0).toUpperCase() + element.type.slice(1)} ({element.id})
+                                                                {formatElementName(element)}
                                                             </div>
                                                         ))}
                                                     </>
@@ -327,4 +309,4 @@ export function UIManager({
             </div>
         </div>
     );
-} 
+}
