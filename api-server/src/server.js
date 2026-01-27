@@ -69,7 +69,8 @@ app.use(errorHandler);
 
 // Start the server
 const port = process.env.PORT || 3000;
-server.listen(port, () => {
+const host = process.env.HOST || '0.0.0.0';
+server.listen(port, host, () => {
   logger.info(`🚀 Dimes CAD API Server running on port ${port}`);
   logger.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
   logger.info(`🔗 C++ Backend: ${process.env.CPP_BACKEND_URL || '127.0.0.1:8080'}`);
