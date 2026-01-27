@@ -15,11 +15,8 @@ RUN bun install --frozen-lockfile
 # Copy source code
 COPY src ./src
 
-# Expose port
-EXPOSE 3000
-
 # Set environment variables
 ENV NODE_ENV=production
 
-# Temporarily use minimal health check server for debugging
-CMD ["node", "src/healthcheck.js"]
+# Start the API server
+CMD ["npx", "tsx", "src/server.js"]

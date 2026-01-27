@@ -400,7 +400,8 @@ export function CADApplication() {
 
                 // Initialize CAD client
                 updateStatus('Connecting to CAD server...', 'info');
-                const client = new CADClient('http://localhost:3000', sessionId);
+                const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+                const client = new CADClient(apiUrl, sessionId);
                 
                 // Set up geometry update callback
                 client.onGeometryUpdate((meshData: MeshData) => {
@@ -623,7 +624,10 @@ export function CADApplication() {
 
                 // Initialize Agent
                 updateStatus('Initializing Agent...', 'info');
-                const agentServerUrl = `ws://${window.location.hostname}:3000/ws`;
+                const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const apiBase = process.env.NEXT_PUBLIC_API_URL || `${window.location.protocol}//${window.location.hostname}:3000`;
+                const apiHost = new URL(apiBase).host;
+                const agentServerUrl = `${wsProtocol}//${apiHost}/ws`;
                 const agent = new AgentManager(agentServerUrl, sessionId);
                 
                 agent.onMessage((message) => {
@@ -667,7 +671,8 @@ export function CADApplication() {
         const testServerConnection = async () => {
             try {
                 console.log('Testing server connection...');
-                const healthResponse = await fetch('http://localhost:3000/api/v1/health');
+                const healthUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+                const healthResponse = await fetch(`${healthUrl}/api/v1/health`);
                 
                 if (healthResponse.ok) {
                     console.log('✅ Server connection successful');
