@@ -8,7 +8,7 @@ import { AgentManager } from '@/lib/cad/agent/agent-manager';
 import { UIManager } from '@/components/ui-manager';
 import { ChatPanel } from '@/components/chat-panel';
 import { ControlsPanel } from '@/components/controls-panel';
-import { StatusBar } from '@/components/status-bar';
+import { StatusIndicator } from '@/components/status-bar';
 import { MeshData, SketchVisualizationData } from '@/types/geometry';
 import { DrawingTool } from '@/lib/cad/controls/cad-controls';
 import { v4 as uuidv4 } from 'uuid';
@@ -68,6 +68,7 @@ export function CADApplication() {
     const [currentUnit, setCurrentUnit] = useState<Unit>('mm');
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [unreadMessages, setUnreadMessages] = useState(0);
+    const [isConnected, setIsConnected] = useState(false);
 
     // Debug: Track activeSketchId changes
     useEffect(() => {
@@ -682,14 +683,16 @@ export function CADApplication() {
                 console.log('Testing server connection...');
                 const healthUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
                 const healthResponse = await fetch(`${healthUrl}/api/v1/health`);
-                
+
                 if (healthResponse.ok) {
                     console.log('✅ Server connection successful');
+                    setIsConnected(true);
                 } else {
                     throw new Error(`Server health check failed: ${healthResponse.status}`);
                 }
             } catch (error) {
                 console.warn('⚠️  Server connection test failed:', error);
+                setIsConnected(false);
                 updateStatus('Server offline - running in demo mode', 'warning');
             }
         };
@@ -813,14 +816,12 @@ export function CADApplication() {
                         {!isChatOpen && (
                             <button
                                 onClick={openChat}
-                                className="absolute bottom-4 right-4 z-20 w-10 h-10 bg-blue-600 hover:bg-blue-500 text-white rounded-full shadow-lg shadow-blue-900/40 flex items-center justify-center transition-all hover:scale-105"
-                                title="Open CAD Agent chat"
+                                className="absolute bottom-4 right-4 z-20 px-3 py-1.5 bg-zinc-700/80 hover:bg-zinc-600 text-zinc-300 hover:text-white rounded-md text-xs font-medium shadow-lg shadow-black/30 transition-colors backdrop-blur-sm border border-zinc-600/50"
+                                title="Open AI Builder chat"
                             >
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                                </svg>
+                                Builder
                                 {unreadMessages > 0 && (
-                                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                                    <span className="ml-1.5 inline-flex items-center justify-center w-4 h-4 bg-blue-500 text-white text-[10px] font-bold rounded-full">
                                         {unreadMessages > 9 ? '9+' : unreadMessages}
                                     </span>
                                 )}
@@ -837,8 +838,12 @@ export function CADApplication() {
                                 />
                             </div>
                         )}
+
+                        {/* Connection Status Indicator */}
+                        <div className="absolute bottom-3 left-3 z-10">
+                            <StatusIndicator connected={isConnected} />
+                        </div>
                     </div>
-                    <StatusBar status={status} />
                 </div>
 
                 {/* Right Sidebar — Scene Tree only */}

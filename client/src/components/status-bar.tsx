@@ -1,27 +1,14 @@
-interface StatusBarProps {
-    status: {
-        message: string;
-        type: 'info' | 'success' | 'warning' | 'error';
-    };
+interface StatusIndicatorProps {
+    connected: boolean;
 }
 
-export function StatusBar({ status }: StatusBarProps) {
-    const getStatusColor = () => {
-        switch (status.type) {
-            case 'success':
-                return 'bg-green-500 text-white';
-            case 'warning':
-                return 'bg-orange-500 text-white';
-            case 'error':
-                return 'bg-red-500 text-white';
-            default: // info
-                return 'bg-blue-500 text-white';
-        }
-    };
-
+export function StatusIndicator({ connected }: StatusIndicatorProps) {
     return (
-        <div className={`px-4 py-2 text-sm font-medium ${getStatusColor()}`}>
-            {status.message}
+        <div className="flex items-center gap-1.5">
+            <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
+            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium select-none">
+                {connected ? 'Connected' : 'Disconnected'}
+            </span>
         </div>
     );
-} 
+}
