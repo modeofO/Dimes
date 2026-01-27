@@ -742,11 +742,16 @@ export class CADClient {
         }
         
         const response = await fetch(url, options);
-        
+
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            let errorDetail = response.statusText;
+            try {
+                const errorBody = await response.json();
+                errorDetail = errorBody.error || errorBody.details || errorBody.message || errorDetail;
+            } catch {}
+            throw new Error(`HTTP ${response.status}: ${errorDetail}`);
         }
-        
+
         return response.json() as Promise<T>;
     }
     

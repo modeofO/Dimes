@@ -2,9 +2,8 @@ import fetch from 'node-fetch';
 import { Agent } from 'http';
 import { logger } from '../utils/logger.js';
 
-// Create IPv4-only agent
-const ipv4Agent = new Agent({
-  family: 4, // Force IPv4
+// Create HTTP agent (allow both IPv4 and IPv6 for Railway internal networking)
+const httpAgent = new Agent({
   keepAlive: true,
   timeout: 30000
 });
@@ -15,6 +14,7 @@ export class CppBackendClient {
     this.timeout = parseInt(process.env.CPP_BACKEND_TIMEOUT) || 30000;
     this.retryAttempts = 3;
     this.retryDelay = 1000;
+    logger.info(`CAD backend configured at: ${this.baseUrl}`);
   }
 
   /**
@@ -24,7 +24,7 @@ export class CppBackendClient {
     const url = `${this.baseUrl}${endpoint}`;
     const requestOptions = {
       timeout: this.timeout,
-      agent: ipv4Agent, // Force IPv4
+      agent: httpAgent,
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
@@ -34,12 +34,13 @@ export class CppBackendClient {
 
     for (let attempt = 1; attempt <= this.retryAttempts; attempt++) {
       try {
-        logger.debug(`Making request to C++ backend: ${url} (attempt ${attempt})`);
-        
+        logger.info(`Making request to CAD backend: ${url} (attempt ${attempt})`);
+
         const response = await fetch(url, requestOptions);
-        
+
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          const errorText = await response.text().catch(() => '');
+          throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
         }
 
         // Handle different content types
@@ -47,7 +48,7 @@ export class CppBackendClient {
         if (contentType && contentType.includes('application/json')) {
           return await response.json();
         } else {
-          return await response.buffer();
+          return Buffer.from(await response.arrayBuffer());
         }
 
       } catch (error) {
