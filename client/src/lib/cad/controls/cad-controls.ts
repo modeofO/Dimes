@@ -52,6 +52,12 @@ export class CADControls extends OrbitControls {
     private snapPoints: THREE.Vector3[] = [];
     private snapThreshold: number = 0.5; // Adjust as needed
     private snapHighlight?: THREE.Mesh;
+
+    // Bound event handlers
+    private boundPointerDown: EventListener;
+    private boundPointerMove: EventListener;
+    private boundPointerUp: EventListener;
+    private boundKeyDown: EventListener;
     
     // Callbacks
     public onDrawingComplete?: (tool: DrawingTool, points: THREE.Vector2[], arcType?: ArcType) => void;
@@ -64,19 +70,25 @@ export class CADControls extends OrbitControls {
 
     constructor(camera: THREE.Camera, domElement: HTMLElement, scene: THREE.Scene) {
         super(camera, domElement);
-        
+
         this.camera = camera;
         this.scene = scene;
         this.drawingState = {
             tool: 'select',
             isDrawing: false
         };
-        
+
+        // Bind event handlers once and store them
+        this.boundPointerDown = this.onPointerDown.bind(this) as EventListener;
+        this.boundPointerMove = this.onPointerMove.bind(this) as EventListener;
+        this.boundPointerUp = this.onPointerUp.bind(this) as EventListener;
+        this.boundKeyDown = this.onKeyDown.bind(this) as EventListener;
+
         // Disable orbit controls when drawing
         this.enablePan = true;
         this.enableRotate = true;
         this.enableZoom = true;
-        
+
         this.setupEventListeners();
     }
     
@@ -85,11 +97,11 @@ export class CADControls extends OrbitControls {
             console.error('CADControls: domElement is null, cannot setup event listeners');
             return;
         }
-        
-        this.domElement.addEventListener('pointerdown', this.onPointerDown.bind(this));
-        this.domElement.addEventListener('pointermove', this.onPointerMove.bind(this));
-        this.domElement.addEventListener('pointerup', this.onPointerUp.bind(this));
-        this.domElement.addEventListener('keydown', this.onKeyDown.bind(this));
+
+        this.domElement.addEventListener('pointerdown', this.boundPointerDown);
+        this.domElement.addEventListener('pointermove', this.boundPointerMove);
+        this.domElement.addEventListener('pointerup', this.boundPointerUp);
+        this.domElement.addEventListener('keydown', this.boundKeyDown);
     }
     
     public setDrawingTool(tool: DrawingTool): void {
@@ -756,12 +768,12 @@ export class CADControls extends OrbitControls {
     public dispose(): void {
         this.removeSnapHighlight();
         if (this.domElement) {
-            this.domElement.removeEventListener('pointerdown', this.onPointerDown);
-            this.domElement.removeEventListener('pointermove', this.onPointerMove);
-            this.domElement.removeEventListener('pointerup', this.onPointerUp);
-            this.domElement.removeEventListener('keydown', this.onKeyDown);
+            this.domElement.removeEventListener('pointerdown', this.boundPointerDown);
+            this.domElement.removeEventListener('pointermove', this.boundPointerMove);
+            this.domElement.removeEventListener('pointerup', this.boundPointerUp);
+            this.domElement.removeEventListener('keydown', this.boundKeyDown);
         }
-        
+
         this.cancelDrawing();
         super.dispose();
     }

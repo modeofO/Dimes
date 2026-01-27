@@ -1,15 +1,15 @@
 # requirements.txt - Additional packages via pip
 # Web framework and server
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-pydantic==2.5.0
+fastapi==0.128.0
+uvicorn[standard]==0.40.0
+pydantic==2.12.5
 
 # HTTP client for testing
-requests==2.31.0
+requests==2.32.3
 
 # Development and debugging (optional)
-ipython==8.18.0
-rich==13.7.0
+ipython==8.31.0
+rich==13.9.4
 
 # Note: pythonOCC (OCC.Core.*) is installed via conda, not pip
 # See environment.yml for conda dependencies
