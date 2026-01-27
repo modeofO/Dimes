@@ -221,7 +221,6 @@ config/secrets.json
 
 # Docker
 docker-compose.override.yml
-.dockerignore
 
 # Deployment configs
 deploy/
