@@ -163,15 +163,15 @@ export function TopToolbar({
     }, [client, selectedObject, extrudeDistance, createdSketches, onUpdateStatus, currentUnit]);
 
     return (
-        <div className="flex items-center space-x-4 p-2 bg-white border-b border-gray-200 shadow-sm w-full">
+        <div className="flex items-center space-x-4 p-2 bg-zinc-800 border-b border-zinc-700 w-full">
             {/* Unit Selection */}
             <div className="flex items-center space-x-2">
-                <label htmlFor="unit-select" className="text-sm font-medium text-gray-700">Unit:</label>
+                <label htmlFor="unit-select" className="text-sm font-medium text-zinc-300">Unit:</label>
                 <select
                     id="unit-select"
                     value={currentUnit}
                     onChange={(e) => onUnitChange(e.target.value as Unit)}
-                    className="px-2 py-1 border border-gray-300 rounded-md text-sm text-gray-800 bg-white"
+                    className="px-2 py-1 border border-zinc-600 rounded-md text-sm text-zinc-200 bg-zinc-700"
                 >
                     <option value="mm">mm</option>
                     <option value="cm">cm</option>
@@ -184,7 +184,7 @@ export function TopToolbar({
                 <select
                     value={planeType}
                     onChange={(e) => setPlaneType(e.target.value)}
-                    className="px-2 py-1 border border-gray-300 rounded-md text-sm text-gray-800 bg-white"
+                    className="px-2 py-1 border border-zinc-600 rounded-md text-sm text-zinc-200 bg-zinc-700"
                 >
                     <option value="XZ">XZ</option>
                     <option value="XY">XY</option>
@@ -193,7 +193,7 @@ export function TopToolbar({
                 <button
                     onClick={createSketchPlane}
                     disabled={!client}
-                    className="px-3 py-1 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600 disabled:bg-gray-300"
+                    className="px-3 py-1 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600 disabled:bg-zinc-600 disabled:text-zinc-400"
                 >
                     Create Plane
                 </button>
@@ -204,7 +204,7 @@ export function TopToolbar({
                 <select
                     value={selectedPlane}
                     onChange={(e) => setSelectedPlane(e.target.value)}
-                    className="px-2 py-1 border border-gray-300 rounded-md text-sm text-gray-800 bg-white"
+                    className="px-2 py-1 border border-zinc-600 rounded-md text-sm text-zinc-200 bg-zinc-700"
                 >
                     <option value="">Plane</option>
                     {createdPlanes.map(plane => (
@@ -216,7 +216,7 @@ export function TopToolbar({
                 <button
                     onClick={createSketch}
                     disabled={!client || !selectedPlane}
-                    className="px-3 py-1 bg-green-500 text-white rounded-md text-sm hover:bg-green-600 disabled:bg-gray-300"
+                    className="px-3 py-1 bg-green-500 text-white rounded-md text-sm hover:bg-green-600 disabled:bg-zinc-600 disabled:text-zinc-400"
                 >
                     Create Sketch
                 </button>
@@ -233,7 +233,7 @@ export function TopToolbar({
                             onSetActiveSketch(sketchId);
                         }
                     }}
-                    className="px-2 py-1 border border-gray-300 rounded-md text-sm text-gray-800 bg-white"
+                    className="px-2 py-1 border border-zinc-600 rounded-md text-sm text-zinc-200 bg-zinc-700"
                 >
                     <option value="">Active Sketch</option>
                     {createdSketches.map(sketch => (
@@ -244,28 +244,28 @@ export function TopToolbar({
                 </select>
                 <button
                     onClick={() => onSetDrawingTool?.('select')}
-                    className={`px-2 py-1 text-xs rounded text-gray-800 ${currentDrawingTool === 'select' ? 'bg-gray-700 text-white' : 'bg-gray-200 hover:bg-gray-300'}`}
+                    className={`px-2 py-1 text-xs rounded text-zinc-200 ${currentDrawingTool === 'select' ? 'bg-zinc-500 text-white' : 'bg-zinc-700 hover:bg-zinc-600'}`}
                     title="Select"
                 >
                     🖱️
                 </button>
                 <button
                     onClick={() => onSetDrawingTool?.('line')}
-                    className={`px-2 py-1 text-xs rounded text-gray-800 ${currentDrawingTool === 'line' ? 'bg-green-600 text-white' : 'bg-green-100 hover:bg-green-200'}`}
+                    className={`px-2 py-1 text-xs rounded text-zinc-200 ${currentDrawingTool === 'line' ? 'bg-green-600 text-white' : 'bg-zinc-700 hover:bg-zinc-600'}`}
                     title="Line"
                 >
                     ─
                 </button>
                 <button
                     onClick={() => onSetDrawingTool?.('circle')}
-                    className={`px-2 py-1 text-xs rounded text-gray-800 ${currentDrawingTool === 'circle' ? 'bg-red-600 text-white' : 'bg-red-100 hover:bg-red-200'}`}
+                    className={`px-2 py-1 text-xs rounded text-zinc-200 ${currentDrawingTool === 'circle' ? 'bg-red-600 text-white' : 'bg-zinc-700 hover:bg-zinc-600'}`}
                     title="Circle"
                 >
                     ○
                 </button>
                 <button
                     onClick={() => onSetDrawingTool?.('rectangle')}
-                    className={`px-2 py-1 text-xs rounded text-gray-800 ${currentDrawingTool === 'rectangle' ? 'bg-blue-600 text-white' : 'bg-blue-100 hover:bg-blue-200'}`}
+                    className={`px-2 py-1 text-xs rounded text-zinc-200 ${currentDrawingTool === 'rectangle' ? 'bg-blue-600 text-white' : 'bg-zinc-700 hover:bg-zinc-600'}`}
                     title="Rectangle"
                 >
                     ▭
@@ -275,7 +275,7 @@ export function TopToolbar({
                         onSetDrawingTool?.('arc');
                         setShowArcSubTools(!showArcSubTools);
                     }}
-                    className={`px-2 py-1 text-xs rounded text-gray-800 ${currentDrawingTool === 'arc' ? 'bg-orange-600 text-white' : 'bg-orange-100 hover:bg-orange-200'}`}
+                    className={`px-2 py-1 text-xs rounded text-zinc-200 ${currentDrawingTool === 'arc' ? 'bg-orange-600 text-white' : 'bg-zinc-700 hover:bg-zinc-600'}`}
                     title="Arc"
                 >
                     ⌒
@@ -285,7 +285,7 @@ export function TopToolbar({
                         onSetDrawingTool?.('polygon');
                         setShowPolygonSubTools(!showPolygonSubTools);
                     }}
-                    className={`px-2 py-1 text-xs rounded text-gray-800 ${currentDrawingTool === 'polygon' ? 'bg-purple-600 text-white' : 'bg-purple-100 hover:bg-purple-200'}`}
+                    className={`px-2 py-1 text-xs rounded text-zinc-200 ${currentDrawingTool === 'polygon' ? 'bg-purple-600 text-white' : 'bg-zinc-700 hover:bg-zinc-600'}`}
                     title="Polygon"
                 >
                     ⬡
@@ -296,56 +296,56 @@ export function TopToolbar({
             <div className="flex items-center space-x-1">
                 <button
                     onClick={() => onSetDrawingTool?.('fillet')}
-                    className={`px-2 py-1 text-xs rounded text-gray-800 ${currentDrawingTool === 'fillet' ? 'bg-indigo-600 text-white' : 'bg-indigo-100 hover:bg-indigo-200'}`}
+                    className={`px-2 py-1 text-xs rounded text-zinc-200 ${currentDrawingTool === 'fillet' ? 'bg-indigo-600 text-white' : 'bg-zinc-700 hover:bg-zinc-600'}`}
                     title="Fillet"
                 >
                     ⤷
                 </button>
                 <button
                     onClick={() => onSetDrawingTool?.('chamfer')}
-                    className={`px-2 py-1 text-xs rounded text-gray-800 ${currentDrawingTool === 'chamfer' ? 'bg-yellow-600 text-white' : 'bg-yellow-100 hover:bg-yellow-200'}`}
+                    className={`px-2 py-1 text-xs rounded text-zinc-200 ${currentDrawingTool === 'chamfer' ? 'bg-yellow-600 text-white' : 'bg-zinc-700 hover:bg-zinc-600'}`}
                     title="Chamfer"
                 >
                     ⟋
                 </button>
                 <button
                     onClick={() => onSetDrawingTool?.('trim')}
-                    className={`px-2 py-1 text-xs rounded text-gray-800 ${currentDrawingTool === 'trim' ? 'bg-red-600 text-white' : 'bg-red-100 hover:bg-red-200'}`}
+                    className={`px-2 py-1 text-xs rounded text-zinc-200 ${currentDrawingTool === 'trim' ? 'bg-red-600 text-white' : 'bg-zinc-700 hover:bg-zinc-600'}`}
                     title="Trim"
                 >
                     ✂
                 </button>
                 <button
                     onClick={() => onSetDrawingTool?.('extend')}
-                    className={`px-2 py-1 text-xs rounded text-gray-800 ${currentDrawingTool === 'extend' ? 'bg-green-600 text-white' : 'bg-green-100 hover:bg-green-200'}`}
+                    className={`px-2 py-1 text-xs rounded text-zinc-200 ${currentDrawingTool === 'extend' ? 'bg-green-600 text-white' : 'bg-zinc-700 hover:bg-zinc-600'}`}
                     title="Extend"
                 >
                     →
                 </button>
                 <button
                     onClick={() => onSetDrawingTool?.('mirror')}
-                    className={`px-2 py-1 text-xs rounded text-gray-800 ${currentDrawingTool === 'mirror' ? 'bg-blue-600 text-white' : 'bg-blue-100 hover:bg-blue-200'}`}
+                    className={`px-2 py-1 text-xs rounded text-zinc-200 ${currentDrawingTool === 'mirror' ? 'bg-blue-600 text-white' : 'bg-zinc-700 hover:bg-zinc-600'}`}
                     title="Mirror"
                 >
                     ⇆
                 </button>
                 <button
                     onClick={() => onSetDrawingTool?.('offset')}
-                    className={`px-2 py-1 text-xs rounded text-gray-800 ${currentDrawingTool === 'offset' ? 'bg-purple-600 text-white' : 'bg-purple-100 hover:bg-purple-200'}`}
+                    className={`px-2 py-1 text-xs rounded text-zinc-200 ${currentDrawingTool === 'offset' ? 'bg-purple-600 text-white' : 'bg-zinc-700 hover:bg-zinc-600'}`}
                     title="Offset"
                 >
                     ⇉
                 </button>
                 <button
                     onClick={() => onSetDrawingTool?.('copy')}
-                    className={`px-2 py-1 text-xs rounded text-gray-800 ${currentDrawingTool === 'copy' ? 'bg-orange-600 text-white' : 'bg-orange-100 hover:bg-orange-200'}`}
+                    className={`px-2 py-1 text-xs rounded text-zinc-200 ${currentDrawingTool === 'copy' ? 'bg-orange-600 text-white' : 'bg-zinc-700 hover:bg-zinc-600'}`}
                     title="Copy"
                 >
                     ⎘
                 </button>
                 <button
                     onClick={() => onSetDrawingTool?.('move')}
-                    className={`px-2 py-1 text-xs rounded text-gray-800 ${currentDrawingTool === 'move' ? 'bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300'}`}
+                    className={`px-2 py-1 text-xs rounded text-zinc-200 ${currentDrawingTool === 'move' ? 'bg-zinc-500 text-white' : 'bg-zinc-700 hover:bg-zinc-600'}`}
                     title="Move"
                 >
                     ↕
@@ -358,13 +358,13 @@ export function TopToolbar({
                     type="number"
                     value={extrudeDistance}
                     onChange={(e) => setExtrudeDistance(parseFloat(e.target.value))}
-                    className="w-20 px-2 py-1 border border-gray-300 rounded-md text-sm text-gray-800 bg-white"
+                    className="w-20 px-2 py-1 border border-zinc-600 rounded-md text-sm text-zinc-200 bg-zinc-700"
                     placeholder="Distance"
                 />
                 <button
                     onClick={extrudeFeature}
                     disabled={!client || !selectedObject}
-                    className="px-3 py-1 bg-purple-500 text-white rounded-md text-sm hover:bg-purple-600 disabled:bg-gray-300"
+                    className="px-3 py-1 bg-purple-500 text-white rounded-md text-sm hover:bg-purple-600 disabled:bg-zinc-600 disabled:text-zinc-400"
                 >
                     Extrude
                 </button>

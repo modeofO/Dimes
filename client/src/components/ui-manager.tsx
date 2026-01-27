@@ -201,14 +201,14 @@ export function UIManager({
     return (
         <div className="h-full flex flex-col">
             {/* Header */}
-            <div className="p-3 border-b border-gray-300 bg-gray-50">
-                <h3 className="font-semibold text-gray-800">Scene Tree</h3>
+            <div className="p-3 border-b border-zinc-700 bg-zinc-800">
+                <h3 className="font-semibold text-zinc-200">Scene Tree</h3>
             </div>
 
             {/* Tree Content */}
             <div className="flex-1 overflow-y-auto p-3">
                 {createdPlanes.length === 0 && createdShapes.length === 0 ? (
-                    <div className="text-gray-500 text-center text-sm">
+                    <div className="text-zinc-500 text-center text-sm">
                         No objects in scene
                     </div>
                 ) : (
@@ -217,8 +217,8 @@ export function UIManager({
                         {createdShapes.map((shape) => (
                             <div
                                 key={`shape-${shape.id}`}
-                                className={`px-2 py-1 text-sm cursor-pointer rounded hover:bg-gray-100 ${
-                                    isSelected(shape.id, 'feature') ? 'bg-blue-100 text-blue-800' : 'text-gray-900'
+                                className={`px-2 py-1 text-sm cursor-pointer rounded hover:bg-zinc-700 ${
+                                    isSelected(shape.id, 'feature') ? 'bg-blue-900/50 text-blue-300' : 'text-zinc-200'
                                 }`}
                                 onClick={() => handleItemClick(shape.id, 'feature')}
                             >
@@ -230,8 +230,8 @@ export function UIManager({
                         {createdPlanes.map((plane) => (
                             <div key={`plane-${plane.plane_id}`} className="space-y-1">
                                 <div
-                                    className={`px-2 py-1 text-sm cursor-pointer rounded hover:bg-gray-100 ${
-                                        isSelected(plane.plane_id, 'plane') ? 'bg-blue-100 text-blue-800' : 'text-gray-900'
+                                    className={`px-2 py-1 text-sm cursor-pointer rounded hover:bg-zinc-700 ${
+                                        isSelected(plane.plane_id, 'plane') ? 'bg-blue-900/50 text-blue-300' : 'text-zinc-200'
                                     }`}
                                     onClick={() => handleItemClick(plane.plane_id, 'plane')}
                                 >
@@ -244,8 +244,8 @@ export function UIManager({
                                     .map((sketch) => (
                                         <div key={`sketch-${sketch.sketch_id}`} className="ml-4 space-y-1">
                                             <div
-                                                className={`px-2 py-1 text-sm cursor-pointer rounded hover:bg-gray-100 ${
-                                                    isSelected(sketch.sketch_id, 'sketch') ? 'bg-blue-100 text-blue-800' : 'text-gray-900'
+                                                className={`px-2 py-1 text-sm cursor-pointer rounded hover:bg-zinc-700 ${
+                                                    isSelected(sketch.sketch_id, 'sketch') ? 'bg-blue-900/50 text-blue-300' : 'text-zinc-200'
                                                 }`}
                                                 onClick={() => handleItemClick(sketch.sketch_id, 'sketch')}
                                             >
@@ -267,9 +267,9 @@ export function UIManager({
                                                                 <div key={`container-${container.id}`} className="ml-4">
                                                                     {/* Container header */}
                                                                     <div
-                                                                        className={`px-2 py-1 text-sm cursor-pointer rounded hover:bg-gray-100 flex items-center ${
-                                                                            isSelected(container.id, 'element') ? 'bg-blue-100 text-blue-800' : 'text-gray-900'
-                                                                        } ${container.is_container_only ? 'italic text-gray-600' : ''}`}
+                                                                        className={`px-2 py-1 text-sm cursor-pointer rounded hover:bg-zinc-700 flex items-center ${
+                                                                            isSelected(container.id, 'element') ? 'bg-blue-900/50 text-blue-300' : 'text-zinc-200'
+                                                                        } ${container.is_container_only ? 'italic text-zinc-400' : ''}`}
                                                                         onClick={() => handleItemClick(container.id, 'element')}
                                                                         title={container.is_container_only ? 'Container (not rendered)' : undefined}
                                                                     >
@@ -279,20 +279,20 @@ export function UIManager({
                                                                                 e.stopPropagation();
                                                                                 toggleContainer(container.id);
                                                                             }}
-                                                                            className="mr-1 w-4 h-4 flex items-center justify-center hover:bg-gray-200 rounded"
+                                                                            className="mr-1 w-4 h-4 flex items-center justify-center hover:bg-zinc-600 rounded"
                                                                         >
                                                                             {isExpanded ? '▼' : '▶'}
                                                                         </button>
                                                                         {getElementIcon(container)} {container.type.charAt(0).toUpperCase() + container.type.slice(1)} ({container.id})
-                                                                        <span className="ml-1 text-xs text-gray-500">({children.length} items)</span>
+                                                                        <span className="ml-1 text-xs text-zinc-500">({children.length} items)</span>
                                                                     </div>
 
                                                                     {/* Children elements (collapsible) */}
                                                                     {isExpanded && children.map((child) => (
                                                                         <div
                                                                             key={`child-${child.id}`}
-                                                                            className={`ml-6 px-2 py-1 text-sm cursor-pointer rounded hover:bg-gray-100 ${
-                                                                                isSelected(child.id, 'element') ? 'bg-blue-100 text-blue-800' : 'text-gray-900'
+                                                                            className={`ml-6 px-2 py-1 text-sm cursor-pointer rounded hover:bg-zinc-700 ${
+                                                                                isSelected(child.id, 'element') ? 'bg-blue-900/50 text-blue-300' : 'text-zinc-200'
                                                                             }`}
                                                                             onClick={() => handleItemClick(child.id, 'element')}
                                                                         >
@@ -307,8 +307,8 @@ export function UIManager({
                                                         {orphans.map((element) => (
                                                             <div
                                                                 key={`orphan-${element.id}`}
-                                                                className={`ml-4 px-2 py-1 text-sm cursor-pointer rounded hover:bg-gray-100 ${
-                                                                    isSelected(element.id, 'element') ? 'bg-blue-100 text-blue-800' : 'text-gray-900'
+                                                                className={`ml-4 px-2 py-1 text-sm cursor-pointer rounded hover:bg-zinc-700 ${
+                                                                    isSelected(element.id, 'element') ? 'bg-blue-900/50 text-blue-300' : 'text-zinc-200'
                                                                 }`}
                                                                 onClick={() => handleItemClick(element.id, 'element')}
                                                             >

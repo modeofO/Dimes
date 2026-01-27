@@ -444,17 +444,17 @@ export function ControlsPanel({
             <div className="p-4 space-y-6">
                 {/* Header */}
                 <div>
-                    <h2 className="text-lg font-semibold text-gray-800">CAD Controls</h2>
+                    <h2 className="text-lg font-semibold text-zinc-200">CAD Controls</h2>
                 </div>
 
                 {/* Sketch Plane Section */}
                 <div className="space-y-3">
-                    <h3 className="font-medium text-gray-700">1. Create Sketch Plane</h3>
+                    <h3 className="font-medium text-zinc-300">1. Create Sketch Plane</h3>
                     <div className="space-y-2">
                         <select
                             value={planeType}
                             onChange={(e) => setPlaneType(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                            className="w-full px-3 py-2 border border-zinc-600 rounded-md text-sm"
                         >
                             <option value="XZ">XZ Plane</option>
                             <option value="XY">XY Plane</option>
@@ -464,7 +464,7 @@ export function ControlsPanel({
                         <button
                             onClick={createSketchPlane}
                             disabled={!client}
-                            className="w-full px-3 py-2 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600 disabled:bg-gray-300"
+                            className="w-full px-3 py-2 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600 disabled:bg-zinc-600 disabled:text-zinc-400"
                         >
                             Create Plane
                         </button>
@@ -473,12 +473,12 @@ export function ControlsPanel({
 
                 {/* Sketch Section */}
                 <div className="space-y-3">
-                    <h3 className="font-medium text-gray-700">2. Create Sketch</h3>
+                    <h3 className="font-medium text-zinc-300">2. Create Sketch</h3>
                     <div className="space-y-2">
                         <select
                             value={selectedPlane}
                             onChange={(e) => setSelectedPlane(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                            className="w-full px-3 py-2 border border-zinc-600 rounded-md text-sm"
                         >
                             <option value="">Select a plane</option>
                             {createdPlanes.map(plane => (
@@ -491,7 +491,7 @@ export function ControlsPanel({
                         <button
                             onClick={createSketch}
                             disabled={!client || !selectedPlane}
-                            className="w-full px-3 py-2 bg-green-500 text-white rounded-md text-sm hover:bg-green-600 disabled:bg-gray-300"
+                            className="w-full px-3 py-2 bg-green-900/300 text-white rounded-md text-sm hover:bg-green-600 disabled:bg-zinc-600 disabled:text-zinc-400"
                         >
                             Create Sketch
                         </button>
@@ -500,7 +500,7 @@ export function ControlsPanel({
 
                 {/* Interactive Drawing Tools */}
                 <div className="space-y-3">
-                    <h3 className="font-medium text-gray-700">3. Interactive Drawing Tools</h3>
+                    <h3 className="font-medium text-zinc-300">3. Interactive Drawing Tools</h3>
                     <div className="space-y-2">
                         <select
                             value={activeSketchId || ''}
@@ -511,7 +511,7 @@ export function ControlsPanel({
                                     onSetActiveSketch(sketchId);
                                 }
                             }}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                            className="w-full px-3 py-2 border border-zinc-600 rounded-md text-sm"
                         >
                             <option value="">Select active sketch</option>
                             {createdSketches.map(sketch => (
@@ -522,12 +522,12 @@ export function ControlsPanel({
                         </select>
                         
                         {activeSketchId && (
-                            <div className="text-xs text-green-600 bg-green-50 p-2 rounded">
+                            <div className="text-xs text-green-600 bg-green-900/30 p-2 rounded">
                                 ✓ Active: {activeSketchId} - Ready for interactive drawing
                             </div>
                         )}
                         
-                        <div className="text-xs text-gray-600 mb-2">
+                        <div className="text-xs text-zinc-400 mb-2">
                             Creation Tools:
                         </div>
                         
@@ -536,8 +536,8 @@ export function ControlsPanel({
                                 onClick={() => onSetDrawingTool?.('select')}
                                 className={`px-2 py-1 text-xs rounded ${
                                     currentDrawingTool === 'select' 
-                                    ? 'bg-gray-700 text-white' 
-                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                    ? 'bg-zinc-600 text-white' 
+                                    : 'bg-zinc-700 text-zinc-300 hover:bg-zinc-600'
                                 }`}
                             >
                                 🖱️ Select
@@ -547,7 +547,7 @@ export function ControlsPanel({
                                 className={`px-2 py-1 text-xs rounded ${
                                     currentDrawingTool === 'line' 
                                     ? 'bg-green-600 text-white' 
-                                    : 'bg-green-100 text-green-700 hover:bg-green-200'
+                                    : 'bg-green-900/30 text-green-400 hover:bg-green-900/50'
                                 }`}
                             >
                                 📏 Line
@@ -557,7 +557,7 @@ export function ControlsPanel({
                                 className={`px-2 py-1 text-xs rounded ${
                                     currentDrawingTool === 'circle' 
                                     ? 'bg-red-600 text-white' 
-                                    : 'bg-red-100 text-red-700 hover:bg-red-200'
+                                    : 'bg-red-900/30 text-red-400 hover:bg-red-900/50'
                                 }`}
                             >
                                 ⭕ Circle
@@ -714,7 +714,7 @@ export function ControlsPanel({
                             </div>
                         )}
                         
-                        <div className="text-xs text-gray-600 mt-3 mb-2">
+                        <div className="text-xs text-zinc-400 mt-3 mb-2">
                             Modification Tools:
                         </div>
                         
@@ -744,7 +744,7 @@ export function ControlsPanel({
                                 className={`px-2 py-1 text-xs rounded ${
                                     currentDrawingTool === 'trim' 
                                     ? 'bg-red-600 text-white' 
-                                    : 'bg-red-100 text-red-700 hover:bg-red-200'
+                                    : 'bg-red-900/30 text-red-400 hover:bg-red-900/50'
                                 }`}
                             >
                                 ✂️ Trim
@@ -754,7 +754,7 @@ export function ControlsPanel({
                                 className={`px-2 py-1 text-xs rounded ${
                                     currentDrawingTool === 'extend' 
                                     ? 'bg-green-600 text-white' 
-                                    : 'bg-green-100 text-green-700 hover:bg-green-200'
+                                    : 'bg-green-900/30 text-green-400 hover:bg-green-900/50'
                                 }`}
                             >
                                 🔗 Extend
@@ -825,9 +825,9 @@ export function ControlsPanel({
 
                 {/* Extrude Section */}
                 <div className="space-y-3">
-                    <h3 className="font-medium text-gray-700">4. Extrude Feature</h3>
+                    <h3 className="font-medium text-zinc-300">4. Extrude Feature</h3>
                     <div className="space-y-2">
-                        <div className="text-sm text-gray-600">
+                        <div className="text-sm text-zinc-400">
                             {selectedObject ? (
                                 `Selected: ${selectedObject.type} (${selectedObject.id})`
                             ) : (
@@ -840,13 +840,13 @@ export function ControlsPanel({
                             placeholder="Extrude Distance"
                             value={extrudeDistance}
                             onChange={(e) => setExtrudeDistance(Number(e.target.value))}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                            className="w-full px-3 py-2 border border-zinc-600 rounded-md text-sm"
                         />
                         
                         <button
                             onClick={extrudeFeature}
                             disabled={!client || !selectedObject || (selectedObject.type !== 'sketch' && selectedObject.type !== 'element')}
-                            className="w-full px-3 py-2 bg-orange-500 text-white rounded-md text-sm hover:bg-orange-600 disabled:bg-gray-300"
+                            className="w-full px-3 py-2 bg-orange-500 text-white rounded-md text-sm hover:bg-orange-600 disabled:bg-zinc-600 disabled:text-zinc-400"
                         >
                             Extrude Feature
                         </button>
@@ -855,13 +855,13 @@ export function ControlsPanel({
 
                 {/* 2D Modification Tools */}
                 <div className="space-y-3">
-                    <h3 className="font-medium text-gray-700">5. Modification Tools</h3>
+                    <h3 className="font-medium text-zinc-300">5. Modification Tools</h3>
                     <div className="space-y-2">
                         <div className="grid grid-cols-2 gap-2">
                             <select
                                 value={selectedElement1}
                                 onChange={(e) => setSelectedElement1(e.target.value)}
-                                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                                className="px-2 py-1 border border-zinc-600 rounded text-sm"
                             >
                                 <option value="">Element 1</option>
                                 {createdSketches.find(s => s.sketch_id === selectedSketch)?.elements.map(el => (
@@ -871,7 +871,7 @@ export function ControlsPanel({
                             <select
                                 value={selectedElement2}
                                 onChange={(e) => setSelectedElement2(e.target.value)}
-                                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                                className="px-2 py-1 border border-zinc-600 rounded text-sm"
                             >
                                 <option value="">Element 2</option>
                                 {createdSketches.find(s => s.sketch_id === selectedSketch)?.elements.map(el => (
@@ -886,12 +886,12 @@ export function ControlsPanel({
                                 placeholder="Fillet Radius"
                                 value={filletRadius}
                                 onChange={(e) => setFilletRadius(Number(e.target.value))}
-                                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                                className="px-2 py-1 border border-zinc-600 rounded text-sm"
                             />
                             <button
                                 onClick={addFillet}
                                 disabled={!client || !selectedSketch || !selectedElement1 || !selectedElement2}
-                                className="px-2 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 disabled:bg-gray-300"
+                                className="px-2 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 disabled:bg-zinc-600 disabled:text-zinc-400"
                             >
                                 Fillet
                             </button>
@@ -903,12 +903,12 @@ export function ControlsPanel({
                                 placeholder="Chamfer Distance"
                                 value={chamferDistance}
                                 onChange={(e) => setChamferDistance(Number(e.target.value))}
-                                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                                className="px-2 py-1 border border-zinc-600 rounded text-sm"
                             />
                             <button
                                 onClick={addChamfer}
                                 disabled={!client || !selectedSketch || !selectedElement1 || !selectedElement2}
-                                className="px-2 py-1 bg-orange-500 text-white rounded text-sm hover:bg-orange-600 disabled:bg-gray-300"
+                                className="px-2 py-1 bg-orange-500 text-white rounded text-sm hover:bg-orange-600 disabled:bg-zinc-600 disabled:text-zinc-400"
                             >
                                 Chamfer
                             </button>
@@ -918,20 +918,20 @@ export function ControlsPanel({
 
                 {/* Positioning Tools */}
                 <div className="space-y-3">
-                    <h3 className="font-medium text-gray-700">6. Positioning Tools</h3>
+                    <h3 className="font-medium text-zinc-300">6. Positioning Tools</h3>
                     <div className="space-y-2">
                         <div className="grid grid-cols-2 gap-2">
                             <button
                                 onClick={trimLine}
                                 disabled={!client || !selectedSketch || !selectedElement1 || !selectedElement2}
-                                className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 disabled:bg-gray-300"
+                                className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 disabled:bg-zinc-600 disabled:text-zinc-400"
                             >
                                 Trim
                             </button>
                             <button
                                 onClick={extendLine}
                                 disabled={!client || !selectedSketch || !selectedElement1 || !selectedElement2}
-                                className="px-2 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600 disabled:bg-gray-300"
+                                className="px-2 py-1 bg-green-900/300 text-white rounded text-sm hover:bg-green-600 disabled:bg-zinc-600 disabled:text-zinc-400"
                             >
                                 Extend
                             </button>
@@ -943,12 +943,12 @@ export function ControlsPanel({
                                 placeholder="Offset Distance"
                                 value={offsetDistance}
                                 onChange={(e) => setOffsetDistance(Number(e.target.value))}
-                                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                                className="px-2 py-1 border border-zinc-600 rounded text-sm"
                             />
                             <button
                                 onClick={offsetElement}
                                 disabled={!client || !selectedSketch || !selectedElement1}
-                                className="px-2 py-1 bg-purple-500 text-white rounded text-sm hover:bg-purple-600 disabled:bg-gray-300"
+                                className="px-2 py-1 bg-purple-500 text-white rounded text-sm hover:bg-purple-600 disabled:bg-zinc-600 disabled:text-zinc-400"
                             >
                                 Offset
                             </button>
@@ -960,14 +960,14 @@ export function ControlsPanel({
                                 placeholder="Translate X"
                                 value={translation.x}
                                 onChange={(e) => setTranslation(prev => ({ ...prev, x: Number(e.target.value) }))}
-                                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                                className="px-2 py-1 border border-zinc-600 rounded text-sm"
                             />
                             <input
                                 type="number"
                                 placeholder="Translate Y"
                                 value={translation.y}
                                 onChange={(e) => setTranslation(prev => ({ ...prev, y: Number(e.target.value) }))}
-                                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                                className="px-2 py-1 border border-zinc-600 rounded text-sm"
                             />
                         </div>
                         
@@ -975,14 +975,14 @@ export function ControlsPanel({
                             <button
                                 onClick={copyElement}
                                 disabled={!client || !selectedSketch || !selectedElement1}
-                                className="px-2 py-1 bg-cyan-500 text-white rounded text-sm hover:bg-cyan-600 disabled:bg-gray-300"
+                                className="px-2 py-1 bg-cyan-500 text-white rounded text-sm hover:bg-cyan-600 disabled:bg-zinc-600 disabled:text-zinc-400"
                             >
                                 Copy
                             </button>
                             <button
                                 onClick={moveElement}
                                 disabled={!client || !selectedSketch || !selectedElement1}
-                                className="px-2 py-1 bg-indigo-500 text-white rounded text-sm hover:bg-indigo-600 disabled:bg-gray-300"
+                                className="px-2 py-1 bg-indigo-500 text-white rounded text-sm hover:bg-indigo-600 disabled:bg-zinc-600 disabled:text-zinc-400"
                             >
                                 Move
                             </button>
@@ -991,7 +991,7 @@ export function ControlsPanel({
                         <button
                             onClick={mirrorElement}
                             disabled={!client || !selectedSketch || !selectedElement1}
-                            className="w-full px-2 py-1 bg-pink-500 text-white rounded text-sm hover:bg-pink-600 disabled:bg-gray-300"
+                            className="w-full px-2 py-1 bg-pink-500 text-white rounded text-sm hover:bg-pink-600 disabled:bg-zinc-600 disabled:text-zinc-400"
                         >
                             Mirror
                         </button>
@@ -1000,7 +1000,7 @@ export function ControlsPanel({
 
                 {/* Pattern Tools */}
                 <div className="space-y-3">
-                    <h3 className="font-medium text-gray-700">7. Pattern Tools</h3>
+                    <h3 className="font-medium text-zinc-300">7. Pattern Tools</h3>
                     <div className="space-y-2">
                         <div className="grid grid-cols-3 gap-1">
                             <input
@@ -1008,14 +1008,14 @@ export function ControlsPanel({
                                 placeholder="Dir X"
                                 value={arrayDirection.x}
                                 onChange={(e) => setArrayDirection(prev => ({ ...prev, x: Number(e.target.value) }))}
-                                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                                className="px-2 py-1 border border-zinc-600 rounded text-sm"
                             />
                             <input
                                 type="number"
                                 placeholder="Dir Y"
                                 value={arrayDirection.y}
                                 onChange={(e) => setArrayDirection(prev => ({ ...prev, y: Number(e.target.value) }))}
-                                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                                className="px-2 py-1 border border-zinc-600 rounded text-sm"
                             />
                             <input
                                 type="number"
@@ -1023,7 +1023,7 @@ export function ControlsPanel({
                                 min="2"
                                 value={arrayCount}
                                 onChange={(e) => setArrayCount(Math.max(2, Number(e.target.value)))}
-                                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                                className="px-2 py-1 border border-zinc-600 rounded text-sm"
                             />
                         </div>
                         
@@ -1031,14 +1031,14 @@ export function ControlsPanel({
                             <button
                                 onClick={createLinearArray}
                                 disabled={!client || !selectedSketch || !selectedElement1}
-                                className="px-2 py-1 bg-teal-500 text-white rounded text-sm hover:bg-teal-600 disabled:bg-gray-300"
+                                className="px-2 py-1 bg-teal-500 text-white rounded text-sm hover:bg-teal-600 disabled:bg-zinc-600 disabled:text-zinc-400"
                             >
                                 Linear Array
                             </button>
                             <button
                                 onClick={createMirrorArray}
                                 disabled={!client || !selectedSketch || !selectedElement1}
-                                className="px-2 py-1 bg-violet-500 text-white rounded text-sm hover:bg-violet-600 disabled:bg-gray-300"
+                                className="px-2 py-1 bg-violet-500 text-white rounded text-sm hover:bg-violet-600 disabled:bg-zinc-600 disabled:text-zinc-400"
                             >
                                 Mirror Array
                             </button>
@@ -1048,7 +1048,7 @@ export function ControlsPanel({
 
                 {/* Utility Section */}
                 <div className="space-y-3">
-                    <h3 className="font-medium text-gray-700">Utilities</h3>
+                    <h3 className="font-medium text-zinc-300">Utilities</h3>
                     <button
                         onClick={clearAllShapes}
                         className="w-full px-3 py-2 bg-red-500 text-white rounded-md text-sm hover:bg-red-600"
@@ -1059,12 +1059,12 @@ export function ControlsPanel({
 
                 {/* View Controls */}
                 <div className="space-y-3">
-                    <h3 className="font-medium text-gray-700">View Controls</h3>
+                    <h3 className="font-medium text-zinc-300">View Controls</h3>
                     <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="text-gray-600">Ctrl+1: Front</div>
-                        <div className="text-gray-600">Ctrl+2: Top</div>
-                        <div className="text-gray-600">Ctrl+3: Right</div>
-                        <div className="text-gray-600">Ctrl+0: Iso</div>
+                        <div className="text-zinc-400">Ctrl+1: Front</div>
+                        <div className="text-zinc-400">Ctrl+2: Top</div>
+                        <div className="text-zinc-400">Ctrl+3: Right</div>
+                        <div className="text-zinc-400">Ctrl+0: Iso</div>
                     </div>
                 </div>
             </div>

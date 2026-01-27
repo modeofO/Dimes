@@ -747,7 +747,7 @@ export function CADApplication() {
     }, [updateStatus]);
 
     return (
-        <div className="flex flex-col h-screen w-screen bg-gray-100">
+        <div className="flex flex-col h-screen w-screen bg-zinc-900">
             {/* Top Toolbar */}
             <TopToolbar 
                 client={clientRef.current}
@@ -778,10 +778,10 @@ export function CADApplication() {
                 <div className="flex-1 flex flex-col">
                     <div 
                         ref={viewportRef} 
-                        className={`flex-1 relative bg-white transition-all duration-300 ${
-                            activeSketchId 
-                                ? 'border-4 border-blue-400 shadow-lg shadow-blue-200' 
-                                : 'border border-gray-200'
+                        className={`flex-1 relative bg-zinc-950 transition-all duration-300 ${
+                            activeSketchId
+                                ? 'border-4 border-blue-500 shadow-lg shadow-blue-500/20'
+                                : 'border border-zinc-700'
                         }`}
                     >
                         {/* The 3D viewport will be mounted here */}
@@ -792,7 +792,7 @@ export function CADApplication() {
                                 </div>
                                 <button
                                     onClick={exitSketchMode}
-                                    className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded-md text-xs font-medium shadow-md transition-colors duration-200"
+                                    className="bg-zinc-600 hover:bg-zinc-500 text-white px-3 py-1 rounded-md text-xs font-medium shadow-md transition-colors duration-200"
                                     title="Exit sketch editing mode"
                                 >
                                     🚪 Exit Sketch
@@ -804,7 +804,7 @@ export function CADApplication() {
                 </div>
 
                 {/* Right Sidebar */}
-                <div className="w-[350px] bg-white border-l border-gray-300 shadow-lg flex flex-col h-full">
+                <div className="w-[350px] bg-zinc-800 border-l border-zinc-700 shadow-lg flex flex-col h-full">
                     {/* Scene Tree - Scrollable container with fixed height */}
                     <div className="flex-1 overflow-y-auto">
                         <UIManager 
@@ -817,7 +817,7 @@ export function CADApplication() {
                     </div>
                     
                     {/* Spacer */}
-                    <div className="h-2 bg-gray-100 border-t border-b border-gray-300"></div>
+                    <div className="h-px bg-zinc-700"></div>
 
                     {/* Agent Chat - Fixed height at bottom */}
                     <div className="h-80 flex-shrink-0">
