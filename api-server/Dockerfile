@@ -21,5 +21,5 @@ EXPOSE 3000
 # Set environment variables
 ENV NODE_ENV=production
 
-# Run the server using tsx (supports TypeScript imports)
-CMD ["npx", "tsx", "src/server.js"]
+# Temporarily use minimal health check server for debugging
+CMD ["node", "src/healthcheck.js"]
