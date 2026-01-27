@@ -23,9 +23,9 @@ export class VisualizationManager {
         // Create light blue plane box
         const planeGeometry = new THREE.PlaneGeometry(data.size, data.size);
         const planeMaterial = new THREE.MeshBasicMaterial({
-            color: 0xadd8e6, // Light blue color
+            color: 0x4488aa, // Blue color tuned for dark background
             transparent: true,
-            opacity: 0.2,
+            opacity: 0.15,
             side: THREE.DoubleSide
         });
         const planeMesh = new THREE.Mesh(planeGeometry, planeMaterial);
@@ -87,7 +87,7 @@ export class VisualizationManager {
             lineGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
             
             const lineMaterial = new THREE.LineBasicMaterial({
-                color: 0x00ff00,
+                color: 0x44ff66,
                 linewidth: 2
             });
             
@@ -100,7 +100,7 @@ export class VisualizationManager {
             circleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
             
             const circleMaterial = new THREE.LineBasicMaterial({
-                color: 0xff0000,
+                color: 0xff4466,
                 linewidth: 2
             });
             
@@ -117,7 +117,7 @@ export class VisualizationManager {
             arcGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
             
             const arcMaterial = new THREE.LineBasicMaterial({
-                color: 0xff8000, // Orange color for arcs
+                color: 0xffaa33, // Orange color for arcs
                 linewidth: 2
             });
             
@@ -130,7 +130,7 @@ export class VisualizationManager {
             rectGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
             
             const rectMaterial = new THREE.LineBasicMaterial({
-                color: 0x0066ff, // Blue color for rectangles
+                color: 0x4488ff, // Blue color for rectangles
                 linewidth: 2
             });
             
@@ -143,7 +143,7 @@ export class VisualizationManager {
             polygonGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
             
             const polygonMaterial = new THREE.LineBasicMaterial({
-                color: 0x8000ff, // Purple color for polygons
+                color: 0xaa55ff, // Purple color for polygons
                 linewidth: 2
             });
             
@@ -156,7 +156,7 @@ export class VisualizationManager {
             filletGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
             
             const filletMaterial = new THREE.LineBasicMaterial({
-                color: 0x0080ff, // Blue color for fillets
+                color: 0x44aaff, // Blue color for fillets
                 linewidth: 3
             });
             
@@ -169,7 +169,7 @@ export class VisualizationManager {
             chamferGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
             
             const chamferMaterial = new THREE.LineBasicMaterial({
-                color: 0xff4000, // Red-orange color for chamfers
+                color: 0xff6633, // Red-orange color for chamfers
                 linewidth: 3
             });
             
@@ -185,8 +185,8 @@ export class VisualizationManager {
                 fallbackGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
                 
                 const fallbackMaterial = new THREE.LineBasicMaterial({
-                    color: 0x888888, // Gray color for unknown types
-                    linewidth: 1
+                    color: 0xaaaaaa, // Gray color for unknown types
+                    linewidth: 2
                 });
                 
                 const fallback = new THREE.Line(fallbackGeometry, fallbackMaterial);
@@ -275,9 +275,9 @@ export class VisualizationManager {
         // Create a glowing ring effect
         const ringGeometry = new THREE.RingGeometry(18, 22, 32);
         const ringMaterial = new THREE.MeshBasicMaterial({
-            color: 0x0066ff,
+            color: 0x3388ff,
             transparent: true,
-            opacity: 0.4,
+            opacity: 0.3,
             side: THREE.DoubleSide
         });
         const ring = new THREE.Mesh(ringGeometry, ringMaterial);

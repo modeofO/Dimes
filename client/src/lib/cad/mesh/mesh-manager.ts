@@ -14,30 +14,30 @@ export class MeshManager {
     }
     
     private initializeMaterials(): void {
-        // Metal material
+        // Metal material — lighter, less metallic for visibility on dark background
         const metalMaterial = new THREE.MeshPhysicalMaterial({
-            color: 0x888888,
-            metalness: 0.9,
-            roughness: 0.1,
+            color: 0xb8c0c8,
+            metalness: 0.4,
+            roughness: 0.45,
             envMapIntensity: 1.0,
             side: THREE.DoubleSide,
-            flatShading: true
+            flatShading: false
         });
         this.materialCache.set('metal', metalMaterial);
-        
+
         // Plastic material
         const plasticMaterial = new THREE.MeshPhysicalMaterial({
-            color: 0x4444ff,
+            color: 0x6688ff,
             metalness: 0.0,
             roughness: 0.3,
             envMapIntensity: 0.5,
             side: THREE.DoubleSide
         });
         this.materialCache.set('plastic', plasticMaterial);
-        
-        // Wireframe material
+
+        // Wireframe material — lighter for dark background
         const wireframeMaterial = new THREE.MeshBasicMaterial({
-            color: 0x000000,
+            color: 0x888888,
             wireframe: true
         });
         this.materialCache.set('wireframe', wireframeMaterial);

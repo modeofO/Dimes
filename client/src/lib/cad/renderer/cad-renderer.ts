@@ -55,11 +55,16 @@ export class CADRenderer {
     
     private initializeScene(): void {
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0xf0f0f0);
-        
+        this.scene.background = new THREE.Color(0x1a1a2e);
+
         // Add axes helper
         const axesHelper = new THREE.AxesHelper(20);
         this.scene.add(axesHelper);
+
+        // Add ground grid for spatial reference
+        const gridHelper = new THREE.GridHelper(100, 50, 0x3a3a5c, 0x2a2a44);
+        gridHelper.position.y = -0.01; // Slightly below origin to avoid z-fighting
+        this.scene.add(gridHelper);
     }
     
     private setupCamera(): void {
@@ -70,15 +75,17 @@ export class CADRenderer {
     }
     
     private setupRenderer(): void {
-        this.renderer = new THREE.WebGLRenderer({ 
+        this.renderer = new THREE.WebGLRenderer({
             antialias: true,
-            alpha: true 
+            alpha: true
         });
         this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
         this.renderer.setPixelRatio(window.devicePixelRatio);
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        
+        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        this.renderer.toneMappingExposure = 1.2;
+
         this.container.appendChild(this.renderer.domElement);
 
         this.renderer.domElement.addEventListener('pointerdown', this.onPointerDown);
@@ -122,22 +129,49 @@ export class CADRenderer {
     }
     
     private setupLighting(): void {
-        // Ambient light
-        const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
+        // Hemisphere light for natural sky/ground ambient illumination
+        const hemiLight = new THREE.HemisphereLight(0x6688cc, 0x333355, 0.7);
+        this.scene.add(hemiLight);
+
+        // Ambient light for base illumination
+        const ambientLight = new THREE.AmbientLight(0x666680, 0.5);
         this.scene.add(ambientLight);
-        
-        // Directional light
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+
+        // Main directional light
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
         directionalLight.position.set(50, 50, 50);
         directionalLight.castShadow = true;
         directionalLight.shadow.mapSize.width = 2048;
         directionalLight.shadow.mapSize.height = 2048;
         this.scene.add(directionalLight);
-        
-        // Point light for fill
-        const pointLight = new THREE.PointLight(0xffffff, 0.3);
+
+        // Secondary fill light from opposite side
+        const fillLight = new THREE.DirectionalLight(0x8899bb, 0.4);
+        fillLight.position.set(-30, 20, -40);
+        this.scene.add(fillLight);
+
+        // Point light for additional fill
+        const pointLight = new THREE.PointLight(0xffffff, 0.4);
         pointLight.position.set(-50, 50, -50);
         this.scene.add(pointLight);
+
+        // Generate environment map for PBR material reflections
+        this.generateEnvironmentMap();
+    }
+
+    private generateEnvironmentMap(): void {
+        const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
+
+        // Create a simple environment scene for PBR reflections
+        const envScene = new THREE.Scene();
+        envScene.background = new THREE.Color(0x2a2a3e);
+        envScene.add(new THREE.AmbientLight(0x8888aa, 2.0));
+        const envDirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        envDirLight.position.set(1, 1, 1);
+        envScene.add(envDirLight);
+
+        this.scene.environment = pmremGenerator.fromScene(envScene).texture;
+        pmremGenerator.dispose();
     }
     
     private setupMeshManager(): void {
