@@ -578,15 +578,15 @@ export class CADControls extends OrbitControls {
     
     private createLinePreview(start: THREE.Vector3, end: THREE.Vector3): THREE.Object3D {
         const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-        const material = new THREE.LineBasicMaterial({ 
-            color: 0x00ff00, 
-            transparent: true, 
-            opacity: 0.7,
+        const material = new THREE.LineBasicMaterial({
+            color: 0x55ff88,
+            transparent: true,
+            opacity: 0.95,
             linewidth: 2
         });
         return new THREE.Line(geometry, material);
     }
-    
+
     private createRectanglePreview(start: THREE.Vector3, end: THREE.Vector3): THREE.Object3D {
         if (!this.drawingState.activeSketchPlane) return this.createLinePreview(start, end);
         
@@ -611,15 +611,15 @@ export class CADControls extends OrbitControls {
         const points = [corner1, corner2, corner3, corner4, corner1]; // Close the rectangle
         
         const geometry = new THREE.BufferGeometry().setFromPoints(points);
-        const material = new THREE.LineBasicMaterial({ 
-            color: 0x0066ff, 
-            transparent: true, 
-            opacity: 0.7,
+        const material = new THREE.LineBasicMaterial({
+            color: 0x66aaff,
+            transparent: true,
+            opacity: 0.95,
             linewidth: 2
         });
         return new THREE.LineLoop(geometry, material);
     }
-    
+
     private createCirclePreview(start: THREE.Vector3, end: THREE.Vector3): THREE.Object3D {
         const radius = start.distanceTo(end);
         const segments = 32;
@@ -641,15 +641,15 @@ export class CADControls extends OrbitControls {
         }
         
         const geometry = new THREE.BufferGeometry().setFromPoints(points);
-        const material = new THREE.LineBasicMaterial({ 
-            color: 0xff0000, 
-            transparent: true, 
-            opacity: 0.7,
+        const material = new THREE.LineBasicMaterial({
+            color: 0xff5577,
+            transparent: true,
+            opacity: 0.95,
             linewidth: 2
         });
         return new THREE.LineLoop(geometry, material);
     }
-    
+
     private createArcPreview(start: THREE.Vector3, end: THREE.Vector3): THREE.Object3D {
         const radius = start.distanceTo(end);
         const segments = 16;
@@ -683,15 +683,15 @@ export class CADControls extends OrbitControls {
         }
         
         const geometry = new THREE.BufferGeometry().setFromPoints(points);
-        const material = new THREE.LineBasicMaterial({ 
-            color: 0xffa500, 
-            transparent: true, 
-            opacity: 0.7,
+        const material = new THREE.LineBasicMaterial({
+            color: 0xffcc44,
+            transparent: true,
+            opacity: 0.95,
             linewidth: 2
         });
         return new THREE.Line(geometry, material);
     }
-    
+
     private createPolygonPreview(start: THREE.Vector3, end: THREE.Vector3): THREE.Object3D {
         const radius = start.distanceTo(end);
         const sides = this.drawingState.polygonSides || 6; // Use current polygon sides setting
@@ -713,10 +713,10 @@ export class CADControls extends OrbitControls {
         }
         
         const geometry = new THREE.BufferGeometry().setFromPoints(points);
-        const material = new THREE.LineBasicMaterial({ 
-            color: 0x800080, 
-            transparent: true, 
-            opacity: 0.7,
+        const material = new THREE.LineBasicMaterial({
+            color: 0xcc77ff,
+            transparent: true,
+            opacity: 0.95,
             linewidth: 2
         });
         return new THREE.LineLoop(geometry, material);
@@ -752,7 +752,7 @@ export class CADControls extends OrbitControls {
     private highlightSnapPoint(point: THREE.Vector3): void {
         this.removeSnapHighlight();
         const geometry = new THREE.SphereGeometry(0.1, 8, 8);
-        const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const material = new THREE.MeshBasicMaterial({ color: 0xff5577 });
         this.snapHighlight = new THREE.Mesh(geometry, material);
         this.snapHighlight.position.copy(point);
         this.scene.add(this.snapHighlight);

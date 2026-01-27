@@ -447,12 +447,12 @@ export class CADRenderer {
         if (!geometry) return null;
         
         // Create highlight with different colors for first/second line
-        const color = isFirstLine ? 0xff4400 : 0x44ff00; // Orange for first, green for second
+        const color = isFirstLine ? 0xff7744 : 0x66ff88; // Orange for first, green for second
         const material = new THREE.LineBasicMaterial({
             color: color,
             linewidth: 4,
             transparent: true,
-            opacity: 0.8
+            opacity: 0.95
         });
         
         const highlight = new THREE.LineSegments(geometry, material);
