@@ -14,14 +14,14 @@ export class MeshManager {
     }
     
     private initializeMaterials(): void {
-        // Metal material — lighter, less metallic for visibility on dark background
+        // Metal material — flat shading for crisp CAD facets, reduced env reflections
         const metalMaterial = new THREE.MeshPhysicalMaterial({
             color: 0xb8c0c8,
-            metalness: 0.4,
-            roughness: 0.45,
-            envMapIntensity: 1.0,
+            metalness: 0.3,
+            roughness: 0.55,
+            envMapIntensity: 0.4,
             side: THREE.DoubleSide,
-            flatShading: false
+            flatShading: true
         });
         this.materialCache.set('metal', metalMaterial);
 
@@ -59,13 +59,23 @@ export class MeshManager {
         // Create mesh with default material
         const material = this.materialCache.get('metal') || new THREE.MeshBasicMaterial();
         const mesh = new THREE.Mesh(geometry, material);
-        
+
         mesh.name = id;
-        
+
         // Enable shadows
         mesh.castShadow = true;
         mesh.receiveShadow = true;
-        
+
+        // Add visible edge lines for clear shape definition
+        const edgesGeometry = new THREE.EdgesGeometry(geometry, 15);
+        const edgesMaterial = new THREE.LineBasicMaterial({
+            color: 0x222233,
+            transparent: true,
+            opacity: 0.7
+        });
+        const edgeLines = new THREE.LineSegments(edgesGeometry, edgesMaterial);
+        mesh.add(edgeLines);
+
         // Add to scene and cache
         this.scene.add(mesh);
         this.activeMeshes.set(id, mesh);
