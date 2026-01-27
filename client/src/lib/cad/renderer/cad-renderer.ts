@@ -129,31 +129,31 @@ export class CADRenderer {
     }
     
     private setupLighting(): void {
-        // Hemisphere light for natural sky/ground ambient illumination
-        const hemiLight = new THREE.HemisphereLight(0x6688cc, 0x333355, 0.7);
+        // Hemisphere light — primary ambient fill (sky/ground)
+        const hemiLight = new THREE.HemisphereLight(0x8899bb, 0x444466, 1.0);
         this.scene.add(hemiLight);
 
-        // Ambient light for base illumination
-        const ambientLight = new THREE.AmbientLight(0x666680, 0.5);
+        // Ambient light — even base illumination to lift shadows
+        const ambientLight = new THREE.AmbientLight(0x888899, 0.6);
         this.scene.add(ambientLight);
 
-        // Main directional light
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
-        directionalLight.position.set(50, 50, 50);
+        // Main directional light — moderate to avoid harsh specular hotspots
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        directionalLight.position.set(50, 80, 50);
         directionalLight.castShadow = true;
         directionalLight.shadow.mapSize.width = 2048;
         directionalLight.shadow.mapSize.height = 2048;
         this.scene.add(directionalLight);
 
         // Secondary fill light from opposite side
-        const fillLight = new THREE.DirectionalLight(0x8899bb, 0.4);
-        fillLight.position.set(-30, 20, -40);
+        const fillLight = new THREE.DirectionalLight(0x8899bb, 0.3);
+        fillLight.position.set(-30, 40, -40);
         this.scene.add(fillLight);
 
-        // Point light for additional fill
-        const pointLight = new THREE.PointLight(0xffffff, 0.4);
-        pointLight.position.set(-50, 50, -50);
-        this.scene.add(pointLight);
+        // Rim light from below-behind for edge definition
+        const rimLight = new THREE.DirectionalLight(0x667799, 0.2);
+        rimLight.position.set(0, -20, -50);
+        this.scene.add(rimLight);
 
         // Generate environment map for PBR material reflections
         this.generateEnvironmentMap();

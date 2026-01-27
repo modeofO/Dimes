@@ -14,12 +14,12 @@ export class MeshManager {
     }
     
     private initializeMaterials(): void {
-        // Metal material — flat shading for crisp CAD facets, reduced env reflections
+        // Metal material — matte CAD look, flat shading, minimal specular
         const metalMaterial = new THREE.MeshPhysicalMaterial({
-            color: 0xb8c0c8,
-            metalness: 0.3,
-            roughness: 0.55,
-            envMapIntensity: 0.4,
+            color: 0xb0b8c0,
+            metalness: 0.08,
+            roughness: 0.75,
+            envMapIntensity: 0.15,
             side: THREE.DoubleSide,
             flatShading: true
         });
