@@ -48,4 +48,5 @@ EXPOSE 3001
 ENV PORT=3001
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["npx", "next", "start", "-H", "0.0.0.0"]
+# Use shell form so Railway's PORT env var is interpolated at runtime
+CMD sh -c "npx next start -H 0.0.0.0 -p ${PORT:-3001}"
