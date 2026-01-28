@@ -84,6 +84,28 @@ export function CADApplication() {
     const [inlineExtrudeValue, setInlineExtrudeValue] = useState('10');
     const inlineExtrudeRef = useRef<HTMLInputElement>(null);
 
+    // Resolve a clicked element to its extrudable parent (if it's a child of a composite shape)
+    const resolveExtrudableElement = useCallback((elementId: string, sketchId: string): SketchElementInfo | null => {
+        const sketch = createdSketches.find(s => s.sketch_id === sketchId);
+        if (!sketch) return null;
+
+        // Check if this element is directly extrudable
+        const directMatch = sketch.elements.find(e => e.id === elementId);
+        if (directMatch) {
+            const isExtrudable = (directMatch.type === 'rectangle' || directMatch.type === 'circle' || directMatch.type === 'polygon');
+            if (isExtrudable) return directMatch;
+
+            // If it's a child, resolve to parent
+            if (directMatch.parent_id) {
+                const parent = sketch.elements.find(e => e.id === directMatch.parent_id);
+                if (parent && (parent.type === 'rectangle' || parent.type === 'circle' || parent.type === 'polygon')) {
+                    return parent;
+                }
+            }
+        }
+        return null;
+    }, [createdSketches]);
+
     const handleSelection = useCallback((id: string | null, type: string | null, sketchId?: string | null) => {
         // Set highlight in 3D scene
         if (rendererRef.current) {
@@ -101,23 +123,19 @@ export function CADApplication() {
         const newSelection = id && type ? { id, type, sketchId: sketchId ?? undefined } : null;
         setSelectedObject(newSelection);
 
-        // Auto-show inline extrude when a closed element is clicked outside sketch mode
+        // Auto-show inline extrude when a closed element (or child of one) is clicked outside sketch mode
         if (newSelection && type === 'element' && sketchId && !activeSketchId) {
-            const elementName = `element-${sketchId}-${id}`;
-            if (rendererRef.current) {
-                const sceneObj = rendererRef.current.getScene().getObjectByName(elementName);
-                const elType = sceneObj?.userData?.elementType;
-                if (elType === 'rectangle' || elType === 'circle' || elType === 'polygon') {
-                    setShowInlineExtrude(true);
-                    setTimeout(() => inlineExtrudeRef.current?.focus(), 50);
-                } else {
-                    setShowInlineExtrude(false);
-                }
+            const extrudable = resolveExtrudableElement(newSelection.id, sketchId);
+            if (extrudable) {
+                setShowInlineExtrude(true);
+                setTimeout(() => inlineExtrudeRef.current?.focus(), 50);
+            } else {
+                setShowInlineExtrude(false);
             }
         } else {
             setShowInlineExtrude(false);
         }
-    }, [activeSketchId]);
+    }, [activeSketchId, resolveExtrudableElement]);
 
     const handleChatMessage = useCallback((message: string) => {
         setChatMessages(prev => [...prev, { sender: 'user', text: message }]);
@@ -339,9 +357,7 @@ export function CADApplication() {
             let elementId: string | undefined;
 
             if (selectedType === 'element') {
-                // Use the sketch ID from the selection directly
                 sketchId = selSketchId;
-                elementId = selectedId;
 
                 // Fallback: search createdSketches if sketchId wasn't provided
                 if (!sketchId) {
@@ -352,13 +368,24 @@ export function CADApplication() {
                         }
                     }
                 }
+
+                if (sketchId) {
+                    // Resolve child elements to their extrudable parent
+                    const extrudable = resolveExtrudableElement(selectedId, sketchId);
+                    if (extrudable) {
+                        elementId = extrudable.id;
+                    } else {
+                        elementId = selectedId; // fallback to raw ID
+                    }
+                }
             } else if (selectedType === 'sketch') {
-                // Try to find the first closed element in this sketch
+                // Try to find the first extrudable element in this sketch
                 sketchId = selectedId;
                 const sketch = createdSketches.find(s => s.sketch_id === selectedId);
                 if (sketch) {
+                    // Look for composite parents (rectangle/polygon containers) or circles
                     const closedElement = sketch.elements.find(e =>
-                        !e.is_container_only && (e.type === 'rectangle' || e.type === 'circle' || e.type === 'polygon')
+                        (e.type === 'rectangle' || e.type === 'circle' || e.type === 'polygon')
                     );
                     if (closedElement) {
                         elementId = closedElement.id;
@@ -385,7 +412,7 @@ export function CADApplication() {
             console.error('Failed to extrude feature:', error);
             updateStatus(`Error extruding: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
         }
-    }, [selectedObject, createdSketches, currentUnit, updateStatus]);
+    }, [selectedObject, createdSketches, currentUnit, updateStatus, resolveExtrudableElement]);
 
     const handleInlineExtrude = useCallback(async () => {
         const dist = parseFloat(inlineExtrudeValue);

@@ -326,21 +326,62 @@ export class CADRenderer {
             this.hoveredObject = hitObj;
             this.renderer.domElement.style.cursor = 'pointer';
 
-            // Brighten visible materials (skip invisible hit-test meshes)
-            hitObj.traverse((child) => {
-                if (child instanceof THREE.Mesh && child.userData.isHitTest) return; // skip hit-test geometry
-                if (child instanceof THREE.Mesh || child instanceof THREE.Line || child instanceof THREE.LineLoop || child instanceof THREE.LineSegments) {
-                    this.hoveredOriginalMaterials.set(child, child.material);
-                    const origMat = child.material as THREE.LineBasicMaterial | THREE.MeshBasicMaterial;
-                    const hoverMat = origMat.clone();
-                    hoverMat.color.set(0xffcc44); // amber hover
-                    if ('opacity' in hoverMat) hoverMat.opacity = 1.0;
-                    if ('transparent' in hoverMat) hoverMat.transparent = false;
-                    child.material = hoverMat;
+            // Collect objects to highlight — include siblings of composite shapes
+            const objectsToHighlight: THREE.Object3D[] = [hitObj];
+
+            // If this is a child element (name contains parent prefix like rectangle_1_2345_line_bottom),
+            // find all sibling elements in the same sketch to highlight the whole shape
+            if (result.parsed.type === 'element' && result.parsed.sketchId) {
+                const elementId = result.parsed.id;
+                // Check if this element ID looks like a child (e.g., "rectangle_1_2345_line_bottom")
+                const underscoreIdx = elementId.lastIndexOf('_line_');
+                if (underscoreIdx === -1) {
+                    // Also check for arc children
+                    const arcIdx = elementId.lastIndexOf('_arc_');
+                    if (arcIdx !== -1) {
+                        const parentPrefix = elementId.substring(0, arcIdx);
+                        this.findSiblingElements(parentPrefix, result.parsed.sketchId, objectsToHighlight);
+                    }
+                } else {
+                    const parentPrefix = elementId.substring(0, underscoreIdx);
+                    this.findSiblingElements(parentPrefix, result.parsed.sketchId, objectsToHighlight);
                 }
-            });
+            }
+
+            // Brighten visible materials on all highlighted objects
+            for (const obj of objectsToHighlight) {
+                obj.traverse((child) => {
+                    if (child instanceof THREE.Mesh && child.userData.isHitTest) return;
+                    if (child instanceof THREE.Mesh || child instanceof THREE.Line || child instanceof THREE.LineLoop || child instanceof THREE.LineSegments) {
+                        if (this.hoveredOriginalMaterials.has(child)) return; // already highlighted
+                        this.hoveredOriginalMaterials.set(child, child.material);
+                        const origMat = child.material as THREE.LineBasicMaterial | THREE.MeshBasicMaterial;
+                        const hoverMat = origMat.clone();
+                        hoverMat.color.set(0xffcc44); // amber hover
+                        if ('opacity' in hoverMat) hoverMat.opacity = 1.0;
+                        if ('transparent' in hoverMat) hoverMat.transparent = false;
+                        child.material = hoverMat;
+                    }
+                });
+            }
         } else {
             this.renderer.domElement.style.cursor = 'default';
+        }
+    }
+
+    private findSiblingElements(parentPrefix: string, sketchId: string, objectsToHighlight: THREE.Object3D[]): void {
+        // Search the scene for all elements whose name starts with element-{sketchId}-{parentPrefix}_
+        const prefix = `element-${sketchId}-${parentPrefix}_`;
+        this.scene.traverse((obj) => {
+            if (obj.name && obj.name.startsWith(prefix) && !objectsToHighlight.includes(obj)) {
+                objectsToHighlight.push(obj);
+            }
+        });
+        // Also include the parent container itself if it exists
+        const parentName = `element-${sketchId}-${parentPrefix}`;
+        const parentObj = this.scene.getObjectByName(parentName);
+        if (parentObj && !objectsToHighlight.includes(parentObj)) {
+            objectsToHighlight.push(parentObj);
         }
     }
 
