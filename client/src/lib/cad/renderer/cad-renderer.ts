@@ -305,9 +305,9 @@ export class CADRenderer {
     }
 
     private onPointerMove = (event: PointerEvent): void => {
-        // Only highlight when in select mode
-        const currentTool = this.controls.getDrawingState().tool;
-        if (currentTool !== 'select') {
+        // Only show hover when in select mode and NOT actively drawing
+        const drawingState = this.controls.getDrawingState();
+        if (drawingState.tool !== 'select' || drawingState.isDrawing) {
             this.clearHoverHighlight();
             return;
         }
@@ -321,18 +321,20 @@ export class CADRenderer {
         // Clear previous hover
         this.clearHoverHighlight();
 
-        if (hitObj && result && (result.parsed.type === 'element' || result.parsed.type === 'sketch')) {
+        if (hitObj && result && (result.parsed.type === 'element' || result.parsed.type === 'sketch' || result.parsed.type === 'feature')) {
             this.hoveredObject = hitObj;
             this.renderer.domElement.style.cursor = 'pointer';
 
-            // Brighten materials
+            // Brighten visible materials (skip invisible hit-test meshes)
             hitObj.traverse((child) => {
+                if (child instanceof THREE.Mesh && child.userData.isHitTest) return; // skip hit-test geometry
                 if (child instanceof THREE.Mesh || child instanceof THREE.Line || child instanceof THREE.LineLoop || child instanceof THREE.LineSegments) {
                     this.hoveredOriginalMaterials.set(child, child.material);
                     const origMat = child.material as THREE.LineBasicMaterial | THREE.MeshBasicMaterial;
                     const hoverMat = origMat.clone();
-                    hoverMat.color.set(0xffcc44);
+                    hoverMat.color.set(0xffcc44); // amber hover
                     if ('opacity' in hoverMat) hoverMat.opacity = 1.0;
+                    if ('transparent' in hoverMat) hoverMat.transparent = false;
                     child.material = hoverMat;
                 }
             });
@@ -646,5 +648,9 @@ export class CADRenderer {
     
     public getActiveSketchPlane(): string | null {
         return this.activeSketchPlane?.sketch_id || null;
+    }
+
+    public getScene(): THREE.Scene {
+        return this.scene;
     }
 } 

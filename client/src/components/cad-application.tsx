@@ -79,24 +79,45 @@ export function CADApplication() {
         console.log(`[${type.toUpperCase()}] ${message}`);
     }, []);
 
+    // Inline extrude state — shown immediately when a closed element is clicked outside sketch mode
+    const [showInlineExtrude, setShowInlineExtrude] = useState(false);
+    const [inlineExtrudeValue, setInlineExtrudeValue] = useState('10');
+    const inlineExtrudeRef = useRef<HTMLInputElement>(null);
+
     const handleSelection = useCallback((id: string | null, type: string | null, sketchId?: string | null) => {
-        setSelectedObject(prevSelected => {
-            if (prevSelected?.id === id) return prevSelected;
-            if (rendererRef.current) {
-                // Construct the full scene object name for highlighting
-                let sceneName = id;
-                if (id && type === 'element' && sketchId) {
-                    sceneName = `element-${sketchId}-${id}`;
-                } else if (id && type === 'sketch') {
-                    sceneName = `sketch-${id}`;
-                } else if (id && type === 'plane') {
-                    sceneName = `plane-${id}`;
-                }
-                rendererRef.current.setHighlight(sceneName);
+        // Set highlight in 3D scene
+        if (rendererRef.current) {
+            let sceneName = id;
+            if (id && type === 'element' && sketchId) {
+                sceneName = `element-${sketchId}-${id}`;
+            } else if (id && type === 'sketch') {
+                sceneName = `sketch-${id}`;
+            } else if (id && type === 'plane') {
+                sceneName = `plane-${id}`;
             }
-            return id && type ? { id, type, sketchId: sketchId ?? undefined } : null;
-        });
-    }, []);
+            rendererRef.current.setHighlight(sceneName);
+        }
+
+        const newSelection = id && type ? { id, type, sketchId: sketchId ?? undefined } : null;
+        setSelectedObject(newSelection);
+
+        // Auto-show inline extrude when a closed element is clicked outside sketch mode
+        if (newSelection && type === 'element' && sketchId && !activeSketchId) {
+            const elementName = `element-${sketchId}-${id}`;
+            if (rendererRef.current) {
+                const sceneObj = rendererRef.current.getScene().getObjectByName(elementName);
+                const elType = sceneObj?.userData?.elementType;
+                if (elType === 'rectangle' || elType === 'circle' || elType === 'polygon') {
+                    setShowInlineExtrude(true);
+                    setTimeout(() => inlineExtrudeRef.current?.focus(), 50);
+                } else {
+                    setShowInlineExtrude(false);
+                }
+            }
+        } else {
+            setShowInlineExtrude(false);
+        }
+    }, [activeSketchId]);
 
     const handleChatMessage = useCallback((message: string) => {
         setChatMessages(prev => [...prev, { sender: 'user', text: message }]);
@@ -112,11 +133,13 @@ export function CADApplication() {
 
     const exitSketchMode = useCallback(() => {
         setActiveSketchId(null);
+        setCurrentDrawingTool('select');
         if (rendererRef.current) {
+            rendererRef.current.setDrawingTool('select');
             rendererRef.current.clearActiveSketchHighlight();
             rendererRef.current.viewIsometric();
         }
-        updateStatus('Exited sketch editing mode', 'info');
+        updateStatus('Exited sketch — click a shape to extrude', 'info');
     }, [updateStatus]);
 
     const handleInteractiveChamfer = useCallback(async (sketchId: string, line1Id: string, line2Id: string) => {
@@ -363,6 +386,13 @@ export function CADApplication() {
             updateStatus(`Error extruding: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
         }
     }, [selectedObject, createdSketches, currentUnit, updateStatus]);
+
+    const handleInlineExtrude = useCallback(async () => {
+        const dist = parseFloat(inlineExtrudeValue);
+        if (isNaN(dist) || dist <= 0) return;
+        setShowInlineExtrude(false);
+        await handlePaletteExtrude(dist);
+    }, [inlineExtrudeValue, handlePaletteExtrude]);
 
     const handlePaletteCreatePlane = useCallback(async (type: 'XZ' | 'XY' | 'YZ') => {
         if (!clientRef.current) return;
@@ -683,7 +713,9 @@ export function CADApplication() {
                     break;
                 case 'Escape':
                     event.preventDefault();
-                    if (isPaletteOpen) {
+                    if (showInlineExtrude) {
+                        setShowInlineExtrude(false);
+                    } else if (isPaletteOpen) {
                         setIsPaletteOpen(false);
                     } else if (isSceneTreeOpen) {
                         setIsSceneTreeOpen(false);
@@ -789,7 +821,7 @@ export function CADApplication() {
 
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [isPaletteOpen, isSceneTreeOpen, activeSketchId, currentDrawingTool, handleSetDrawingTool, handleDeleteSelected, handleSelection, exitSketchMode, updateStatus]);
+    }, [isPaletteOpen, isSceneTreeOpen, activeSketchId, currentDrawingTool, showInlineExtrude, handleSetDrawingTool, handleDeleteSelected, handleSelection, exitSketchMode, updateStatus]);
 
     return (
         <div className="h-screen w-screen overflow-hidden" style={{ backgroundColor: '#12141C' }}>
@@ -822,6 +854,39 @@ export function CADApplication() {
                 {/* Welcome Overlay — first-time experience */}
                 {showWelcome && (
                     <WelcomeOverlay onDismiss={() => setShowWelcome(false)} />
+                )}
+
+                {/* Inline Extrude Input — appears when clicking a closed contour */}
+                {showInlineExtrude && selectedObject && (
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30">
+                        <div
+                            className="flex items-center gap-3 px-4 py-3 rounded-lg shadow-2xl shadow-black/60"
+                            style={{ backgroundColor: '#1A1D27', border: '1px solid #2A2D3A' }}
+                        >
+                            <span className="text-[#D4A017] text-sm font-medium">Extrude</span>
+                            <input
+                                ref={inlineExtrudeRef}
+                                type="number"
+                                value={inlineExtrudeValue}
+                                onChange={(e) => setInlineExtrudeValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleInlineExtrude();
+                                    }
+                                    if (e.key === 'Escape') {
+                                        e.preventDefault();
+                                        setShowInlineExtrude(false);
+                                    }
+                                }}
+                                className="w-20 bg-[#12141C] text-[#E8DCC8] text-sm px-2 py-1 rounded outline-none border border-[#2A2D3A] focus:border-[#D4A017] transition-colors"
+                                style={{ caretColor: '#D4A017' }}
+                                autoFocus
+                            />
+                            <span className="text-[#5A5D6A] text-xs">{currentUnit}</span>
+                            <span className="text-[#5A5D6A] text-[10px]">Enter to apply</span>
+                        </div>
+                    </div>
                 )}
 
                 {/* Bottom HUD — tool pill, key hints, builder button */}

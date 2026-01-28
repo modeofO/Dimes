@@ -77,127 +77,241 @@ export class VisualizationManager {
     public addSketchElementVisualization(data: SketchElementVisualizationData): void {
         // If element already exists, remove it first to update it
         this.removeElementVisualization(data.element_id);
-        
+
         const group = new THREE.Group();
         group.name = `element-${data.sketch_id}-${data.element_id}`;
-        
+        // Store element type for downstream selection logic
+        group.userData.elementType = data.element_type;
+
         if (data.element_type === 'line') {
             const lineGeometry = new THREE.BufferGeometry();
             const positions = new Float32Array(data.points_3d);
             lineGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            
+
             const lineMaterial = new THREE.LineBasicMaterial({
                 color: 0x44ff66,
                 linewidth: 2
             });
-            
+
             const line = new THREE.Line(lineGeometry, lineMaterial);
             group.add(line);
-            
+
+            // Add invisible hit-test mesh for reliable raycasting
+            this.addHitTestMesh(group, data.points_3d, false);
+
         } else if (data.element_type === 'circle') {
             const circleGeometry = new THREE.BufferGeometry();
             const positions = new Float32Array(data.points_3d);
             circleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            
+
             const circleMaterial = new THREE.LineBasicMaterial({
                 color: 0xff4466,
                 linewidth: 2
             });
-            
+
             const circle = new THREE.LineLoop(circleGeometry, circleMaterial);
             group.add(circle);
-            
+
             // For snapping, add userData with center if available
             if (data.parameters_2d?.center) {
                 group.userData.center = new THREE.Vector3(...data.parameters_2d.center);
             }
+
+            // Add invisible hit-test mesh for reliable raycasting
+            this.addHitTestMesh(group, data.points_3d, true);
+
         } else if (data.element_type === 'arc') {
             const arcGeometry = new THREE.BufferGeometry();
             const positions = new Float32Array(data.points_3d);
             arcGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            
+
             const arcMaterial = new THREE.LineBasicMaterial({
-                color: 0xffaa33, // Orange color for arcs
+                color: 0xffaa33,
                 linewidth: 2
             });
-            
+
             const arc = new THREE.Line(arcGeometry, arcMaterial);
             group.add(arc);
-            
+
+            // Add invisible hit-test mesh for reliable raycasting
+            this.addHitTestMesh(group, data.points_3d, false);
+
         } else if (data.element_type === 'rectangle') {
             const rectGeometry = new THREE.BufferGeometry();
             const positions = new Float32Array(data.points_3d);
             rectGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            
+
             const rectMaterial = new THREE.LineBasicMaterial({
-                color: 0x4488ff, // Blue color for rectangles
+                color: 0x4488ff,
                 linewidth: 2
             });
-            
+
             const rectangle = new THREE.LineLoop(rectGeometry, rectMaterial);
             group.add(rectangle);
-            
+
+            // Add invisible hit-test mesh for reliable raycasting
+            this.addHitTestMesh(group, data.points_3d, true);
+
         } else if (data.element_type === 'polygon') {
             const polygonGeometry = new THREE.BufferGeometry();
             const positions = new Float32Array(data.points_3d);
             polygonGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            
+
             const polygonMaterial = new THREE.LineBasicMaterial({
-                color: 0xaa55ff, // Purple color for polygons
+                color: 0xaa55ff,
                 linewidth: 2
             });
-            
+
             const polygon = new THREE.LineLoop(polygonGeometry, polygonMaterial);
             group.add(polygon);
-            
+
+            // Add invisible hit-test mesh for reliable raycasting
+            this.addHitTestMesh(group, data.points_3d, true);
+
         } else if (data.element_type === 'fillet') {
             const filletGeometry = new THREE.BufferGeometry();
             const positions = new Float32Array(data.points_3d);
             filletGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            
+
             const filletMaterial = new THREE.LineBasicMaterial({
-                color: 0x44aaff, // Blue color for fillets
+                color: 0x44aaff,
                 linewidth: 3
             });
-            
+
             const fillet = new THREE.Line(filletGeometry, filletMaterial);
             group.add(fillet);
-            
+
+            this.addHitTestMesh(group, data.points_3d, false);
+
         } else if (data.element_type === 'chamfer') {
             const chamferGeometry = new THREE.BufferGeometry();
             const positions = new Float32Array(data.points_3d);
             chamferGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            
+
             const chamferMaterial = new THREE.LineBasicMaterial({
-                color: 0xff6633, // Red-orange color for chamfers
+                color: 0xff6633,
                 linewidth: 3
             });
-            
+
             const chamfer = new THREE.Line(chamferGeometry, chamferMaterial);
             group.add(chamfer);
-            
+
+            this.addHitTestMesh(group, data.points_3d, false);
+
         } else {
             console.warn(`Unknown element type for visualization: ${data.element_type}`);
-            // Fallback: render as a simple line if points_3d has at least 6 values (2 points)
             if (data.points_3d && data.points_3d.length >= 6) {
                 const fallbackGeometry = new THREE.BufferGeometry();
                 const positions = new Float32Array(data.points_3d);
                 fallbackGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-                
+
                 const fallbackMaterial = new THREE.LineBasicMaterial({
-                    color: 0xaaaaaa, // Gray color for unknown types
+                    color: 0xaaaaaa,
                     linewidth: 2
                 });
-                
+
                 const fallback = new THREE.Line(fallbackGeometry, fallbackMaterial);
                 group.add(fallback);
+
+                this.addHitTestMesh(group, data.points_3d, false);
             }
         }
-        
+
         this.scene.add(group);
         this.elementMeshes.set(data.element_id, group);
-        
+
         console.log(`Added element visualization: ${data.element_id} (${data.element_type})`);
+    }
+
+    /**
+     * Adds an invisible mesh behind line geometry for reliable raycasting.
+     * Lines are nearly impossible to click in Three.js; this flat ribbon mesh
+     * gives the raycaster a solid surface to hit.
+     */
+    private addHitTestMesh(group: THREE.Group, points3d: number[], isClosed: boolean): void {
+        const pointCount = points3d.length / 3;
+        if (pointCount < 2) return;
+
+        const vertices: THREE.Vector3[] = [];
+        for (let i = 0; i < pointCount; i++) {
+            vertices.push(new THREE.Vector3(
+                points3d[i * 3],
+                points3d[i * 3 + 1],
+                points3d[i * 3 + 2]
+            ));
+        }
+
+        // Build a flat ribbon mesh along the polyline with a fixed half-width
+        const HALF_WIDTH = 0.4; // world units — generous click target
+        const ribbonPositions: number[] = [];
+        const ribbonIndices: number[] = [];
+
+        // Compute an "up" direction perpendicular to the general polyline plane.
+        // For XZ-plane sketches the normal is Y; detect from first 3 non-collinear points.
+        let up = new THREE.Vector3(0, 1, 0);
+        if (vertices.length >= 3) {
+            const e1 = new THREE.Vector3().subVectors(vertices[1], vertices[0]);
+            const e2 = new THREE.Vector3().subVectors(vertices[2], vertices[0]);
+            const cross = new THREE.Vector3().crossVectors(e1, e2);
+            if (cross.lengthSq() > 1e-8) {
+                up = cross.normalize();
+            }
+        } else if (vertices.length === 2) {
+            // Single segment — pick an arbitrary perpendicular
+            const seg = new THREE.Vector3().subVectors(vertices[1], vertices[0]);
+            up = new THREE.Vector3(0, 1, 0);
+            if (Math.abs(seg.dot(up)) > 0.99 * seg.length()) {
+                up = new THREE.Vector3(1, 0, 0);
+            }
+        }
+
+        // For each vertex, compute a perpendicular offset in the plane
+        const allVerts = isClosed ? [...vertices, vertices[0]] : vertices;
+
+        for (let i = 0; i < allVerts.length; i++) {
+            const prev = i > 0 ? allVerts[i - 1] : (isClosed ? vertices[vertices.length - 1] : allVerts[0]);
+            const next = i < allVerts.length - 1 ? allVerts[i + 1] : (isClosed ? vertices[0] : allVerts[allVerts.length - 1]);
+
+            const tangent = new THREE.Vector3().subVectors(next, prev).normalize();
+            const offset = new THREE.Vector3().crossVectors(tangent, up).normalize().multiplyScalar(HALF_WIDTH);
+
+            if (offset.lengthSq() < 1e-8) {
+                // Fallback: try another up vector
+                const altUp = new THREE.Vector3(0, 0, 1);
+                offset.crossVectors(tangent, altUp).normalize().multiplyScalar(HALF_WIDTH);
+            }
+
+            const p = allVerts[i];
+            ribbonPositions.push(
+                p.x + offset.x, p.y + offset.y, p.z + offset.z,
+                p.x - offset.x, p.y - offset.y, p.z - offset.z
+            );
+        }
+
+        // Create quad faces between consecutive ribbon vertex pairs
+        const segCount = allVerts.length - 1;
+        for (let i = 0; i < segCount; i++) {
+            const base = i * 2;
+            // Two triangles per quad
+            ribbonIndices.push(base, base + 1, base + 2);
+            ribbonIndices.push(base + 1, base + 3, base + 2);
+        }
+
+        if (ribbonPositions.length === 0 || ribbonIndices.length === 0) return;
+
+        const ribbonGeo = new THREE.BufferGeometry();
+        ribbonGeo.setAttribute('position', new THREE.Float32BufferAttribute(ribbonPositions, 3));
+        ribbonGeo.setIndex(ribbonIndices);
+        ribbonGeo.computeVertexNormals();
+
+        const ribbonMat = new THREE.MeshBasicMaterial({
+            visible: false, // invisible — only for raycasting
+            side: THREE.DoubleSide,
+        });
+
+        const hitMesh = new THREE.Mesh(ribbonGeo, ribbonMat);
+        hitMesh.userData.isHitTest = true;
+        group.add(hitMesh);
     }
     
     public removePlaneVisualization(planeId: string): void {
