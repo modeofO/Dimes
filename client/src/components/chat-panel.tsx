@@ -40,12 +40,18 @@ export function ChatPanel({ messages, onSendMessage, onClose }: ChatPanelProps) 
     return (
         <div className="flex flex-col h-full">
             {/* Header */}
-            <div className="px-3 py-2 border-b border-zinc-700 bg-zinc-800 flex items-center justify-between flex-shrink-0">
-                <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">CAD Agent</h3>
+            <div
+                className="px-3 py-2 flex items-center justify-between flex-shrink-0"
+                style={{ borderBottom: '1px solid #2A2D3A', backgroundColor: '#1A1D27' }}
+            >
+                <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#6A6D7A' }}>Builder</h3>
                 {onClose && (
                     <button
                         onClick={onClose}
-                        className="text-zinc-500 hover:text-zinc-300 transition-colors text-sm leading-none w-5 h-5 flex items-center justify-center rounded hover:bg-zinc-700"
+                        className="transition-colors text-sm leading-none w-5 h-5 flex items-center justify-center rounded"
+                        style={{ color: '#5A5D6A' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = '#C8BDA0'; e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = '#5A5D6A'; e.currentTarget.style.backgroundColor = 'transparent'; }}
                     >
                         &times;
                     </button>
@@ -55,8 +61,8 @@ export function ChatPanel({ messages, onSendMessage, onClose }: ChatPanelProps) 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-3 space-y-2">
                 {messages.length === 0 ? (
-                    <div className="text-zinc-600 text-center text-xs py-4">
-                        Ask the CAD agent to build geometry...
+                    <div className="text-center text-xs py-4" style={{ color: '#5A5D6A' }}>
+                        Ask the builder to create geometry...
                     </div>
                 ) : (
                     messages.map((message, index) => (
@@ -64,9 +70,13 @@ export function ChatPanel({ messages, onSendMessage, onClose }: ChatPanelProps) 
                             key={index}
                             className={`p-2 rounded-lg max-w-[85%] ${
                                 message.sender === 'user'
-                                    ? 'bg-blue-600 text-white ml-auto'
-                                    : 'bg-zinc-700 text-zinc-200 mr-auto'
+                                    ? 'ml-auto'
+                                    : 'mr-auto'
                             }`}
+                            style={message.sender === 'user'
+                                ? { backgroundColor: 'rgba(212, 160, 23, 0.2)', color: '#E8DCC8' }
+                                : { backgroundColor: 'rgba(255, 255, 255, 0.05)', color: '#C8BDA0' }
+                            }
                         >
                             <div className="text-xs whitespace-pre-wrap">
                                 {message.text}
@@ -78,20 +88,30 @@ export function ChatPanel({ messages, onSendMessage, onClose }: ChatPanelProps) 
             </div>
 
             {/* Input */}
-            <form onSubmit={handleSubmit} className="p-2 border-t border-zinc-700 flex-shrink-0">
+            <form onSubmit={handleSubmit} className="p-2 flex-shrink-0" style={{ borderTop: '1px solid #2A2D3A' }}>
                 <div className="flex space-x-1.5">
                     <input
                         type="text"
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
                         onKeyPress={handleKeyPress}
-                        placeholder="Talk to the agent..."
-                        className="flex-1 px-2.5 py-1.5 border border-zinc-600/50 rounded-md text-xs text-zinc-200 bg-zinc-700/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                        placeholder="Talk to the builder..."
+                        className="flex-1 px-2.5 py-1.5 rounded-md text-xs outline-none"
+                        style={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid #2A2D3A',
+                            color: '#E8DCC8',
+                        }}
                     />
                     <button
                         type="submit"
                         disabled={!inputValue.trim()}
-                        className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-xs font-medium hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed transition-colors"
+                        className="px-3 py-1.5 rounded-md text-xs font-medium transition-colors disabled:cursor-not-allowed"
+                        style={{
+                            backgroundColor: inputValue.trim() ? 'rgba(212, 160, 23, 0.3)' : '#1A1D27',
+                            color: inputValue.trim() ? '#D4A017' : '#5A5D6A',
+                            border: '1px solid #2A2D3A',
+                        }}
                     >
                         Send
                     </button>

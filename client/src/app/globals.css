@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #18181b;
-  --foreground: #e4e4e7;
+  --background: #12141C;
+  --foreground: #E8DCC8;
 }
 
 @theme inline {
@@ -22,23 +22,23 @@ input,
 select,
 textarea {
   color: var(--foreground);
-  background-color: #27272a;
+  background-color: #1A1D27;
 }
 
-/* Scrollbar styling for dark mode */
+/* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #27272a;
+  background: #1A1D27;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #52525b;
+  background: #2A2D3A;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #71717a;
+  background: #3A3D4A;
 }
