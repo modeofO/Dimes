@@ -9,7 +9,7 @@ interface CommandItem {
     label: string;
     shortcut?: string;
     icon?: string;
-    category: 'tool' | 'operation' | 'view' | 'setting';
+    category: 'quickstart' | 'tool' | 'operation' | 'view' | 'setting';
     action: () => void;
 }
 
@@ -20,11 +20,13 @@ interface CommandPaletteProps {
     onExtrude: (distance: number) => void;
     onCreatePlane: (type: 'XZ' | 'XY' | 'YZ') => void;
     onCreateSketch: (planeId: string) => void;
+    onNewSketch: (planeType: 'XZ' | 'XY' | 'YZ') => void;
     onSetView: (view: 'front' | 'top' | 'right' | 'isometric') => void;
     onSetUnit: (unit: Unit) => void;
     onSendAIMessage: (message: string) => void;
     currentTool: DrawingTool;
     currentUnit: Unit;
+    activeSketchId: string | null;
     availablePlanes: Array<{ plane_id: string; plane_type: string }>;
     availableSketches: Array<{ sketch_id: string; plane_id: string }>;
     onSetActiveSketch: (sketchId: string) => void;
@@ -38,11 +40,13 @@ export function CommandPalette({
     onExtrude,
     onCreatePlane,
     onCreateSketch,
+    onNewSketch,
     onSetView,
     onSetUnit,
     onSendAIMessage,
     currentTool,
     currentUnit,
+    activeSketchId,
     availablePlanes,
     availableSketches,
     onSetActiveSketch,
@@ -81,7 +85,22 @@ export function CommandPalette({
     }, []);
 
     // Build command list
+    const hasActiveSketch = !!activeSketchId;
+    const hasPlanes = availablePlanes.length > 0;
+
     const allCommands: CommandItem[] = [
+        // Quick Start — New Sketch (plane + sketch in one step)
+        { id: 'new-sketch-xz', label: 'New Sketch on Top Plane (XZ)', icon: '✎', category: 'quickstart', action: () => onNewSketch('XZ') },
+        { id: 'new-sketch-xy', label: 'New Sketch on Front Plane (XY)', icon: '✎', category: 'quickstart', action: () => onNewSketch('XY') },
+        { id: 'new-sketch-yz', label: 'New Sketch on Right Plane (YZ)', icon: '✎', category: 'quickstart', action: () => onNewSketch('YZ') },
+        // Activate existing sketches
+        ...availableSketches.map((sketch, i) => ({
+            id: `activate-sketch-${sketch.sketch_id}`,
+            label: `Edit Sketch ${i + 1}`,
+            icon: '✏',
+            category: 'quickstart' as const,
+            action: () => onSetActiveSketch(sketch.sketch_id),
+        })),
         // Tools - Creation
         { id: 'select', label: 'Select', shortcut: 'V', icon: '↖', category: 'tool', action: () => onSetDrawingTool('select') },
         { id: 'line', label: 'Line', shortcut: 'L', icon: '╱', category: 'tool', action: () => onSetDrawingTool('line') },
@@ -101,25 +120,17 @@ export function CommandPalette({
         // 3D Operations
         { id: 'extrude', label: 'Extrude', shortcut: 'E', icon: '⬆', category: 'operation', action: () => setExtrudeInputMode(true) },
         { id: 'delete', label: 'Delete selected', shortcut: 'X', icon: '✕', category: 'operation', action: () => onDeleteSelected() },
-        // Planes
+        // Planes (advanced — standalone plane creation)
         { id: 'plane-xz', label: 'Create XZ Plane (Top)', icon: '⊞', category: 'operation', action: () => onCreatePlane('XZ') },
         { id: 'plane-xy', label: 'Create XY Plane (Front)', icon: '⊞', category: 'operation', action: () => onCreatePlane('XY') },
         { id: 'plane-yz', label: 'Create YZ Plane (Right)', icon: '⊞', category: 'operation', action: () => onCreatePlane('YZ') },
-        // Sketches on available planes
+        // Sketches on existing planes (advanced)
         ...availablePlanes.map(plane => ({
             id: `sketch-on-${plane.plane_id}`,
             label: `Create Sketch on ${plane.plane_type} Plane`,
             icon: '✎',
             category: 'operation' as const,
             action: () => onCreateSketch(plane.plane_id),
-        })),
-        // Activate existing sketches
-        ...availableSketches.map((sketch, i) => ({
-            id: `activate-sketch-${sketch.sketch_id}`,
-            label: `Edit Sketch ${i + 1}`,
-            icon: '✏',
-            category: 'operation' as const,
-            action: () => onSetActiveSketch(sketch.sketch_id),
         })),
         // Views
         { id: 'view-front', label: 'Front View', shortcut: '1', icon: '⊡', category: 'view', action: () => onSetView('front') },
@@ -142,10 +153,15 @@ export function CommandPalette({
         )
         : [];
 
-    // Build display list: recent when empty, filtered when typing
+    // Build display list: quick-start when empty, filtered when typing
+    const quickStartCommands = allCommands.filter(cmd => cmd.category === 'quickstart');
+    const recentDisplayCommands = allCommands.filter(cmd =>
+        recentCommands.includes(cmd.id) && cmd.category !== 'quickstart'
+    ).slice(0, 3);
+
     const displayCommands = query.trim()
         ? filteredCommands
-        : allCommands.filter(cmd => recentCommands.includes(cmd.id)).slice(0, 3);
+        : [...quickStartCommands, ...recentDisplayCommands];
 
     const isAIQuery = query.trim().length > 0 && filteredCommands.length === 0;
 
@@ -266,33 +282,45 @@ export function CommandPalette({
 
                 {/* Results */}
                 <div ref={listRef} className="overflow-y-auto max-h-[40vh]">
-                    {/* Recent header when no query */}
-                    {!query.trim() && displayCommands.length > 0 && (
+                    {/* Section headers when no query */}
+                    {!query.trim() && quickStartCommands.length > 0 && (
                         <div className="px-3 pt-2 pb-1">
-                            <span className="text-[10px] text-[#5A5D6A] uppercase tracking-wider font-medium">Recent</span>
+                            <span className="text-[10px] text-[#5A5D6A] uppercase tracking-wider font-medium">
+                                {hasActiveSketch ? 'Sketches' : 'Get Started'}
+                            </span>
                         </div>
                     )}
 
-                    {displayCommands.map((cmd, index) => (
-                        <div
-                            key={cmd.id}
-                            className={`px-3 py-2 flex items-center gap-3 cursor-pointer transition-colors ${
-                                index === selectedIndex
-                                    ? 'bg-amber-500/15 text-amber-300'
-                                    : 'text-[#C8BDA0] hover:bg-[#22252F]'
-                            }`}
-                            onClick={() => executeCommand(cmd)}
-                            onMouseEnter={() => setSelectedIndex(index)}
-                        >
-                            {cmd.icon && (
-                                <span className="w-5 text-center text-sm opacity-60">{cmd.icon}</span>
-                            )}
-                            <span className="flex-1 text-sm">{cmd.label}</span>
-                            {cmd.shortcut && (
-                                <span className="text-xs text-[#5A5D6A] font-mono">{cmd.shortcut}</span>
-                            )}
-                        </div>
-                    ))}
+                    {displayCommands.map((cmd, index) => {
+                        // Insert "Recent" header before recent commands
+                        const isFirstRecent = !query.trim() && recentDisplayCommands.length > 0 && cmd === recentDisplayCommands[0];
+                        return (
+                            <React.Fragment key={cmd.id}>
+                                {isFirstRecent && (
+                                    <div className="px-3 pt-3 pb-1">
+                                        <span className="text-[10px] text-[#5A5D6A] uppercase tracking-wider font-medium">Recent</span>
+                                    </div>
+                                )}
+                                <div
+                                    className={`px-3 py-2 flex items-center gap-3 cursor-pointer transition-colors ${
+                                        index === selectedIndex
+                                            ? 'bg-amber-500/15 text-amber-300'
+                                            : 'text-[#C8BDA0] hover:bg-[#22252F]'
+                                    }`}
+                                    onClick={() => executeCommand(cmd)}
+                                    onMouseEnter={() => setSelectedIndex(index)}
+                                >
+                                    {cmd.icon && (
+                                        <span className="w-5 text-center text-sm opacity-60">{cmd.icon}</span>
+                                    )}
+                                    <span className="flex-1 text-sm">{cmd.label}</span>
+                                    {cmd.shortcut && (
+                                        <span className="text-xs text-[#5A5D6A] font-mono">{cmd.shortcut}</span>
+                                    )}
+                                </div>
+                            </React.Fragment>
+                        );
+                    })}
 
                     {/* AI query hint */}
                     {isAIQuery && (

@@ -381,6 +381,25 @@ export function CADApplication() {
         updateStatus(`Delete not yet implemented for ${selectedObject.type}`, 'warning');
     }, [selectedObject, updateStatus]);
 
+    const handleNewSketch = useCallback(async (planeType: 'XZ' | 'XY' | 'YZ') => {
+        if (!clientRef.current) return;
+        try {
+            updateStatus(`Creating ${planeType} plane + sketch...`, 'info');
+            const planeResponse = await clientRef.current.createSketchPlane(planeType as any);
+            if (planeResponse.success && planeResponse.data) {
+                const planeId = planeResponse.data.plane_id;
+                updateStatus(`Plane created. Creating sketch...`, 'info');
+                const sketchResponse = await clientRef.current.createSketch(planeId);
+                if (sketchResponse.success && sketchResponse.data) {
+                    updateStatus(`Sketch ready — start drawing!`, 'success');
+                }
+            }
+        } catch (error) {
+            console.error('Failed to create new sketch:', error);
+            updateStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+        }
+    }, [updateStatus]);
+
     const handleAIMessage = useCallback((message: string) => {
         handleChatMessage(message);
         setIsChatOpen(true);
@@ -796,11 +815,13 @@ export function CADApplication() {
                 onExtrude={handlePaletteExtrude}
                 onCreatePlane={handlePaletteCreatePlane}
                 onCreateSketch={handlePaletteCreateSketch}
+                onNewSketch={handleNewSketch}
                 onSetView={handlePaletteSetView}
                 onSetUnit={setCurrentUnit}
                 onSendAIMessage={handleAIMessage}
                 currentTool={currentDrawingTool}
                 currentUnit={currentUnit}
+                activeSketchId={activeSketchId}
                 availablePlanes={createdPlanes}
                 availableSketches={createdSketches}
                 onSetActiveSketch={handleSetActiveSketch}
