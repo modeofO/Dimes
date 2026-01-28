@@ -90,7 +90,7 @@ export function CommandPalette({
 
     const allCommands: CommandItem[] = [
         // Quick Start — New Sketch (plane + sketch in one step)
-        { id: 'new-sketch-xz', label: 'New Sketch on Top Plane (XZ)', icon: '✎', category: 'quickstart', action: () => onNewSketch('XZ') },
+        { id: 'new-sketch-xz', label: 'New Sketch on Top Plane (XZ)', shortcut: 'N', icon: '✎', category: 'quickstart', action: () => onNewSketch('XZ') },
         { id: 'new-sketch-xy', label: 'New Sketch on Front Plane (XY)', icon: '✎', category: 'quickstart', action: () => onNewSketch('XY') },
         { id: 'new-sketch-yz', label: 'New Sketch on Right Plane (YZ)', icon: '✎', category: 'quickstart', action: () => onNewSketch('YZ') },
         // Activate existing sketches

@@ -53,9 +53,9 @@ export function WelcomeOverlay({ onDismiss }: WelcomeOverlayProps) {
                 <div className="text-[#E8DCC8] text-lg tracking-wide">
                     Press{' '}
                     <kbd className="inline-block px-2.5 py-1 rounded-md bg-[#1A1D27] border border-[#2A2D3A] text-amber-400 font-mono text-base mx-1">
-                        Space
+                        N
                     </kbd>{' '}
-                    to begin
+                    to start a new sketch
                 </div>
 
                 {/* Divider */}
@@ -65,8 +65,15 @@ export function WelcomeOverlay({ onDismiss }: WelcomeOverlayProps) {
                     <div className="w-8 h-px bg-[#2A2D3A]" />
                 </div>
 
-                {/* Tool hints - row 1 */}
+                {/* Sketch + Tool hints */}
                 <div className="flex items-center gap-6 justify-center">
+                    <HintKey letter="N" label="new sketch" />
+                    <HintKey letter="S" label="sketch menu" />
+                    <HintKey letter="Space" label="all commands" />
+                </div>
+
+                {/* Drawing tool hints */}
+                <div className="flex items-center gap-6 justify-center mt-2">
                     <HintKey letter="L" label="line" />
                     <HintKey letter="C" label="circle" />
                     <HintKey letter="R" label="rect" />
@@ -76,8 +83,9 @@ export function WelcomeOverlay({ onDismiss }: WelcomeOverlayProps) {
 
                 {/* Navigation hints */}
                 <div className="flex items-center gap-6 justify-center mt-2">
-                    <HintKey letter="Tab" label="scene" />
-                    <HintKey letter="?" label="help" />
+                    <HintKey letter="Tab" label="scene tree" />
+                    <HintKey letter="1-3" label="views" />
+                    <HintKey letter="Esc" label="back" />
                 </div>
             </div>
         </div>

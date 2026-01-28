@@ -29,12 +29,12 @@ const TOOL_LABELS: Record<DrawingTool, string> = {
 };
 
 const KEY_HINTS = [
-    { key: 'V', label: 'select' },
+    { key: 'N', label: 'new sketch' },
     { key: 'L', label: 'line' },
     { key: 'C', label: 'circle' },
     { key: 'R', label: 'rect' },
-    { key: 'A', label: 'arc' },
-    { key: 'P', label: 'poly' },
+    { key: 'E', label: 'extrude' },
+    { key: 'Space', label: 'commands' },
 ];
 
 export function BottomHud({ currentTool, isConnected, onBuilderClick, isChatOpen, unreadMessages }: BottomHudProps) {

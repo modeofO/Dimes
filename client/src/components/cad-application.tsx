@@ -702,6 +702,20 @@ export function CADApplication() {
                     handleSetDrawingTool('trim');
                     break;
 
+                // Sketch workflow
+                case 'n': case 'N':
+                    // Quick: new sketch on XZ (top) plane
+                    event.preventDefault();
+                    handleNewSketch('XZ');
+                    setShowWelcome(false);
+                    break;
+                case 's': case 'S':
+                    // Opens palette pre-filtered to sketch commands
+                    event.preventDefault();
+                    setIsPaletteOpen(true);
+                    setShowWelcome(false);
+                    break;
+
                 // 3D Operations
                 case 'e': case 'E':
                     event.preventDefault();
