@@ -55,16 +55,91 @@ export class CADRenderer {
     
     private initializeScene(): void {
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x1a1a2e);
+        this.scene.background = new THREE.Color(0x0a1628);
 
-        // Add axes helper
-        const axesHelper = new THREE.AxesHelper(20);
-        this.scene.add(axesHelper);
+        // Blueprint grid — XZ plane
+        this.createBlueprintGrid();
+    }
 
-        // Add ground grid for spatial reference
-        const gridHelper = new THREE.GridHelper(100, 50, 0x3a3a5c, 0x2a2a44);
-        gridHelper.position.y = -0.01; // Slightly below origin to avoid z-fighting
-        this.scene.add(gridHelper);
+    private createBlueprintGrid(): void {
+        const gridGroup = new THREE.Group();
+        gridGroup.name = 'blueprint-grid';
+
+        const gridSize = 200; // total extent (-100 to +100)
+        const half = gridSize / 2;
+
+        // Minor grid: every 1 unit
+        const minorGeo = new THREE.BufferGeometry();
+        const minorVerts: number[] = [];
+        for (let i = -half; i <= half; i += 1) {
+            if (i % 10 === 0) continue; // skip major lines
+            // Lines along X
+            minorVerts.push(-half, 0, i, half, 0, i);
+            // Lines along Z
+            minorVerts.push(i, 0, -half, i, 0, half);
+        }
+        minorGeo.setAttribute('position', new THREE.Float32BufferAttribute(minorVerts, 3));
+        const minorMat = new THREE.LineBasicMaterial({
+            color: 0x152a4a,
+            transparent: true,
+            opacity: 0.5,
+        });
+        gridGroup.add(new THREE.LineSegments(minorGeo, minorMat));
+
+        // Major grid: every 10 units
+        const majorGeo = new THREE.BufferGeometry();
+        const majorVerts: number[] = [];
+        for (let i = -half; i <= half; i += 10) {
+            if (i === 0) continue; // skip origin (drawn separately)
+            majorVerts.push(-half, 0, i, half, 0, i);
+            majorVerts.push(i, 0, -half, i, 0, half);
+        }
+        majorGeo.setAttribute('position', new THREE.Float32BufferAttribute(majorVerts, 3));
+        const majorMat = new THREE.LineBasicMaterial({
+            color: 0x1e3a5f,
+            transparent: true,
+            opacity: 0.7,
+        });
+        gridGroup.add(new THREE.LineSegments(majorGeo, majorMat));
+
+        // Origin axes — X axis (soft red) and Z axis (soft blue)
+        const xAxisGeo = new THREE.BufferGeometry();
+        xAxisGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+            -half, 0, 0, half, 0, 0
+        ], 3));
+        const xAxisMat = new THREE.LineBasicMaterial({
+            color: 0x6b3a3a,
+            transparent: true,
+            opacity: 0.8,
+        });
+        gridGroup.add(new THREE.LineSegments(xAxisGeo, xAxisMat));
+
+        const zAxisGeo = new THREE.BufferGeometry();
+        zAxisGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+            0, 0, -half, 0, 0, half
+        ], 3));
+        const zAxisMat = new THREE.LineBasicMaterial({
+            color: 0x3a4a6b,
+            transparent: true,
+            opacity: 0.8,
+        });
+        gridGroup.add(new THREE.LineSegments(zAxisGeo, zAxisMat));
+
+        // Small origin marker — crosshair dot
+        const originGeo = new THREE.RingGeometry(0.15, 0.3, 16);
+        const originMat = new THREE.MeshBasicMaterial({
+            color: 0x4a6a8a,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.6,
+        });
+        const originMarker = new THREE.Mesh(originGeo, originMat);
+        originMarker.rotation.x = -Math.PI / 2; // lay flat on XZ
+        gridGroup.add(originMarker);
+
+        // Position grid slightly below origin to avoid z-fighting
+        gridGroup.position.y = -0.01;
+        this.scene.add(gridGroup);
     }
     
     private setupCamera(): void {
@@ -164,7 +239,7 @@ export class CADRenderer {
 
         // Create a simple environment scene for PBR reflections
         const envScene = new THREE.Scene();
-        envScene.background = new THREE.Color(0x2a2a3e);
+        envScene.background = new THREE.Color(0x0e1e30);
         envScene.add(new THREE.AmbientLight(0x8888aa, 2.0));
         const envDirLight = new THREE.DirectionalLight(0xffffff, 1.0);
         envDirLight.position.set(1, 1, 1);
