@@ -459,6 +459,55 @@ export function CADApplication() {
         }
     }, [updateStatus]);
 
+    // Pending face selection for sketch-on-face confirmation
+    const [pendingFace, setPendingFace] = useState<{ normal: THREE.Vector3; center: THREE.Vector3; meshId: string } | null>(null);
+
+    const handleFaceSelected = useCallback((faceNormal: THREE.Vector3, faceCenter: THREE.Vector3, meshId: string) => {
+        // Don't offer sketch-on-face while already in a sketch
+        if (activeSketchId) return;
+        // Show confirmation prompt
+        setPendingFace({ normal: faceNormal, center: faceCenter, meshId });
+    }, [activeSketchId]);
+
+    const handleConfirmSketchOnFace = useCallback(async () => {
+        if (!clientRef.current || !pendingFace) return;
+
+        const { normal, center } = pendingFace;
+        setPendingFace(null);
+
+        // Map face normal to closest standard plane type
+        const absX = Math.abs(normal.x);
+        const absY = Math.abs(normal.y);
+        const absZ = Math.abs(normal.z);
+
+        let planeType: 'XZ' | 'XY' | 'YZ';
+        if (absY >= absX && absY >= absZ) {
+            planeType = 'XZ'; // Y-facing face → sketch on XZ plane
+        } else if (absZ >= absX && absZ >= absY) {
+            planeType = 'XY'; // Z-facing face → sketch on XY plane
+        } else {
+            planeType = 'YZ'; // X-facing face → sketch on YZ plane
+        }
+
+        const origin: [number, number, number] = [center.x, center.y, center.z];
+
+        try {
+            updateStatus(`Creating sketch on face (${planeType} at ${origin.map(v => v.toFixed(1)).join(', ')})...`, 'info');
+
+            const planeResponse = await clientRef.current.createSketchPlane(planeType, origin);
+            if (planeResponse.success && planeResponse.data) {
+                const planeId = planeResponse.data.plane_id;
+                const sketchResponse = await clientRef.current.createSketch(planeId);
+                if (sketchResponse.success && sketchResponse.data) {
+                    updateStatus(`Sketch on face ready — start drawing!`, 'success');
+                }
+            }
+        } catch (error) {
+            console.error('Failed to create sketch on face:', error);
+            updateStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+        }
+    }, [pendingFace, updateStatus]);
+
     const handleAIMessage = useCallback((message: string) => {
         handleChatMessage(message);
         setIsChatOpen(true);
@@ -474,6 +523,7 @@ export function CADApplication() {
                 updateStatus('Setting up 3D viewport...', 'info');
                 const renderer = new CADRenderer(viewportRef.current);
                 renderer.onObjectSelected = handleSelection;
+                renderer.onFaceSelected = handleFaceSelected;
                 renderer.onChamferRequested = handleInteractiveChamfer;
                 renderer.onFilletRequested = handleInteractiveFillet;
                 rendererRef.current = renderer;
@@ -679,6 +729,13 @@ export function CADApplication() {
     // Keyboard shortcut system — instant "game feel"
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
+            // Enter confirms pending face selection
+            if (pendingFace && event.key === 'Enter') {
+                event.preventDefault();
+                handleConfirmSketchOnFace();
+                return;
+            }
+
             // Don't handle shortcuts when palette is open (except Escape)
             if (isPaletteOpen && event.key !== 'Escape') return;
 
@@ -713,7 +770,9 @@ export function CADApplication() {
                     break;
                 case 'Escape':
                     event.preventDefault();
-                    if (showInlineExtrude) {
+                    if (pendingFace) {
+                        setPendingFace(null);
+                    } else if (showInlineExtrude) {
                         setShowInlineExtrude(false);
                     } else if (isPaletteOpen) {
                         setIsPaletteOpen(false);
@@ -821,7 +880,7 @@ export function CADApplication() {
 
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [isPaletteOpen, isSceneTreeOpen, activeSketchId, currentDrawingTool, showInlineExtrude, handleSetDrawingTool, handleDeleteSelected, handleSelection, exitSketchMode, updateStatus]);
+    }, [isPaletteOpen, isSceneTreeOpen, activeSketchId, currentDrawingTool, showInlineExtrude, pendingFace, handleConfirmSketchOnFace, handleSetDrawingTool, handleDeleteSelected, handleSelection, exitSketchMode, updateStatus]);
 
     return (
         <div className="h-screen w-screen overflow-hidden" style={{ backgroundColor: '#12141C' }}>
@@ -885,6 +944,36 @@ export function CADApplication() {
                             />
                             <span className="text-[#5A5D6A] text-xs">{currentUnit}</span>
                             <span className="text-[#5A5D6A] text-[10px]">Enter to apply</span>
+                        </div>
+                    </div>
+                )}
+
+                {/* Sketch-on-Face Confirmation */}
+                {pendingFace && (
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30">
+                        <div
+                            className="flex items-center gap-3 px-4 py-3 rounded-lg shadow-2xl shadow-black/60"
+                            style={{ backgroundColor: '#1A1D27', border: '1px solid #2A2D3A' }}
+                        >
+                            <span className="text-[#E8DCC8] text-sm">Sketch on this face?</span>
+                            <button
+                                onClick={handleConfirmSketchOnFace}
+                                className="px-3 py-1 rounded text-xs font-medium transition-colors cursor-pointer"
+                                style={{ backgroundColor: '#D4A017', color: '#12141C' }}
+                                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#E8B520'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#D4A017'; }}
+                            >
+                                Yes
+                            </button>
+                            <button
+                                onClick={() => setPendingFace(null)}
+                                className="px-3 py-1 rounded text-xs font-medium transition-colors cursor-pointer"
+                                style={{ backgroundColor: '#2A2D3A', color: '#A0A3B0' }}
+                                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#3A3D4A'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#2A2D3A'; }}
+                            >
+                                No
+                            </button>
                         </div>
                     </div>
                 )}

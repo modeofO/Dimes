@@ -21,6 +21,7 @@ export class CADRenderer {
     private pointerDownPos = new THREE.Vector2();
     private selectionBox: THREE.BoxHelper | null = null;
     public onObjectSelected: ((id: string | null, type: string | null, sketchId?: string | null) => void) | null = null;
+    public onFaceSelected: ((faceNormal: THREE.Vector3, faceCenter: THREE.Vector3, meshId: string) => void) | null = null;
     public onDrawingComplete: ((tool: DrawingTool, points: THREE.Vector2[], arcType?: 'three_points' | 'endpoints_radius') => void) | null = null;
     public onChamferRequested: ((sketchId: string, line1Id: string, line2Id: string) => void) | null = null;
     public onFilletRequested: ((sketchId: string, line1Id: string, line2Id: string) => void) | null = null;
@@ -321,7 +322,7 @@ export class CADRenderer {
         // Clear previous hover
         this.clearHoverHighlight();
 
-        if (hitObj && result && (result.parsed.type === 'element' || result.parsed.type === 'sketch' || result.parsed.type === 'feature')) {
+        if (hitObj && result && (result.parsed.type === 'element' || result.parsed.type === 'sketch' || result.parsed.type === 'feature' || result.parsed.type === 'mesh')) {
             this.hoveredObject = hitObj;
             this.renderer.domElement.style.cursor = 'pointer';
 
@@ -366,7 +367,6 @@ export class CADRenderer {
                     return { id: parts.slice(1).join('-'), type: 'sketch' };
                 case 'element':
                     // Format: element-{sketch_id}-{element_id}
-                    // sketch_id is parts[1], element_id is parts[2+]
                     if (parts.length >= 3) {
                         return {
                             id: parts.slice(2).join('-'),
@@ -375,6 +375,8 @@ export class CADRenderer {
                         };
                     }
                     return { id: parts.slice(1).join('-'), type: 'element' };
+                case 'model':
+                    return { id: name, type: 'mesh' };
                 default:
                     return { id: name, type: 'feature' };
             }
@@ -385,7 +387,7 @@ export class CADRenderer {
         return null;
     }
 
-    private raycastNamedObject(event: PointerEvent): { object: THREE.Object3D; parsed: { id: string; type: string; sketchId?: string } } | null {
+    private raycastNamedObject(event: PointerEvent): { object: THREE.Object3D; parsed: { id: string; type: string; sketchId?: string }; faceNormal?: THREE.Vector3; faceCenter?: THREE.Vector3 } | null {
         const rect = this.renderer.domElement.getBoundingClientRect();
         const mouse = new THREE.Vector2();
         mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -402,7 +404,17 @@ export class CADRenderer {
             if (obj?.name && obj.name !== 'blueprint-grid') {
                 const parsed = this.parseObjectName(obj.name);
                 if (parsed) {
-                    return { object: obj, parsed };
+                    // For mesh hits, extract face normal and center from the intersection
+                    let faceNormal: THREE.Vector3 | undefined;
+                    let faceCenter: THREE.Vector3 | undefined;
+                    if (parsed.type === 'mesh' && hit.face) {
+                        faceNormal = hit.face.normal.clone();
+                        // Transform face normal to world space
+                        const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
+                        faceNormal.applyMatrix3(normalMatrix).normalize();
+                        faceCenter = hit.point.clone();
+                    }
+                    return { object: obj, parsed, faceNormal, faceCenter };
                 }
             }
         }
@@ -428,6 +440,14 @@ export class CADRenderer {
                 this.controls.selectLine(selectedId);
                 return;
             }
+        }
+
+        // Handle mesh face click — trigger face selection for sketch-on-face
+        if (selectedType === 'mesh' && result?.faceNormal && result?.faceCenter && selectedId) {
+            if (this.onFaceSelected) {
+                this.onFaceSelected(result.faceNormal, result.faceCenter, selectedId);
+            }
+            return;
         }
 
         if (this.onObjectSelected) {

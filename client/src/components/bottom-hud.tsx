@@ -119,8 +119,8 @@ export function BottomHud({ currentTool, isConnected, onBuilderClick, isChatOpen
                 >
                     {KEY_HINTS.map(hint => (
                         <div key={hint.key} className="flex items-center gap-1">
-                            <span className="text-amber-400/80 font-mono text-xs font-medium">{hint.key}</span>
-                            <span className="text-[#6A6D7A] text-[10px]">{hint.label}</span>
+                            <span className="text-[#D4A017] font-mono text-xs font-medium">{hint.key}</span>
+                            <span className="text-[#A0A3B0] text-[10px]">{hint.label}</span>
                         </div>
                     ))}
                 </div>
@@ -128,20 +128,27 @@ export function BottomHud({ currentTool, isConnected, onBuilderClick, isChatOpen
                 {/* Right: Builder button */}
                 {!isChatOpen && (
                     <button
-                        onClick={onBuilderClick}
-                        className="pointer-events-auto px-3 py-1.5 rounded-md text-xs font-medium shadow-lg shadow-black/30 transition-colors border select-none"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onBuilderClick();
+                        }}
+                        className="pointer-events-auto px-3 py-1.5 rounded-md text-xs font-medium shadow-lg shadow-black/30 transition-all duration-150 border select-none cursor-pointer relative z-20"
                         style={{
                             backgroundColor: '#1A1D27',
-                            borderColor: '#2A2D3A',
-                            color: '#C8BDA0',
+                            borderColor: '#D4A017',
+                            color: '#E8DCC8',
                         }}
                         onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = '#22252F';
-                            e.currentTarget.style.color = '#E8DCC8';
+                            e.currentTarget.style.backgroundColor = '#2A2D3A';
+                            e.currentTarget.style.borderColor = '#E8B520';
+                            e.currentTarget.style.color = '#FFFFFF';
+                            e.currentTarget.style.transform = 'translateY(-1px)';
                         }}
                         onMouseLeave={(e) => {
                             e.currentTarget.style.backgroundColor = '#1A1D27';
-                            e.currentTarget.style.color = '#C8BDA0';
+                            e.currentTarget.style.borderColor = '#D4A017';
+                            e.currentTarget.style.color = '#E8DCC8';
+                            e.currentTarget.style.transform = 'translateY(0)';
                         }}
                     >
                         Builder
