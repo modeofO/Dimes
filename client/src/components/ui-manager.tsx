@@ -30,6 +30,7 @@ interface CreatedSketch {
 }
 
 interface UIManagerProps {
+    isOpen: boolean;
     createdPlanes: CreatedPlane[];
     createdSketches: CreatedSketch[];
     createdShapes: CreatedShape[];
@@ -38,6 +39,7 @@ interface UIManagerProps {
 }
 
 export function UIManager({
+    isOpen,
     createdPlanes,
     createdSketches,
     createdShapes,
@@ -182,28 +184,34 @@ export function UIManager({
         return { containers, childMap, orphans };
     };
 
-    // --- Shared styles ---
+    // --- Shared styles (new color tokens) ---
 
     const itemBase = 'px-2 py-0.5 text-xs cursor-pointer rounded transition-colors';
-    const itemHover = 'hover:bg-zinc-700/50';
-    const itemSelected = 'bg-blue-900/50 text-blue-300';
-    const itemDefault = 'text-zinc-300';
+    const itemHover = 'hover:bg-white/5';
+    const itemSelected = 'bg-amber-500/15 text-amber-300';
+    const itemDefault = 'text-[#C8BDA0]';
+    const itemSecondary = 'text-[#6A6D7A]';
 
     const itemClass = (id: string, type: string) =>
         `${itemBase} ${itemHover} ${isSelected(id, type) ? itemSelected : itemDefault}`;
 
-    return (
-        <div className="h-full flex flex-col">
-            {/* Header */}
-            <div className="px-3 py-2 border-b border-zinc-700 bg-zinc-800">
-                <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Scene Tree</h3>
-            </div>
+    const isEmpty = createdPlanes.length === 0 && createdShapes.length === 0;
 
-            {/* Tree Content */}
-            <div className="flex-1 overflow-y-auto px-2 py-1.5">
-                {createdPlanes.length === 0 && createdShapes.length === 0 ? (
-                    <div className="text-zinc-600 text-center text-xs py-4">
-                        No objects in scene
+    return (
+        <div
+            className={`fixed top-0 left-0 h-full w-[280px] z-40 flex flex-col transition-transform duration-200 ease-out backdrop-blur-md ${
+                isOpen ? 'translate-x-0' : '-translate-x-full'
+            }`}
+            style={{
+                backgroundColor: 'rgba(26, 29, 39, 0.92)',
+                borderRight: '2px solid rgba(212, 160, 23, 0.3)',
+            }}
+        >
+            {/* Tree Content — no header per spec */}
+            <div className="flex-1 overflow-y-auto px-2 py-3">
+                {isEmpty ? (
+                    <div className="text-[#6A6D7A] text-center text-xs py-8 select-none">
+                        Empty scene &mdash; press Space to start
                     </div>
                 ) : (
                     <div className="space-y-px">
@@ -238,7 +246,7 @@ export function UIManager({
                                                 onClick={() => handleItemClick(sketch.sketch_id, 'sketch')}
                                             >
                                                 <span>{formatSketchName(sketch)}</span>
-                                                <span className="text-zinc-600 ml-1">
+                                                <span className={`${itemSecondary} ml-1`}>
                                                     · {sketch.elements.length} el
                                                 </span>
                                             </div>
@@ -257,7 +265,7 @@ export function UIManager({
                                                                 <div key={`c-${container.id}`} className="ml-3">
                                                                     <div
                                                                         className={`${itemBase} ${itemHover} flex items-center gap-1 ${
-                                                                            isSelected(container.id, 'element') ? itemSelected : 'text-zinc-400'
+                                                                            isSelected(container.id, 'element') ? itemSelected : itemSecondary
                                                                         }`}
                                                                         onClick={() => handleItemClick(container.id, 'element')}
                                                                     >
@@ -266,12 +274,12 @@ export function UIManager({
                                                                                 e.stopPropagation();
                                                                                 toggleContainer(container.id);
                                                                             }}
-                                                                            className="w-3 h-3 flex items-center justify-center text-[10px] text-zinc-500 hover:text-zinc-300"
+                                                                            className="w-3 h-3 flex items-center justify-center text-[10px] text-[#5A5D6A] hover:text-[#C8BDA0]"
                                                                         >
                                                                             {isExpanded ? '▾' : '▸'}
                                                                         </button>
                                                                         <span>{formatElementName(container)}</span>
-                                                                        <span className="text-zinc-600 text-[10px]">({children.length})</span>
+                                                                        <span className="text-[#5A5D6A] text-[10px]">({children.length})</span>
                                                                     </div>
 
                                                                     {isExpanded && children.map((child) => (
@@ -288,7 +296,7 @@ export function UIManager({
                                                         })}
 
                                                         {/* Orphan elements */}
-                                                        {orphans.map((element, i) => (
+                                                        {orphans.map((element) => (
                                                             <div
                                                                 key={`o-${element.id}`}
                                                                 className={`ml-3 ${itemClass(element.id, 'element')}`}
