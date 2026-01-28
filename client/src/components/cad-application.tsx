@@ -57,7 +57,7 @@ export function CADApplication() {
     const [createdShapes, setCreatedShapes] = useState<CreatedShape[]>([]);
     const [createdPlanes, setCreatedPlanes] = useState<CreatedPlane[]>([]);
     const [createdSketches, setCreatedSketches] = useState<CreatedSketch[]>([]);
-    const [selectedObject, setSelectedObject] = useState<{ id: string; type: string; } | null>(null);
+    const [selectedObject, setSelectedObject] = useState<{ id: string; type: string; sketchId?: string } | null>(null);
     const [chatMessages, setChatMessages] = useState<Array<{ sender: 'user' | 'agent'; text: string }>>([]);
     const [currentDrawingTool, setCurrentDrawingTool] = useState<DrawingTool>('select');
     const [activeSketchId, setActiveSketchId] = useState<string | null>(null);
@@ -70,6 +70,7 @@ export function CADApplication() {
 
     // New overlay state
     const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+    const [paletteExtrudeMode, setPaletteExtrudeMode] = useState(false);
     const [isSceneTreeOpen, setIsSceneTreeOpen] = useState(false);
     const [showWelcome, setShowWelcome] = useState(true);
 
@@ -78,13 +79,22 @@ export function CADApplication() {
         console.log(`[${type.toUpperCase()}] ${message}`);
     }, []);
 
-    const handleSelection = useCallback((id: string | null, type: string | null) => {
+    const handleSelection = useCallback((id: string | null, type: string | null, sketchId?: string | null) => {
         setSelectedObject(prevSelected => {
             if (prevSelected?.id === id) return prevSelected;
             if (rendererRef.current) {
-                rendererRef.current.setHighlight(id);
+                // Construct the full scene object name for highlighting
+                let sceneName = id;
+                if (id && type === 'element' && sketchId) {
+                    sceneName = `element-${sketchId}-${id}`;
+                } else if (id && type === 'sketch') {
+                    sceneName = `sketch-${id}`;
+                } else if (id && type === 'plane') {
+                    sceneName = `plane-${id}`;
+                }
+                rendererRef.current.setHighlight(sceneName);
             }
-            return id && type ? { id, type } : null;
+            return id && type ? { id, type, sketchId: sketchId ?? undefined } : null;
         });
     }, []);
 
@@ -297,33 +307,52 @@ export function CADApplication() {
     // Command palette callbacks
     const handlePaletteExtrude = useCallback(async (distance: number) => {
         if (!clientRef.current || !selectedObject) {
-            updateStatus('Select a sketch or element to extrude', 'error');
+            updateStatus('Select an element to extrude (click a shape first)', 'error');
             return;
         }
         try {
-            const { id: selectedId, type: selectedType } = selectedObject;
+            const { id: selectedId, type: selectedType, sketchId: selSketchId } = selectedObject;
             let sketchId: string | undefined;
             let elementId: string | undefined;
 
-            if (selectedType === 'sketch') {
+            if (selectedType === 'element') {
+                // Use the sketch ID from the selection directly
+                sketchId = selSketchId;
+                elementId = selectedId;
+
+                // Fallback: search createdSketches if sketchId wasn't provided
+                if (!sketchId) {
+                    for (const sketch of createdSketches) {
+                        if (sketch.elements.find(e => e.id === selectedId)) {
+                            sketchId = sketch.sketch_id;
+                            break;
+                        }
+                    }
+                }
+            } else if (selectedType === 'sketch') {
+                // Try to find the first closed element in this sketch
                 sketchId = selectedId;
-            } else if (selectedType === 'element') {
-                for (const sketch of createdSketches) {
-                    const element = sketch.elements.find(e => e.id === selectedId);
-                    if (element) {
-                        sketchId = sketch.sketch_id;
-                        elementId = element.id;
-                        break;
+                const sketch = createdSketches.find(s => s.sketch_id === selectedId);
+                if (sketch) {
+                    const closedElement = sketch.elements.find(e =>
+                        !e.is_container_only && (e.type === 'rectangle' || e.type === 'circle' || e.type === 'polygon')
+                    );
+                    if (closedElement) {
+                        elementId = closedElement.id;
                     }
                 }
             }
 
             if (!sketchId) {
-                updateStatus('Please select a sketch or element to extrude', 'error');
+                updateStatus('Could not determine sketch — select an element to extrude', 'error');
+                return;
+            }
+            if (!elementId) {
+                updateStatus('Select a closed shape (rectangle, circle, polygon) to extrude', 'error');
                 return;
             }
 
-            updateStatus(`Extruding ${elementId ? `element ${elementId}` : `sketch ${sketchId}`}...`, 'info');
+            updateStatus(`Extruding element...`, 'info');
             const distanceInMm = toMillimeters(distance, currentUnit);
             const response = await clientRef.current.extrudeFeature(sketchId, distanceInMm, elementId);
             if (response.success && response.data) {
@@ -648,6 +677,7 @@ export function CADApplication() {
                 // Navigation
                 case ' ':
                     event.preventDefault();
+                    setPaletteExtrudeMode(false);
                     setIsPaletteOpen(true);
                     setShowWelcome(false);
                     break;
@@ -712,6 +742,7 @@ export function CADApplication() {
                 case 's': case 'S':
                     // Opens palette pre-filtered to sketch commands
                     event.preventDefault();
+                    setPaletteExtrudeMode(false);
                     setIsPaletteOpen(true);
                     setShowWelcome(false);
                     break;
@@ -719,6 +750,12 @@ export function CADApplication() {
                 // 3D Operations
                 case 'e': case 'E':
                     event.preventDefault();
+                    if (selectedObject) {
+                        // Element selected — go straight to extrude distance input
+                        setPaletteExtrudeMode(true);
+                    } else {
+                        setPaletteExtrudeMode(false);
+                    }
                     setIsPaletteOpen(true);
                     setShowWelcome(false);
                     break;
@@ -824,7 +861,7 @@ export function CADApplication() {
             {/* Command Palette — centered, toggled by Space */}
             <CommandPalette
                 isOpen={isPaletteOpen}
-                onClose={() => setIsPaletteOpen(false)}
+                onClose={() => { setIsPaletteOpen(false); setPaletteExtrudeMode(false); }}
                 onSetDrawingTool={handleSetDrawingTool}
                 onExtrude={handlePaletteExtrude}
                 onCreatePlane={handlePaletteCreatePlane}
@@ -840,6 +877,7 @@ export function CADApplication() {
                 availableSketches={createdSketches}
                 onSetActiveSketch={handleSetActiveSketch}
                 onDeleteSelected={handleDeleteSelected}
+                startInExtrudeMode={paletteExtrudeMode}
             />
         </div>
     );

@@ -17,16 +17,20 @@ export class CADRenderer {
     private meshManager!: MeshManager;
     private visualizationManager!: VisualizationManager;
     private container: HTMLElement;
-    private raycaster = new THREE.Raycaster();
+    private raycaster: THREE.Raycaster;
     private pointerDownPos = new THREE.Vector2();
     private selectionBox: THREE.BoxHelper | null = null;
-    public onObjectSelected: ((id: string | null, type: string | null) => void) | null = null;
+    public onObjectSelected: ((id: string | null, type: string | null, sketchId?: string | null) => void) | null = null;
     public onDrawingComplete: ((tool: DrawingTool, points: THREE.Vector2[], arcType?: 'three_points' | 'endpoints_radius') => void) | null = null;
     public onChamferRequested: ((sketchId: string, line1Id: string, line2Id: string) => void) | null = null;
     public onFilletRequested: ((sketchId: string, line1Id: string, line2Id: string) => void) | null = null;
-    
+
     // Visual feedback for selected lines
     private selectedLineHighlights: { [lineId: string]: THREE.LineSegments } = {};
+
+    // Hover highlight state
+    private hoveredObject: THREE.Object3D | null = null;
+    private hoveredOriginalMaterials: Map<THREE.Object3D, THREE.Material | THREE.Material[]> = new Map();
     
     // Current active sketch plane for drawing
     private activeSketchPlane: {
@@ -39,17 +43,19 @@ export class CADRenderer {
     
     constructor(container: HTMLElement) {
         this.container = container;
-        
+        this.raycaster = new THREE.Raycaster();
+        this.raycaster.params.Line!.threshold = 0.5;
+
         this.initializeScene();
         this.setupCamera();
         this.setupRenderer();
         this.setupControls();
         this.setupLighting();
         this.setupMeshManager();
-        
+
         // Start render loop
         this.animate();
-        
+
         console.log('CAD Renderer initialized');
     }
     
@@ -165,6 +171,7 @@ export class CADRenderer {
 
         this.renderer.domElement.addEventListener('pointerdown', this.onPointerDown);
         this.renderer.domElement.addEventListener('pointerup', this.onPointerUp);
+        this.renderer.domElement.addEventListener('pointermove', this.onPointerMove);
     }
     
     private setupControls(): void {
@@ -280,7 +287,7 @@ export class CADRenderer {
         // Find and highlight new object
         const objectToHighlight = this.scene.getObjectByName(id);
         if (objectToHighlight) {
-            this.selectionBox = new THREE.BoxHelper(objectToHighlight, 0x00ff00);
+            this.selectionBox = new THREE.BoxHelper(objectToHighlight, 0xd4a017);
             this.scene.add(this.selectionBox);
         }
     }
@@ -297,7 +304,86 @@ export class CADRenderer {
         this.performRaycasting(event);
     }
 
-    private performRaycasting(event: PointerEvent): void {
+    private onPointerMove = (event: PointerEvent): void => {
+        // Only highlight when in select mode
+        const currentTool = this.controls.getDrawingState().tool;
+        if (currentTool !== 'select') {
+            this.clearHoverHighlight();
+            return;
+        }
+
+        const result = this.raycastNamedObject(event);
+        const hitObj = result?.object ?? null;
+
+        // Same object — no change
+        if (hitObj === this.hoveredObject) return;
+
+        // Clear previous hover
+        this.clearHoverHighlight();
+
+        if (hitObj && result && (result.parsed.type === 'element' || result.parsed.type === 'sketch')) {
+            this.hoveredObject = hitObj;
+            this.renderer.domElement.style.cursor = 'pointer';
+
+            // Brighten materials
+            hitObj.traverse((child) => {
+                if (child instanceof THREE.Mesh || child instanceof THREE.Line || child instanceof THREE.LineLoop || child instanceof THREE.LineSegments) {
+                    this.hoveredOriginalMaterials.set(child, child.material);
+                    const origMat = child.material as THREE.LineBasicMaterial | THREE.MeshBasicMaterial;
+                    const hoverMat = origMat.clone();
+                    hoverMat.color.set(0xffcc44);
+                    if ('opacity' in hoverMat) hoverMat.opacity = 1.0;
+                    child.material = hoverMat;
+                }
+            });
+        } else {
+            this.renderer.domElement.style.cursor = 'default';
+        }
+    }
+
+    private clearHoverHighlight(): void {
+        if (this.hoveredObject) {
+            // Restore original materials
+            this.hoveredOriginalMaterials.forEach((origMat, child) => {
+                (child as THREE.Mesh).material = origMat;
+            });
+            this.hoveredOriginalMaterials.clear();
+            this.hoveredObject = null;
+            this.renderer.domElement.style.cursor = 'default';
+        }
+    }
+
+    private parseObjectName(name: string): { id: string; type: string; sketchId?: string } | null {
+        const parts = name.split('-');
+        if (parts.length > 1) {
+            const typePrefix = parts[0];
+            switch (typePrefix) {
+                case 'plane':
+                    return { id: parts.slice(1).join('-'), type: 'plane' };
+                case 'sketch':
+                    return { id: parts.slice(1).join('-'), type: 'sketch' };
+                case 'element':
+                    // Format: element-{sketch_id}-{element_id}
+                    // sketch_id is parts[1], element_id is parts[2+]
+                    if (parts.length >= 3) {
+                        return {
+                            id: parts.slice(2).join('-'),
+                            type: 'element',
+                            sketchId: parts[1],
+                        };
+                    }
+                    return { id: parts.slice(1).join('-'), type: 'element' };
+                default:
+                    return { id: name, type: 'feature' };
+            }
+        }
+        if (name.toLowerCase().includes('extru')) {
+            return { id: name, type: 'feature' };
+        }
+        return null;
+    }
+
+    private raycastNamedObject(event: PointerEvent): { object: THREE.Object3D; parsed: { id: string; type: string; sketchId?: string } } | null {
         const rect = this.renderer.domElement.getBoundingClientRect();
         const mouse = new THREE.Vector2();
         mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -306,70 +392,50 @@ export class CADRenderer {
         this.raycaster.setFromCamera(mouse, this.camera);
         const intersects = this.raycaster.intersectObjects(this.scene.children, true);
 
-        let selectedId: string | null = null;
-        let selectedType: string | null = null;
-
-        if (intersects.length > 0) {
-            let clickedObject = intersects[0].object;
-            // Traverse up to find the parent group with a meaningful name
-            while (clickedObject.parent && !clickedObject.name) {
-                clickedObject = clickedObject.parent;
+        for (const hit of intersects) {
+            let obj: THREE.Object3D | null = hit.object;
+            while (obj && !obj.name) {
+                obj = obj.parent;
             }
-
-            if (clickedObject.name) {
-                const name = clickedObject.name;
-                const parts = name.split('-');
-                if (parts.length > 1) {
-                    const typePrefix = parts[0];
-                    selectedId = parts.slice(1).join('-'); // Re-join in case ID has hyphens
-                    switch(typePrefix) {
-                        case 'plane':
-                            selectedType = 'plane';
-                            break;
-                        case 'sketch':
-                            selectedType = 'sketch';
-                            break;
-                        case 'element':
-                            selectedType = 'element';
-                            break;
-                        default:
-                            selectedId = name; // Revert if prefix is unknown
-                            selectedType = 'feature';
-                            break;
-                    }
-                } else {
-                     selectedId = name;
-                     // Assume things without prefix are features (e.g., from boolean ops)
-                     if (name.toLowerCase().includes('extru')) {
-                         selectedType = 'feature';
-                     } else {
-                         selectedType = 'unknown';
-                     }
+            if (obj?.name && obj.name !== 'blueprint-grid') {
+                const parsed = this.parseObjectName(obj.name);
+                if (parsed) {
+                    return { object: obj, parsed };
                 }
-                console.log(`Clicked object ID: ${selectedId}, Type: ${selectedType}`);
             }
         }
-        
+        return null;
+    }
+
+    private performRaycasting(event: PointerEvent): void {
+        const result = this.raycastNamedObject(event);
+
+        const selectedId = result?.parsed.id ?? null;
+        const selectedType = result?.parsed.type ?? null;
+        const selectedSketchId = result?.parsed.sketchId ?? null;
+
+        if (selectedId) {
+            console.log(`Clicked object ID: ${selectedId}, Type: ${selectedType}, SketchID: ${selectedSketchId ?? 'n/a'}`);
+        }
+
         // Handle line selection for fillet/chamfer tools
         const currentTool = this.controls.getDrawingState().tool;
-        if ((currentTool === 'fillet' || currentTool === 'chamfer') && 
-            selectedType === 'element' && selectedId) {
-            
-            // Check if this is a line element by looking at the object's userData or geometry
-            if (this.isLineElement(selectedId)) {
+        if ((currentTool === 'fillet' || currentTool === 'chamfer') &&
+            selectedType === 'element' && selectedId && selectedSketchId) {
+            if (this.isLineElement(selectedSketchId, selectedId)) {
                 this.controls.selectLine(selectedId);
-                return; // Don't trigger normal object selection
+                return;
             }
         }
-        
+
         if (this.onObjectSelected) {
-            this.onObjectSelected(selectedId, selectedType);
+            this.onObjectSelected(selectedId, selectedType, selectedSketchId);
         }
     }
     
-    private isLineElement(elementId: string): boolean {
+    private isLineElement(sketchId: string, elementId: string): boolean {
         // Find the element and check if it's a line
-        const elementName = `element-${elementId}`;
+        const elementName = `element-${sketchId}-${elementId}`;
         const elementObject = this.scene.getObjectByName(elementName);
         
         if (elementObject) {
@@ -447,6 +513,7 @@ export class CADRenderer {
         
         this.renderer.domElement.removeEventListener('pointerdown', this.onPointerDown);
         this.renderer.domElement.removeEventListener('pointerup', this.onPointerUp);
+        this.renderer.domElement.removeEventListener('pointermove', this.onPointerMove);
 
         if (this.renderer.domElement.parentNode) {
             this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
@@ -484,9 +551,13 @@ export class CADRenderer {
     }
     
     public highlightSelectedLine(lineId: string, isFirstLine: boolean): void {
-        // Find the line element in the scene
-        const elementName = `element-${lineId}`;
-        const lineObject = this.scene.getObjectByName(elementName);
+        // Find the line element in the scene — name format: element-{sketchId}-{elementId}
+        let lineObject: THREE.Object3D | undefined;
+        this.scene.traverse((obj) => {
+            if (!lineObject && obj.name.startsWith('element-') && obj.name.endsWith(`-${lineId}`)) {
+                lineObject = obj;
+            }
+        });
         
         if (lineObject) {
             // Create highlight geometry around the line
@@ -497,7 +568,7 @@ export class CADRenderer {
                 console.log(`🔶 Highlighted ${isFirstLine ? 'first' : 'second'} line: ${lineId}`);
             }
         } else {
-            console.warn(`⚠️ Could not find line element: ${elementName}`);
+            console.warn(`⚠️ Could not find line element: ${lineId}`);
         }
     }
     

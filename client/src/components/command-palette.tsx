@@ -31,6 +31,7 @@ interface CommandPaletteProps {
     availableSketches: Array<{ sketch_id: string; plane_id: string }>;
     onSetActiveSketch: (sketchId: string) => void;
     onDeleteSelected: () => void;
+    startInExtrudeMode?: boolean;
 }
 
 export function CommandPalette({
@@ -51,6 +52,7 @@ export function CommandPalette({
     availableSketches,
     onSetActiveSketch,
     onDeleteSelected,
+    startInExtrudeMode,
 }: CommandPaletteProps) {
     const [query, setQuery] = useState('');
     const [selectedIndex, setSelectedIndex] = useState(0);
@@ -71,10 +73,10 @@ export function CommandPalette({
         if (isOpen) {
             setQuery('');
             setSelectedIndex(0);
-            setExtrudeInputMode(false);
+            setExtrudeInputMode(!!startInExtrudeMode);
             setTimeout(() => inputRef.current?.focus(), 50);
         }
-    }, [isOpen]);
+    }, [isOpen, startInExtrudeMode]);
 
     const trackRecent = useCallback((commandId: string) => {
         setRecentCommands(prev => {
