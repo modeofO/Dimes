@@ -42,3 +42,38 @@ textarea {
 ::-webkit-scrollbar-thumb:hover {
   background: #3A3D4A;
 }
+
+/* Toast animations */
+@keyframes slide-in-from-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-in {
+  animation-duration: 200ms;
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+}
+
+.slide-in-from-right-5 {
+  animation-name: slide-in-from-right;
+}
+
+.fade-in {
+  animation-name: fade-in;
+}

@@ -38,6 +38,21 @@ interface UIManagerProps {
     onSelection: (id: string | null, type: string | null) => void;
 }
 
+// Icons for different element types
+const TYPE_ICONS: Record<string, string> = {
+    plane: '◫',
+    sketch: '✎',
+    line: '╱',
+    circle: '○',
+    rectangle: '▭',
+    polygon: '⬡',
+    arc: '⌒',
+    fillet: '⤷',
+    chamfer: '⟋',
+    feature: '◆',
+    model: '◇',
+};
+
 export function UIManager({
     isOpen,
     createdPlanes,
@@ -184,16 +199,18 @@ export function UIManager({
         return { containers, childMap, orphans };
     };
 
-    // --- Shared styles (new color tokens) ---
+    // --- Shared styles (improved contrast) ---
 
-    const itemBase = 'px-2 py-0.5 text-xs cursor-pointer rounded transition-colors';
-    const itemHover = 'hover:bg-white/5';
-    const itemSelected = 'bg-amber-500/15 text-amber-300';
-    const itemDefault = 'text-[#C8BDA0]';
-    const itemSecondary = 'text-[#6A6D7A]';
+    const itemBase = 'px-2 py-1 text-xs cursor-pointer rounded transition-all duration-150';
+    const itemHover = 'hover:bg-white/8';
+    const itemSelected = 'bg-amber-500/20 text-amber-300';
+    const itemDefault = 'text-[#DDD4C0]';
+    const itemSecondary = 'text-[#8A8D9A]';
 
     const itemClass = (id: string, type: string) =>
         `${itemBase} ${itemHover} ${isSelected(id, type) ? itemSelected : itemDefault}`;
+
+    const getIcon = (type: string) => TYPE_ICONS[type.toLowerCase()] || '•';
 
     const isEmpty = createdPlanes.length === 0 && createdShapes.length === 0;
 
@@ -214,15 +231,16 @@ export function UIManager({
                         Empty scene &mdash; press Space to start
                     </div>
                 ) : (
-                    <div className="space-y-px">
+                    <div className="space-y-0.5">
                         {/* Shapes (3D models) */}
                         {createdShapes.map((shape, index) => (
                             <div
                                 key={`shape-${shape.id}`}
-                                className={itemClass(shape.id, 'feature')}
+                                className={`${itemClass(shape.id, 'feature')} flex items-center gap-2`}
                                 onClick={() => handleItemClick(shape.id, 'feature')}
                             >
-                                {formatShapeName(shape, index)}
+                                <span className="text-[#8A8D9A] w-4 text-center">{getIcon('feature')}</span>
+                                <span>{formatShapeName(shape, index)}</span>
                             </div>
                         ))}
 
@@ -230,24 +248,26 @@ export function UIManager({
                         {createdPlanes.map((plane) => (
                             <div key={`plane-${plane.plane_id}`}>
                                 <div
-                                    className={itemClass(plane.plane_id, 'plane')}
+                                    className={`${itemClass(plane.plane_id, 'plane')} flex items-center gap-2`}
                                     onClick={() => handleItemClick(plane.plane_id, 'plane')}
                                 >
-                                    {formatPlaneName(plane)}
+                                    <span className="text-[#6AAFFF] w-4 text-center">{getIcon('plane')}</span>
+                                    <span>{formatPlaneName(plane)}</span>
                                 </div>
 
                                 {/* Sketches on this plane */}
                                 {createdSketches
                                     .filter((sketch) => sketch.plane_id === plane.plane_id)
                                     .map((sketch) => (
-                                        <div key={`sketch-${sketch.sketch_id}`} className="ml-3">
+                                        <div key={`sketch-${sketch.sketch_id}`} className="ml-4">
                                             <div
-                                                className={itemClass(sketch.sketch_id, 'sketch')}
+                                                className={`${itemClass(sketch.sketch_id, 'sketch')} flex items-center gap-2`}
                                                 onClick={() => handleItemClick(sketch.sketch_id, 'sketch')}
                                             >
+                                                <span className="text-[#D4A017] w-4 text-center">{getIcon('sketch')}</span>
                                                 <span>{formatSketchName(sketch)}</span>
-                                                <span className={`${itemSecondary} ml-1`}>
-                                                    · {sketch.elements.length} el
+                                                <span className={`${itemSecondary} text-[10px]`}>
+                                                    ({sketch.elements.length})
                                                 </span>
                                             </div>
 
@@ -262,9 +282,9 @@ export function UIManager({
                                                             const children = childMap.get(container.id) || [];
 
                                                             return (
-                                                                <div key={`c-${container.id}`} className="ml-3">
+                                                                <div key={`c-${container.id}`} className="ml-4">
                                                                     <div
-                                                                        className={`${itemBase} ${itemHover} flex items-center gap-1 ${
+                                                                        className={`${itemBase} ${itemHover} flex items-center gap-1.5 ${
                                                                             isSelected(container.id, 'element') ? itemSelected : itemSecondary
                                                                         }`}
                                                                         onClick={() => handleItemClick(container.id, 'element')}
@@ -274,21 +294,23 @@ export function UIManager({
                                                                                 e.stopPropagation();
                                                                                 toggleContainer(container.id);
                                                                             }}
-                                                                            className="w-3 h-3 flex items-center justify-center text-[10px] text-[#5A5D6A] hover:text-[#C8BDA0]"
+                                                                            className="w-4 h-4 flex items-center justify-center text-xs text-[#6A6D7A] hover:text-[#DDD4C0] hover:bg-white/5 rounded transition-colors"
                                                                         >
                                                                             {isExpanded ? '▾' : '▸'}
                                                                         </button>
+                                                                        <span className="w-4 text-center">{getIcon(container.type)}</span>
                                                                         <span>{formatElementName(container)}</span>
-                                                                        <span className="text-[#5A5D6A] text-[10px]">({children.length})</span>
+                                                                        <span className="text-[#6A6D7A] text-[10px]">({children.length})</span>
                                                                     </div>
 
                                                                     {isExpanded && children.map((child) => (
                                                                         <div
                                                                             key={`ch-${child.id}`}
-                                                                            className={`ml-4 ${itemClass(child.id, 'element')}`}
+                                                                            className={`ml-5 ${itemClass(child.id, 'element')} flex items-center gap-2`}
                                                                             onClick={() => handleItemClick(child.id, 'element')}
                                                                         >
-                                                                            {formatElementName(child)}
+                                                                            <span className="text-[#6A6D7A] w-4 text-center">{getIcon(child.type)}</span>
+                                                                            <span>{formatElementName(child)}</span>
                                                                         </div>
                                                                     ))}
                                                                 </div>
@@ -299,10 +321,11 @@ export function UIManager({
                                                         {orphans.map((element) => (
                                                             <div
                                                                 key={`o-${element.id}`}
-                                                                className={`ml-3 ${itemClass(element.id, 'element')}`}
+                                                                className={`ml-4 ${itemClass(element.id, 'element')} flex items-center gap-2`}
                                                                 onClick={() => handleItemClick(element.id, 'element')}
                                                             >
-                                                                {formatElementName(element)}
+                                                                <span className="text-[#6A6D7A] w-4 text-center">{getIcon(element.type)}</span>
+                                                                <span>{formatElementName(element)}</span>
                                                             </div>
                                                         ))}
                                                     </>

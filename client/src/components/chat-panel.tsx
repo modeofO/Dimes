@@ -13,6 +13,14 @@ interface ChatPanelProps {
     onClose?: () => void;
 }
 
+// Example prompts for the Builder panel
+const EXAMPLE_PROMPTS = [
+    'Create a 50mm cube',
+    'Extrude the rectangle by 20mm',
+    'Add a circle with radius 15',
+    'Make a hexagonal prism',
+];
+
 export function ChatPanel({ messages, onSendMessage, onClose }: ChatPanelProps) {
     const [inputValue, setInputValue] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -61,8 +69,39 @@ export function ChatPanel({ messages, onSendMessage, onClose }: ChatPanelProps) 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-3 space-y-2">
                 {messages.length === 0 ? (
-                    <div className="text-center text-xs py-4" style={{ color: '#5A5D6A' }}>
-                        Ask the builder to create geometry...
+                    <div className="py-4 space-y-4">
+                        <p className="text-xs text-center" style={{ color: '#8A8D9A' }}>
+                            Ask the builder to create geometry...
+                        </p>
+                        <div className="space-y-2">
+                            <p className="text-[10px] uppercase tracking-wider font-medium px-1" style={{ color: '#6A6D7A' }}>
+                                Try asking:
+                            </p>
+                            {EXAMPLE_PROMPTS.map((prompt, index) => (
+                                <button
+                                    key={index}
+                                    onClick={() => onSendMessage(prompt)}
+                                    className="w-full text-left px-3 py-2 rounded-md text-xs transition-colors"
+                                    style={{
+                                        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                                        color: '#B8BBCA',
+                                        border: '1px solid transparent'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.backgroundColor = 'rgba(212, 160, 23, 0.1)';
+                                        e.currentTarget.style.borderColor = 'rgba(212, 160, 23, 0.3)';
+                                        e.currentTarget.style.color = '#E8DCC8';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.03)';
+                                        e.currentTarget.style.borderColor = 'transparent';
+                                        e.currentTarget.style.color = '#B8BBCA';
+                                    }}
+                                >
+                                    &ldquo;{prompt}&rdquo;
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 ) : (
                     messages.map((message, index) => (
