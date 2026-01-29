@@ -1,0 +1,216 @@
+# Dimes CAD - Known Issues & Deferred Work
+
+## Status Legend
+
+- **Deferred** - User explicitly said to handle later
+- **Known Bug** - Identified but not yet fixed
+- **Needs Investigation** - Root cause not yet determined
+- **Architecture** - Structural issue requiring design decisions
+
+---
+
+## 1. Fillet, Chamfer, Delete Not Working
+
+**Status:** Deferred
+**User said:** "the fillet, chamfer, delete functions don't work right now but we will handle those later"
+
+### Fillet/Chamfer Issues
+
+The fillet and chamfer tools have a working UI flow (select two lines -> enter radius/distance), but the backend operations may not produce correct results or the visualization updates may not apply properly.
+
+**Current flow:**
+1. User selects fillet/chamfer tool (F/H key)
+2. Clicks two lines -> highlights them (orange + green)
+3. Prompts for radius/distance via `window.prompt()`
+4. Calls `client.addFilletToSketch()` / `client.addChamferToSketch()`
+5. Backend modifies line endpoints and creates connecting arc/line element
+
+**Potential issues to investigate:**
+- The `window.prompt()` for radius/distance is a UX problem (blocks the thread, ugly browser dialog). Should use inline input like the extrude flow.
+- Backend response includes `updated_elements` array with modified line endpoints - need to verify these visualization updates are being applied correctly to the existing scene objects (replacing vs duplicating).
+- Fillet requires finding line intersection, computing tangent points, and creating an arc - complex geometry that may have edge cases with non-intersecting lines or lines at certain angles.
+- After fillet/chamfer, the modified shape's closed boundary must still work for extrusion.
+
+### Delete Not Working
+
+`handleDeleteSelected()` in `cad-application.tsx` just shows "Delete not yet implemented" status message. Full implementation needs:
+- API endpoint to delete elements from sketch
+- Scene object removal
+- State cleanup (createdSketches, selectedObject)
+- Handle deletion of composite children (should delete parent and all siblings?)
+- Handle deletion of elements that have fillets/chamfers applied
+
+**Files:** `cad-application.tsx:462-468`, `cad-client.ts` (no delete method exists)
+
+---
+
+## 2. Undo/Redo Not Implemented
+
+**Status:** Known Bug
+**Location:** `cad-application.tsx:777-787`
+
+Currently shows "Undo/Redo (not yet implemented)" status message when Ctrl+Z / Ctrl+Shift+Z is pressed.
+
+Implementation would require:
+- Command history stack
+- Backend support for reversing operations
+- Scene state snapshots or incremental undo
+
+---
+
+## 3. API Server WebSocket Inconsistency: `data` vs `payload` Key
+
+**Status:** Known Bug
+
+The API server uses inconsistent keys when sending WebSocket messages:
+- Most messages use `payload` key for the data
+- Boolean operations (`geometry_update`) use `data` key (`cad.js:993-1000`)
+- Extrude uses `payload` key for both `visualization_data` and `geometry_update`
+
+The client's `CADClient.handleVisualizationData()` handles this via the visualization data router, but direct WebSocket consumers (like AgentManager) need to check both `message.data` and `message.payload`.
+
+---
+
+## 4. element_id Optional in API Validation but Required by Backend
+
+**Status:** Known Bug
+**Location:** `api-server/src/routes/cad.js:65` (validation), Python backend `geometry_engine.py`
+
+The extrude endpoint's validation marks `element_id` as optional, but the Python backend's `extrude_feature()` requires it to find the correct face for extrusion. If `element_id` is not provided, the backend tries to extrude the entire sketch which may fail or produce unexpected results.
+
+**Fix:** Either make `element_id` required in validation, or implement a fallback in the backend that finds the first extrudable element.
+
+---
+
+## 5. Missing Response Validation for mesh_data/visualization_data
+
+**Status:** Known Bug
+**Location:** `api-server/src/routes/cad.js` (extrude handler, lines 943-963)
+
+The extrude handler checks for `visualization_data` first, then falls back to `mesh_data`, and gracefully handles missing data. But other handlers (like boolean operations) don't have this fallback logic and may fail silently if the response structure doesn't match expectations.
+
+---
+
+## 6. Sketch-on-Face: Normal-to-Plane Mapping Approximation
+
+**Status:** Known Bug
+**Location:** `cad-application.tsx:506-517`
+
+When clicking a face of extruded geometry, the face normal is mapped to the closest standard plane type (XZ/XY/YZ). This is an approximation that works for axis-aligned faces but fails for:
+- Angled faces (e.g., chamfered edges, draft angles)
+- Curved surfaces (face normal varies across the surface)
+- Rotated geometry
+
+The current mapping:
+```
+|normal.y| >= others -> XZ plane
+|normal.z| >= others -> XY plane
+|normal.x| >= others -> YZ plane
+```
+
+For a proper implementation, the backend would need to support arbitrary sketch planes defined by any normal vector, not just the three standard orientations.
+
+---
+
+## 7. Trim, Extend, Mirror, Offset, Copy, Move Tools
+
+**Status:** Deferred (partially)
+
+These tools have backend endpoints and client API methods, but the frontend interactive flow for most of them just shows "Please select elements first for {tool} operations" (`cad-application.tsx:325`).
+
+| Tool | Backend | Client API | Frontend UX |
+|------|---------|------------|-------------|
+| Trim (line-to-line) | Yes | Yes | Not interactive |
+| Trim (line-to-geometry) | Yes | Yes | Not interactive |
+| Extend (line-to-line) | Yes | Yes | Not interactive |
+| Extend (line-to-geometry) | Yes | Yes | Not interactive |
+| Mirror | Yes | Yes | Not interactive |
+| Offset | Yes | Yes | Not interactive |
+| Copy | Yes | Yes | Not interactive |
+| Move | Yes | Yes | Not interactive |
+
+These need proper two-step selection UIs similar to the fillet/chamfer flow.
+
+---
+
+## 8. Export Functionality Not Exposed in UI
+
+**Status:** Known Bug
+
+The backend supports exporting to STEP, STL, OBJ, and IGES formats (`api-server/src/routes/cad.js:1069-1093`, `cad-client.ts:exportModel`), but there's no UI to trigger an export. Should be added to the command palette.
+
+---
+
+## 9. Boolean Operations Not Exposed in UI
+
+**Status:** Known Bug
+
+The backend supports union, cut, and intersect boolean operations between shapes (`api-server/src/routes/cad.js:981-1013`), but there's no UI flow for selecting two shapes and applying a boolean operation.
+
+---
+
+## 10. Linear/Mirror Array Not Exposed in UI
+
+**Status:** Known Bug
+
+Backend supports creating linear arrays (copy elements in a pattern) and mirror arrays, but no UI flow exists for these operations.
+
+---
+
+## 11. Model ID Collision Risk
+
+**Status:** Known Bug
+**Location:** `cad-application.tsx:563`
+
+When geometry updates arrive, model IDs are generated as `model-${Date.now()}`. If two extrusions complete within the same millisecond, they'll get the same ID and overwrite each other. Should use a counter or UUID.
+
+---
+
+## 12. Agent WebSocket Message Handling
+
+**Status:** Needs Investigation
+
+The AgentManager connects to the same WebSocket server but uses `agent_message` type. When the agent creates geometry, it sends back `geometry_update` and `visualization_data` messages. The handling in `cad-application.tsx:695-707` checks for `message.data` and `message.payload` but the data flow through the agent path hasn't been fully tested.
+
+---
+
+## 13. No Constraint System
+
+**Status:** Architecture
+
+The CAD application currently has no parametric constraint system (coincident, perpendicular, parallel, tangent, equal, horizontal, vertical, fixed). All geometry is placed by absolute coordinates with snap points only.
+
+A constraint solver would be a major architectural addition.
+
+---
+
+## 14. Session Persistence
+
+**Status:** Architecture
+
+Sessions are in-memory only (Python `SessionManager` uses a dict). Closing the browser or restarting the server loses all work. No save/load functionality exists.
+
+---
+
+## 15. Hover Highlight Cleanup on Tool Switch
+
+**Status:** Known Bug
+**Location:** `cad-renderer.ts:310-314`
+
+When switching from 'select' tool to a drawing tool, hover highlights are cleared. But if the user switches tools while hovering over an element, the material change sticks until the next hover event. The `clearHoverHighlight()` call on tool switch should be sufficient, but edge cases may exist with rapid tool switching.
+
+---
+
+## Priority Order (Suggested)
+
+1. **Fillet/Chamfer** - Core CAD workflow, backend exists
+2. **Delete** - Basic operation, blocking iterative design
+3. **Sketch-on-Face normal mapping** - Limits 3D modeling capability
+4. **Trim/Extend** - Important for sketch cleanup
+5. **Export** - Users need to get their work out
+6. **Undo/Redo** - Expected in any design tool
+7. **Mirror/Offset/Copy/Move** - Productivity features
+8. **Boolean operations** - Advanced 3D modeling
+9. **Linear/Mirror arrays** - Pattern creation
+10. **Constraint system** - Parametric modeling
+11. **Session persistence** - Save/load
