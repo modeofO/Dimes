@@ -350,6 +350,26 @@ export class CppBackendClient {
   }
 
   /**
+   * Delete a sketch element from the backend
+   */
+  async deleteSketchElement(sessionId, sketchId, elementId) {
+    try {
+      console.log(`🗑️ Deleting element ${elementId} from sketch ${sketchId}`);
+
+      const response = await this.makeRequest(`/api/v1/sketches/${sketchId}/elements/${elementId}`, {
+        method: 'DELETE',
+        headers: {
+          'X-Session-ID': sessionId,
+        },
+      });
+      return response;
+    } catch (error) {
+      logger.error('Failed to delete sketch element in backend:', error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Trim line to line in the C++ backend
    */
   async trimLineToLine(sessionId, trimData) {

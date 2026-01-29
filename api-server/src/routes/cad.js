@@ -458,6 +458,46 @@ export default function(webSocketManager) {
   });
 
   /**
+   * DELETE /api/v1/cad/sketches/:sketchId/elements/:elementId
+   * Delete a sketch element
+   */
+  router.delete('/sketches/:sketchId/elements/:elementId', async (req, res, next) => {
+    try {
+      const sessionId = req.sessionId;
+      const { sketchId, elementId } = req.params;
+
+      logger.info(`Deleting element ${elementId} from sketch ${sketchId} for session ${sessionId}`);
+
+      const result = await cppBackend.deleteSketchElement(sessionId, sketchId, elementId);
+
+      console.log('🔍 Raw backend deleteSketchElement result:', JSON.stringify(result, null, 2));
+
+      // Send WebSocket notification for real-time updates
+      if (webSocketManager && result.success && result.data) {
+        console.log('🔊 Sending WebSocket notification for element deletion');
+        webSocketManager.sendToClient(sessionId, {
+          type: 'element_deleted',
+          payload: {
+            element_id: elementId,
+            sketch_id: sketchId,
+          },
+          timestamp: Date.now(),
+        });
+      }
+
+      res.json({
+        success: true,
+        session_id: sessionId,
+        timestamp: Date.now(),
+        data: result.data || result,
+      });
+
+    } catch (error) {
+      next(new ApiError(500, 'Failed to delete sketch element', error.message));
+    }
+  });
+
+  /**
    * POST /api/v1/cad/trim-line-to-line
    * Trim line to line
    */

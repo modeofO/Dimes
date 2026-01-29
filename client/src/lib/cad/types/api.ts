@@ -332,6 +332,15 @@ export interface CreateMirrorArrayResponse extends CADResponse {
     };
 }
 
+export interface DeleteElementResponse extends CADResponse {
+    data: {
+        element_id: string;
+        sketch_id: string;
+        deleted: boolean;
+        message?: string;
+    };
+}
+
 export interface DaydreamsInstructionRequest {
     instruction: string;
     sessionId: string;

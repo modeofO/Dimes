@@ -484,7 +484,36 @@ class Sketch:
     def get_elements(self) -> List[SketchElement]:
         """Get all sketch elements"""
         return self.elements.copy()
-    
+
+    def remove_element(self, element_id: str) -> bool:
+        """
+        Remove a sketch element by ID.
+        If the element is a composite parent, also removes all child elements.
+        If the element is a child of a composite, removes only that child.
+
+        Returns:
+            True if element was found and removed, False otherwise
+        """
+        element = self.get_element_by_id(element_id)
+        if not element:
+            print(f"❌ Element {element_id} not found in sketch {self.sketch_id}")
+            return False
+
+        elements_to_remove = [element_id]
+
+        # If this is a composite parent, collect all child IDs
+        if element.is_composite_parent and element.child_ids:
+            elements_to_remove.extend(element.child_ids)
+            print(f"🗑️ Removing composite element {element_id} with {len(element.child_ids)} children")
+
+        # Remove all collected elements
+        original_count = len(self.elements)
+        self.elements = [e for e in self.elements if e.id not in elements_to_remove]
+        removed_count = original_count - len(self.elements)
+
+        print(f"✅ Removed {removed_count} element(s) from sketch {self.sketch_id}")
+        return removed_count > 0
+
     def get_visualization_data(self) -> Dict[str, Any]:
         """Get visualization data for the sketch - matches SketchVisualizationData interface"""
         # Get coordinate system from the associated plane
@@ -3286,11 +3315,43 @@ class OCCTEngine:
                 print(f"❌ Failed to add chamfer to sketch {sketch_id}")
             
             return chamfer_id
-            
+
         except Exception as e:
             print(f"❌ Error adding chamfer to sketch: {e}")
             return ""
-    
+
+    def delete_element_from_sketch(self, sketch_id: str, element_id: str) -> bool:
+        """
+        Delete a sketch element by ID.
+
+        Args:
+            sketch_id: Sketch identifier
+            element_id: Element identifier to delete
+
+        Returns:
+            True if element was deleted, False otherwise
+        """
+        print(f"🗑️ Deleting element {element_id} from sketch {sketch_id}")
+
+        if not self.sketch_exists(sketch_id):
+            print(f"❌ Sketch not found: {sketch_id}")
+            return False
+
+        try:
+            sketch = self.sketches[sketch_id]
+            success = sketch.remove_element(element_id)
+
+            if success:
+                print(f"✅ Successfully deleted element {element_id} from sketch {sketch_id}")
+            else:
+                print(f"❌ Failed to delete element {element_id} from sketch {sketch_id}")
+
+            return success
+
+        except Exception as e:
+            print(f"❌ Error deleting element from sketch: {e}")
+            return False
+
     def trim_line_to_line_in_sketch(self, sketch_id: str, line_to_trim_id: str, cutting_line_id: str, keep_start: bool = True) -> bool:
         """
         Trim a line at its intersection with another line - equivalent to C++ trimLineToLine

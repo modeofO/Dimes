@@ -21,6 +21,21 @@ interface CreatedShape {
     visible: boolean;
 }
 
+// Toast notification interface
+interface Toast {
+    id: string;
+    message: string;
+    type: 'info' | 'success' | 'warning' | 'error';
+}
+
+// Toast colors based on type
+const TOAST_COLORS: Record<Toast['type'], { bg: string; border: string; text: string }> = {
+    info: { bg: 'rgba(74, 158, 255, 0.15)', border: 'rgba(74, 158, 255, 0.4)', text: '#6AAFFF' },
+    success: { bg: 'rgba(80, 200, 120, 0.15)', border: 'rgba(80, 200, 120, 0.4)', text: '#50C878' },
+    warning: { bg: 'rgba(212, 160, 23, 0.15)', border: 'rgba(212, 160, 23, 0.4)', text: '#E8B520' },
+    error: { bg: 'rgba(255, 107, 107, 0.15)', border: 'rgba(255, 107, 107, 0.4)', text: '#FF6B6B' },
+};
+
 interface CreatedPlane {
     plane_id: string;
     plane_type: string;
@@ -74,15 +89,42 @@ export function CADApplication() {
     const [isSceneTreeOpen, setIsSceneTreeOpen] = useState(false);
     const [showWelcome, setShowWelcome] = useState(true);
 
+    // Toast notifications
+    const [toasts, setToasts] = useState<Toast[]>([]);
+
+    // Current view for viewport controls
+    const [currentView, setCurrentView] = useState<'front' | 'top' | 'right' | 'isometric'>('isometric');
+
+    // Show toast notification
+    const showToast = useCallback((message: string, type: Toast['type']) => {
+        const id = Date.now().toString();
+        setToasts(prev => [...prev, { id, message, type }]);
+        setTimeout(() => {
+            setToasts(prev => prev.filter(t => t.id !== id));
+        }, 3000);
+    }, []);
+
     const updateStatus = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error') => {
         setStatus({ message, type });
         console.log(`[${type.toUpperCase()}] ${message}`);
-    }, []);
+        // Also show toast for user feedback
+        showToast(message, type);
+    }, [showToast]);
 
     // Inline extrude state — shown immediately when a closed element is clicked outside sketch mode
     const [showInlineExtrude, setShowInlineExtrude] = useState(false);
     const [inlineExtrudeValue, setInlineExtrudeValue] = useState('10');
     const inlineExtrudeRef = useRef<HTMLInputElement>(null);
+
+    // Inline fillet/chamfer state — shown when drawing a line across two sketch lines
+    const [pendingFilletChamfer, setPendingFilletChamfer] = useState<{
+        tool: 'fillet' | 'chamfer';
+        sketchId: string;
+        line1Id: string;
+        line2Id: string;
+    } | null>(null);
+    const [inlineFilletValue, setInlineFilletValue] = useState('2');
+    const inlineFilletRef = useRef<HTMLInputElement>(null);
 
     // Resolve a clicked element to its extrudable parent (if it's a child of a composite shape)
     const resolveExtrudableElement = useCallback((elementId: string, sketchId: string): SketchElementInfo | null => {
@@ -104,6 +146,87 @@ export function CADApplication() {
             }
         }
         return null;
+    }, [createdSketches]);
+
+    // Find sketch line elements that a drawn line segment intersects
+    // Uses 2D line-line intersection in sketch plane coordinates
+    const findIntersectingLines = useCallback((
+        sketchId: string,
+        drawStart: THREE.Vector2,
+        drawEnd: THREE.Vector2
+    ): string[] => {
+        const sketch = createdSketches.find(s => s.sketch_id === sketchId);
+        if (!sketch || !rendererRef.current) return [];
+
+        const intersectingIds: string[] = [];
+
+        // Helper: check if two 2D line segments intersect
+        const segmentsIntersect = (
+            p1: THREE.Vector2, p2: THREE.Vector2,
+            p3: THREE.Vector2, p4: THREE.Vector2
+        ): boolean => {
+            const d1 = (p4.x - p3.x) * (p1.y - p3.y) - (p4.y - p3.y) * (p1.x - p3.x);
+            const d2 = (p4.x - p3.x) * (p2.y - p3.y) - (p4.y - p3.y) * (p2.x - p3.x);
+            const d3 = (p2.x - p1.x) * (p3.y - p1.y) - (p2.y - p1.y) * (p3.x - p1.x);
+            const d4 = (p2.x - p1.x) * (p4.y - p1.y) - (p2.y - p1.y) * (p4.x - p1.x);
+
+            if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+                ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
+                return true;
+            }
+            return false;
+        };
+
+        // Get sketch plane info to convert 3D points to 2D
+        const sketchVizData = sketch.visualization_data;
+        if (!sketchVizData) return [];
+
+        const origin = new THREE.Vector3(...sketchVizData.origin);
+        const uAxis = new THREE.Vector3(...sketchVizData.u_axis);
+        const vAxis = new THREE.Vector3(...sketchVizData.v_axis);
+
+        // Convert 3D point to 2D sketch coordinates
+        const worldTo2D = (worldPoint: THREE.Vector3): THREE.Vector2 => {
+            const relative = worldPoint.clone().sub(origin);
+            return new THREE.Vector2(relative.dot(uAxis), relative.dot(vAxis));
+        };
+
+        // Find all line elements in the sketch
+        for (const element of sketch.elements) {
+            // Only check line elements (including rectangle/polygon children which are lines)
+            if (element.type !== 'line' && !element.id.includes('_line_')) continue;
+            if (element.is_container_only) continue;
+
+            // Find the Three.js object for this element
+            const elementName = `element-${sketchId}-${element.id}`;
+            const scene = rendererRef.current.getScene();
+            const elementObject = scene.getObjectByName(elementName);
+
+            if (!elementObject) continue;
+
+            // Extract line geometry points
+            let linePoints: THREE.Vector3[] = [];
+            elementObject.traverse((child) => {
+                if (child instanceof THREE.Line && child.geometry?.attributes?.position) {
+                    const positions = child.geometry.attributes.position;
+                    for (let i = 0; i < positions.count; i++) {
+                        linePoints.push(new THREE.Vector3().fromBufferAttribute(positions, i));
+                    }
+                }
+            });
+
+            if (linePoints.length < 2) continue;
+
+            // Convert to 2D and check intersection
+            const line2DStart = worldTo2D(linePoints[0]);
+            const line2DEnd = worldTo2D(linePoints[linePoints.length - 1]);
+
+            if (segmentsIntersect(drawStart, drawEnd, line2DStart, line2DEnd)) {
+                intersectingIds.push(element.id);
+            }
+        }
+
+        return intersectingIds;
     }, [createdSketches]);
 
     const handleSelection = useCallback((id: string | null, type: string | null, sketchId?: string | null) => {
@@ -315,7 +438,37 @@ export function CADApplication() {
                     break;
                 }
                 case 'fillet':
-                case 'chamfer':
+                case 'chamfer': {
+                    // Find lines that the drawn segment intersects
+                    const intersectingLines = findIntersectingLines(currentActiveSketchId, start, end);
+                    console.log(`🔍 Fillet/Chamfer: found ${intersectingLines.length} intersecting lines:`, intersectingLines);
+
+                    if (intersectingLines.length < 2) {
+                        updateStatus(`Draw across two lines to ${tool} them (found ${intersectingLines.length})`, 'info');
+                        return;
+                    }
+
+                    // Take the first two intersecting lines
+                    const [line1Id, line2Id] = intersectingLines.slice(0, 2);
+
+                    // Store pending operation and show inline input
+                    setPendingFilletChamfer({
+                        tool: tool as 'fillet' | 'chamfer',
+                        sketchId: currentActiveSketchId,
+                        line1Id,
+                        line2Id
+                    });
+                    setInlineFilletValue(tool === 'fillet' ? '2' : '2');
+                    setTimeout(() => inlineFilletRef.current?.focus(), 50);
+
+                    // Highlight the selected lines
+                    if (rendererRef.current) {
+                        rendererRef.current.setHighlight(`element-${currentActiveSketchId}-${line1Id}`);
+                    }
+
+                    updateStatus(`Selected lines for ${tool}. Enter ${tool === 'fillet' ? 'radius' : 'distance'}.`, 'info');
+                    return;
+                }
                 case 'trim':
                 case 'extend':
                 case 'mirror':
@@ -336,7 +489,7 @@ export function CADApplication() {
             console.error('Interactive drawing error:', error);
             updateStatus(`Error creating ${tool}: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
         }
-    }, [activeSketchId, updateStatus, currentPolygonSides, currentArcType]);
+    }, [activeSketchId, updateStatus, currentPolygonSides, currentArcType, findIntersectingLines]);
 
     // Update the renderer's drawing callback whenever the handler changes
     useEffect(() => {
@@ -421,6 +574,45 @@ export function CADApplication() {
         await handlePaletteExtrude(dist);
     }, [inlineExtrudeValue, handlePaletteExtrude]);
 
+    // Handle inline fillet/chamfer submission
+    const handleInlineFilletChamfer = useCallback(async () => {
+        if (!pendingFilletChamfer || !clientRef.current) return;
+
+        const value = parseFloat(inlineFilletValue);
+        if (isNaN(value) || value <= 0) {
+            updateStatus(`Invalid ${pendingFilletChamfer.tool} value`, 'error');
+            return;
+        }
+
+        const { tool, sketchId, line1Id, line2Id } = pendingFilletChamfer;
+        const valueInMm = toMillimeters(value, currentUnit);
+
+        try {
+            updateStatus(`Creating ${tool}...`, 'info');
+
+            let response;
+            if (tool === 'fillet') {
+                response = await clientRef.current.addFilletToSketch(sketchId, line1Id, line2Id, valueInMm);
+            } else {
+                response = await clientRef.current.addChamferToSketch(sketchId, line1Id, line2Id, valueInMm);
+            }
+
+            if (response.success) {
+                updateStatus(`Created ${tool} with ${tool === 'fillet' ? 'radius' : 'distance'} ${value}${currentUnit}`, 'success');
+            } else {
+                updateStatus(`Failed to create ${tool}`, 'error');
+            }
+        } catch (error) {
+            console.error(`${tool} failed:`, error);
+            updateStatus(`Error creating ${tool}: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+        } finally {
+            setPendingFilletChamfer(null);
+            if (rendererRef.current) {
+                rendererRef.current.setHighlight(null);
+            }
+        }
+    }, [pendingFilletChamfer, inlineFilletValue, currentUnit, updateStatus]);
+
     const handlePaletteCreatePlane = useCallback(async (type: 'XZ' | 'XY' | 'YZ') => {
         if (!clientRef.current) return;
         try {
@@ -451,6 +643,7 @@ export function CADApplication() {
 
     const handlePaletteSetView = useCallback((view: 'front' | 'top' | 'right' | 'isometric') => {
         if (!rendererRef.current) return;
+        setCurrentView(view);
         switch (view) {
             case 'front': rendererRef.current.viewFront(); break;
             case 'top': rendererRef.current.viewTop(); break;
@@ -459,13 +652,100 @@ export function CADApplication() {
         }
     }, []);
 
-    const handleDeleteSelected = useCallback(() => {
+    const handleDeleteSelected = useCallback(async () => {
         if (!selectedObject) {
             updateStatus('Nothing selected to delete', 'info');
             return;
         }
-        updateStatus(`Delete not yet implemented for ${selectedObject.type}`, 'warning');
-    }, [selectedObject, updateStatus]);
+
+        if (!clientRef.current) {
+            updateStatus('Client not initialized', 'error');
+            return;
+        }
+
+        const { id: elementId, type, sketchId } = selectedObject;
+
+        // Currently only support deleting sketch elements
+        if (type !== 'element' || !sketchId) {
+            updateStatus(`Delete not yet supported for ${type}`, 'warning');
+            return;
+        }
+
+        // Check if this is a child element - if so, resolve to parent
+        const sketch = createdSketches.find(s => s.sketch_id === sketchId);
+        if (!sketch) {
+            updateStatus('Sketch not found', 'error');
+            return;
+        }
+
+        const element = sketch.elements.find(e => e.id === elementId);
+        let deleteId = elementId;
+        let deleteDescription = elementId;
+
+        // If this is a child of a composite (e.g., a rectangle line), ask about deleting the parent
+        if (element?.parent_id) {
+            const parent = sketch.elements.find(e => e.id === element.parent_id);
+            if (parent) {
+                // Delete the parent (which will delete all children)
+                deleteId = parent.id;
+                deleteDescription = `${parent.type} (${parent.id})`;
+            }
+        }
+
+        try {
+            updateStatus(`Deleting ${deleteDescription}...`, 'info');
+
+            const response = await clientRef.current.deleteSketchElement(sketchId, deleteId);
+
+            if (response.success) {
+                // Remove from local state
+                setCreatedSketches(prev => prev.map(s => {
+                    if (s.sketch_id !== sketchId) return s;
+
+                    // Find the element being deleted
+                    const deletedElement = s.elements.find(e => e.id === deleteId);
+
+                    // Collect all IDs to remove (element + its children if composite)
+                    const idsToRemove = new Set<string>([deleteId]);
+                    if (deletedElement?.child_ids) {
+                        deletedElement.child_ids.forEach(childId => idsToRemove.add(childId));
+                    }
+
+                    return {
+                        ...s,
+                        elements: s.elements.filter(e => !idsToRemove.has(e.id))
+                    };
+                }));
+
+                // Remove visualization from scene
+                if (rendererRef.current) {
+                    // Remove the main element
+                    rendererRef.current.removeElementVisualization(deleteId);
+
+                    // Remove children if it's a composite
+                    const deletedElement = sketch.elements.find(e => e.id === deleteId);
+                    if (deletedElement?.child_ids) {
+                        deletedElement.child_ids.forEach(childId => {
+                            rendererRef.current?.removeElementVisualization(childId);
+                        });
+                    }
+
+                    // Clear selection highlight
+                    rendererRef.current.setHighlight(null);
+                }
+
+                // Clear selection
+                setSelectedObject(null);
+
+                updateStatus(`Deleted ${deleteDescription}`, 'success');
+            } else {
+                updateStatus(`Failed to delete element`, 'error');
+            }
+        } catch (error) {
+            console.error('Delete failed:', error);
+            updateStatus(`Error deleting: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+        }
+    }, [selectedObject, createdSketches, updateStatus]);
 
     const handleNewSketch = useCallback(async (planeType: 'XZ' | 'XY' | 'YZ') => {
         if (!clientRef.current) return;
@@ -797,7 +1077,12 @@ export function CADApplication() {
                     break;
                 case 'Escape':
                     event.preventDefault();
-                    if (pendingFace) {
+                    if (pendingFilletChamfer) {
+                        setPendingFilletChamfer(null);
+                        if (rendererRef.current) {
+                            rendererRef.current.setHighlight(null);
+                        }
+                    } else if (pendingFace) {
                         setPendingFace(null);
                     } else if (showInlineExtrude) {
                         setShowInlineExtrude(false);
@@ -907,7 +1192,7 @@ export function CADApplication() {
 
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [isPaletteOpen, isSceneTreeOpen, activeSketchId, currentDrawingTool, showInlineExtrude, pendingFace, handleConfirmSketchOnFace, handleSetDrawingTool, handleDeleteSelected, handleSelection, exitSketchMode, updateStatus]);
+    }, [isPaletteOpen, isSceneTreeOpen, activeSketchId, currentDrawingTool, showInlineExtrude, pendingFace, pendingFilletChamfer, handleConfirmSketchOnFace, handleSetDrawingTool, handleDeleteSelected, handleSelection, exitSketchMode, updateStatus]);
 
     return (
         <div className="h-screen w-screen overflow-hidden" style={{ backgroundColor: '#12141C' }}>
@@ -975,6 +1260,46 @@ export function CADApplication() {
                     </div>
                 )}
 
+                {/* Inline Fillet/Chamfer Input — appears after drawing across two lines */}
+                {pendingFilletChamfer && (
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30">
+                        <div
+                            className="flex items-center gap-3 px-4 py-3 rounded-lg shadow-2xl shadow-black/60"
+                            style={{ backgroundColor: '#1A1D27', border: '1px solid #2A2D3A' }}
+                        >
+                            <span className="text-[#D4A017] text-sm font-medium capitalize">
+                                {pendingFilletChamfer.tool}
+                            </span>
+                            <input
+                                ref={inlineFilletRef}
+                                type="number"
+                                value={inlineFilletValue}
+                                onChange={(e) => setInlineFilletValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleInlineFilletChamfer();
+                                    }
+                                    if (e.key === 'Escape') {
+                                        e.preventDefault();
+                                        setPendingFilletChamfer(null);
+                                        if (rendererRef.current) {
+                                            rendererRef.current.setHighlight(null);
+                                        }
+                                    }
+                                }}
+                                className="w-20 bg-[#12141C] text-[#E8DCC8] text-sm px-2 py-1 rounded outline-none border border-[#2A2D3A] focus:border-[#D4A017] transition-colors"
+                                style={{ caretColor: '#D4A017' }}
+                                autoFocus
+                            />
+                            <span className="text-[#5A5D6A] text-xs">{currentUnit}</span>
+                            <span className="text-[#5A5D6A] text-[10px]">
+                                {pendingFilletChamfer.tool === 'fillet' ? 'radius' : 'distance'} · Enter to apply
+                            </span>
+                        </div>
+                    </div>
+                )}
+
                 {/* Sketch-on-Face Confirmation */}
                 {pendingFace && (
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30">
@@ -1013,6 +1338,131 @@ export function CADApplication() {
                     isChatOpen={isChatOpen}
                     unreadMessages={unreadMessages}
                 />
+
+                {/* Scene Tree Toggle Button — visible when panel is closed */}
+                {!isSceneTreeOpen && (
+                    <button
+                        onClick={() => setIsSceneTreeOpen(true)}
+                        className="fixed left-0 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-1 px-1.5 py-3 rounded-r-md transition-all duration-200 hover:px-2"
+                        style={{
+                            backgroundColor: 'rgba(26, 29, 39, 0.9)',
+                            border: '1px solid #2A2D3A',
+                            borderLeft: 'none',
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = 'rgba(42, 45, 58, 0.95)';
+                            e.currentTarget.style.borderColor = '#D4A017';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'rgba(26, 29, 39, 0.9)';
+                            e.currentTarget.style.borderColor = '#2A2D3A';
+                        }}
+                    >
+                        <span className="text-[#D4A017] text-sm">▸</span>
+                        <span className="text-[#6A6D7A] text-[9px] uppercase tracking-wider" style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}>
+                            Tab
+                        </span>
+                    </button>
+                )}
+
+                {/* Toast Notifications — top right */}
+                <div className="fixed top-4 right-4 z-50 space-y-2 pointer-events-none">
+                    {toasts.map(toast => (
+                        <div
+                            key={toast.id}
+                            className="px-4 py-2 rounded-lg shadow-lg backdrop-blur-sm animate-in slide-in-from-right-5 fade-in duration-200 pointer-events-auto"
+                            style={{
+                                backgroundColor: TOAST_COLORS[toast.type].bg,
+                                border: `1px solid ${TOAST_COLORS[toast.type].border}`,
+                                color: TOAST_COLORS[toast.type].text,
+                            }}
+                        >
+                            <span className="text-sm">{toast.message}</span>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Properties Panel — top right when object selected (below toasts) */}
+                {selectedObject && !isChatOpen && (
+                    <div
+                        className="fixed right-4 z-20 rounded-lg p-3 backdrop-blur-sm"
+                        style={{
+                            top: toasts.length > 0 ? `${4 + toasts.length * 3}rem` : '4rem',
+                            backgroundColor: 'rgba(26, 29, 39, 0.95)',
+                            border: '1px solid #2A2D3A',
+                            minWidth: '200px',
+                        }}
+                    >
+                        <div className="text-[10px] uppercase tracking-wider text-[#6A6D7A] font-medium mb-1">Selected</div>
+                        <div className="text-[#E8DCC8] text-sm font-medium">
+                            {selectedObject.type === 'feature' && 'Model'}
+                            {selectedObject.type === 'plane' && 'Plane'}
+                            {selectedObject.type === 'sketch' && 'Sketch'}
+                            {selectedObject.type === 'element' && (() => {
+                                // Find element type from sketches
+                                for (const sketch of createdSketches) {
+                                    const element = sketch.elements.find(e => e.id === selectedObject.id);
+                                    if (element) {
+                                        return element.type.charAt(0).toUpperCase() + element.type.slice(1);
+                                    }
+                                }
+                                return 'Element';
+                            })()}
+                        </div>
+                        <div className="text-[#8A8D9A] text-xs mt-1 font-mono">
+                            {selectedObject.id.substring(0, 20)}{selectedObject.id.length > 20 ? '...' : ''}
+                        </div>
+                        {selectedObject.type === 'feature' && (() => {
+                            const shape = createdShapes.find(s => s.id === selectedObject.id);
+                            if (shape) {
+                                return (
+                                    <div className="text-[#6A6D7A] text-[10px] mt-2 space-y-0.5">
+                                        <div>Vertices: {shape.dimensions.vertices}</div>
+                                        <div>Faces: {shape.dimensions.faces}</div>
+                                    </div>
+                                );
+                            }
+                            return null;
+                        })()}
+                    </div>
+                )}
+
+                {/* Viewport Controls — bottom right */}
+                {!isChatOpen && (
+                    <div
+                        className="absolute bottom-16 right-4 z-10 flex flex-col gap-1"
+                    >
+                        {/* View buttons */}
+                        <div className="flex gap-1">
+                            {(['front', 'top', 'right', 'isometric'] as const).map(view => (
+                                <button
+                                    key={view}
+                                    onClick={() => handlePaletteSetView(view)}
+                                    className={`w-8 h-8 rounded flex items-center justify-center text-[10px] font-medium uppercase transition-colors ${
+                                        currentView === view
+                                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                            : 'text-[#8A8D9A] border border-[#2A2D3A] hover:bg-white/5 hover:text-[#DDD4C0]'
+                                    }`}
+                                    style={{ backgroundColor: currentView !== view ? 'rgba(26, 29, 39, 0.9)' : undefined }}
+                                    title={`${view.charAt(0).toUpperCase() + view.slice(1)} view (${view === 'isometric' ? '0' : view === 'front' ? '1' : view === 'top' ? '2' : '3'})`}
+                                >
+                                    {view === 'front' && '1'}
+                                    {view === 'top' && '2'}
+                                    {view === 'right' && '3'}
+                                    {view === 'isometric' && '0'}
+                                </button>
+                            ))}
+                        </div>
+                        {/* Reset view button */}
+                        <button
+                            onClick={() => handlePaletteSetView('isometric')}
+                            className="w-full py-1 rounded text-[10px] font-medium text-[#6A6D7A] border border-[#2A2D3A] hover:bg-white/5 hover:text-[#DDD4C0] transition-colors"
+                            style={{ backgroundColor: 'rgba(26, 29, 39, 0.9)' }}
+                        >
+                            Reset
+                        </button>
+                    </div>
+                )}
 
                 {/* Floating Chat Panel */}
                 {isChatOpen && (
