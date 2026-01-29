@@ -95,20 +95,27 @@ export function CADApplication() {
     // Current view for viewport controls
     const [currentView, setCurrentView] = useState<'front' | 'top' | 'right' | 'isometric'>('isometric');
 
-    // Show toast notification
+    // Show toast notification - minimal, only for important messages
     const showToast = useCallback((message: string, type: Toast['type']) => {
         const id = Date.now().toString();
-        setToasts(prev => [...prev, { id, message, type }]);
+        setToasts(prev => {
+            // Limit to max 3 toasts, remove oldest if needed
+            const newToasts = [...prev, { id, message, type }];
+            return newToasts.slice(-3);
+        });
+        // Auto-dismiss after 2 seconds
         setTimeout(() => {
             setToasts(prev => prev.filter(t => t.id !== id));
-        }, 3000);
+        }, 2000);
     }, []);
 
     const updateStatus = useCallback((message: string, type: 'info' | 'success' | 'warning' | 'error') => {
         setStatus({ message, type });
         console.log(`[${type.toUpperCase()}] ${message}`);
-        // Also show toast for user feedback
-        showToast(message, type);
+        // Only show toasts for success and error - not info/warning spam
+        if (type === 'success' || type === 'error') {
+            showToast(message, type);
+        }
     }, [showToast]);
 
     // Inline extrude state — shown immediately when a closed element is clicked outside sketch mode
@@ -1365,32 +1372,34 @@ export function CADApplication() {
                     </button>
                 )}
 
-                {/* Toast Notifications — top right */}
-                <div className="fixed top-4 right-4 z-50 space-y-2 pointer-events-none">
-                    {toasts.map(toast => (
-                        <div
-                            key={toast.id}
-                            className="px-4 py-2 rounded-lg shadow-lg backdrop-blur-sm animate-in slide-in-from-right-5 fade-in duration-200 pointer-events-auto"
-                            style={{
-                                backgroundColor: TOAST_COLORS[toast.type].bg,
-                                border: `1px solid ${TOAST_COLORS[toast.type].border}`,
-                                color: TOAST_COLORS[toast.type].text,
-                            }}
-                        >
-                            <span className="text-sm">{toast.message}</span>
-                        </div>
-                    ))}
-                </div>
+                {/* Toast Notifications — minimal, top right */}
+                {toasts.length > 0 && (
+                    <div className="fixed top-3 right-3 z-50 space-y-1 pointer-events-none">
+                        {toasts.map(toast => (
+                            <div
+                                key={toast.id}
+                                className="px-2.5 py-1 rounded text-[11px] font-medium shadow-md animate-in slide-in-from-right-5 fade-in duration-150"
+                                style={{
+                                    backgroundColor: TOAST_COLORS[toast.type].bg,
+                                    borderLeft: `2px solid ${TOAST_COLORS[toast.type].text}`,
+                                    color: TOAST_COLORS[toast.type].text,
+                                }}
+                            >
+                                {toast.message}
+                            </div>
+                        ))}
+                    </div>
+                )}
 
                 {/* Properties Panel — top right when object selected (below toasts) */}
                 {selectedObject && !isChatOpen && (
                     <div
-                        className="fixed right-4 z-20 rounded-lg p-3 backdrop-blur-sm"
+                        className="fixed right-3 z-20 rounded-lg p-3 backdrop-blur-sm"
                         style={{
-                            top: toasts.length > 0 ? `${4 + toasts.length * 3}rem` : '4rem',
+                            top: toasts.length > 0 ? `${3 + toasts.length * 1.75}rem` : '3rem',
                             backgroundColor: 'rgba(26, 29, 39, 0.95)',
                             border: '1px solid #2A2D3A',
-                            minWidth: '200px',
+                            minWidth: '180px',
                         }}
                     >
                         <div className="text-[10px] uppercase tracking-wider text-[#6A6D7A] font-medium mb-1">Selected</div>
