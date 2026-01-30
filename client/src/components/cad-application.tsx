@@ -1581,6 +1581,9 @@ export function CADApplication() {
                 client.onSketchVisualization((data) => {
                     renderer.addSketchVisualization(data);
                     renderer.setActiveSketchPlane(data.sketch_id, data);
+
+                    // Pass sketch visualization data to dimension manager
+                    rendererRef.current?.getDimensionManager().setSketchVisualizationData(data.sketch_id, data);
                     setActiveSketchId(data.sketch_id);
                     renderer.viewTop();
                     updateStatus('Switched to top-down view for sketch', 'info');
@@ -1601,6 +1604,18 @@ export function CADApplication() {
 
                 client.onElementVisualization((data) => {
                     renderer.addSketchElementVisualization(data);
+
+                    // Track line data for dimension manager
+                    if (data.element_type === 'line' && data.parameters_2d) {
+                        const { x1, y1, x2, y2 } = data.parameters_2d;
+                        if (x1 !== undefined && y1 !== undefined && x2 !== undefined && y2 !== undefined) {
+                            rendererRef.current?.getDimensionManager().setElementData(
+                                data.element_id,
+                                data.sketch_id,
+                                x1, y1, x2, y2
+                            );
+                        }
+                    }
 
                     if (data.element_id && data.sketch_id && data.element_type) {
                         setCreatedSketches(prev => prev.map(sketch =>
