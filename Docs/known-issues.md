@@ -167,9 +167,13 @@ Model IDs are now generated with both timestamp and counter: `model-${Date.now()
 
 ## 12. Agent WebSocket Message Handling
 
-**Status:** Needs Investigation
+**Status:** Partially Fixed
 
-The AgentManager connects to the same WebSocket server but uses `agent_message` type. When the agent creates geometry, it sends back `geometry_update` and `visualization_data` messages. The handling in `cad-application.tsx:695-707` checks for `message.data` and `message.payload` but the data flow through the agent path hasn't been fully tested.
+The `data` vs `payload` inconsistency has been fixed (see #3). Agent message handling now consistently uses:
+- `message.data.content` for `agent_message` type (chat responses)
+- `message.payload` for `geometry_update` and `visualization_data`
+
+The data flow through the agent path still needs end-to-end testing.
 
 ---
 
@@ -191,14 +195,13 @@ Sessions are in-memory only (Python `SessionManager` uses a dict). Closing the b
 
 ---
 
-## 15. Hover Highlight Cleanup on Tool Switch
+## 15. Hover Highlight Cleanup on Tool Switch ✅ FIXED
 
-**Status:** Known Bug
-**Location:** `cad-renderer.ts:310-314`
+**Status:** Fixed
 
-~~When switching from 'select' tool to a drawing tool, hover highlights are cleared. But if the user switches tools while hovering over an element, the material change sticks until the next hover event. The `clearHoverHighlight()` call on tool switch should be sufficient, but edge cases may exist with rapid tool switching.~~
+`setDrawingTool()` now calls `clearHoverHighlight()` and resets cursor to inherit.
 
-**Status:** Fixed - `setDrawingTool()` now calls `clearHoverHighlight()` and resets cursor to inherit.
+**Files:** `client/src/lib/cad/renderer/cad-renderer.ts`
 
 ---
 
