@@ -259,6 +259,117 @@ export function CADApplication() {
         return intersectingIds;
     }, [createdSketches]);
 
+    // Helper: Convert 2D sketch coordinates to 3D world coordinates (flat array for points_3d)
+    const convert2DTo3DPoints = useCallback((
+        sketchId: string,
+        points2D: Array<{x: number, y: number}>
+    ): number[] => {
+        const sketch = createdSketches.find(s => s.sketch_id === sketchId);
+        if (!sketch?.visualization_data) return [];
+
+        const origin = new THREE.Vector3(...sketch.visualization_data.origin);
+        const uAxis = new THREE.Vector3(...sketch.visualization_data.u_axis);
+        const vAxis = new THREE.Vector3(...sketch.visualization_data.v_axis);
+
+        const points3D: number[] = [];
+        for (const p of points2D) {
+            const point = origin.clone()
+                .add(uAxis.clone().multiplyScalar(p.x))
+                .add(vAxis.clone().multiplyScalar(p.y));
+            points3D.push(point.x, point.y, point.z);
+        }
+        return points3D;
+    }, [createdSketches]);
+
+    // Helper: Get element endpoints in 2D sketch coordinates from the Three.js scene
+    const getElement2DEndpoints = useCallback((
+        sketchId: string,
+        elementId: string
+    ): {start: {x: number, y: number}, end: {x: number, y: number}} | null => {
+        const sketch = createdSketches.find(s => s.sketch_id === sketchId);
+        if (!sketch?.visualization_data || !rendererRef.current) return null;
+
+        const scene = rendererRef.current.getScene();
+        const elementName = `element-${sketchId}-${elementId}`;
+        const elementObject = scene.getObjectByName(elementName);
+
+        if (!elementObject) return null;
+
+        let startWorld: THREE.Vector3 | null = null;
+        let endWorld: THREE.Vector3 | null = null;
+
+        elementObject.traverse((child) => {
+            if (child instanceof THREE.Line && child.geometry?.attributes?.position) {
+                const positions = child.geometry.attributes.position;
+                if (positions.count >= 2) {
+                    startWorld = new THREE.Vector3().fromBufferAttribute(positions, 0);
+                    endWorld = new THREE.Vector3().fromBufferAttribute(positions, positions.count - 1);
+                }
+            }
+        });
+
+        if (!startWorld || !endWorld) return null;
+
+        const origin = new THREE.Vector3(...sketch.visualization_data.origin);
+        const uAxis = new THREE.Vector3(...sketch.visualization_data.u_axis);
+        const vAxis = new THREE.Vector3(...sketch.visualization_data.v_axis);
+
+        const worldTo2D = (worldPoint: THREE.Vector3): {x: number, y: number} => {
+            const relative = worldPoint.clone().sub(origin);
+            return {x: relative.dot(uAxis), y: relative.dot(vAxis)};
+        };
+
+        return {
+            start: worldTo2D(startWorld),
+            end: worldTo2D(endWorld)
+        };
+    }, [createdSketches]);
+
+    // Helper: Calculate intersection point of two lines defined by their endpoints
+    const lineLineIntersection = (
+        p1: {x: number, y: number}, p2: {x: number, y: number},
+        p3: {x: number, y: number}, p4: {x: number, y: number}
+    ): {x: number, y: number} | null => {
+        const denom = (p4.y - p3.y) * (p2.x - p1.x) - (p4.x - p3.x) * (p2.y - p1.y);
+        if (Math.abs(denom) < 1e-10) return null; // Lines are parallel
+
+        const t = ((p4.x - p3.x) * (p1.y - p3.y) - (p4.y - p3.y) * (p1.x - p3.x)) / denom;
+
+        return {
+            x: p1.x + t * (p2.x - p1.x),
+            y: p1.y + t * (p2.y - p1.y)
+        };
+    };
+
+    // Helper: Update element visualization after operation (creates proper visualization_data and triggers update)
+    const updateElementVisualization = useCallback((
+        sketchId: string,
+        elementId: string,
+        elementType: string,
+        points2D: Array<{x: number, y: number}>
+    ) => {
+        if (!rendererRef.current) return;
+
+        const points3D = convert2DTo3DPoints(sketchId, points2D);
+        if (points3D.length === 0) return;
+
+        const vizData = {
+            element_id: elementId,
+            element_type: elementType,
+            sketch_id: sketchId,
+            points_3d: points3D,
+            parameters_2d: points2D.length === 2 ? {
+                x1: points2D[0].x,
+                y1: points2D[0].y,
+                x2: points2D[1].x,
+                y2: points2D[1].y
+            } : {}
+        };
+
+        rendererRef.current.addSketchElementVisualization(vizData as any);
+        console.log(`📊 Updated visualization for element ${elementId}:`, vizData);
+    }, [convert2DTo3DPoints]);
+
     const handleSelection = useCallback((id: string | null, type: string | null, sketchId?: string | null) => {
         // Set highlight in 3D scene
         if (rendererRef.current) {
@@ -627,6 +738,31 @@ export function CADApplication() {
                         );
 
                         if (response.success) {
+                            // Calculate and update the trimmed line visualization
+                            const trimLineEndpoints = getElement2DEndpoints(currentActiveSketchId, lineToTrimId);
+                            const cuttingLineEndpoints = getElement2DEndpoints(currentActiveSketchId, cuttingLineId);
+
+                            if (trimLineEndpoints && cuttingLineEndpoints) {
+                                // Calculate intersection point
+                                const intersection = lineLineIntersection(
+                                    trimLineEndpoints.start, trimLineEndpoints.end,
+                                    cuttingLineEndpoints.start, cuttingLineEndpoints.end
+                                );
+
+                                if (intersection) {
+                                    // Create new endpoints based on keepStart
+                                    const newPoints = keepStart
+                                        ? [trimLineEndpoints.start, intersection]
+                                        : [intersection, trimLineEndpoints.end];
+
+                                    updateElementVisualization(
+                                        currentActiveSketchId,
+                                        lineToTrimId,
+                                        'line',
+                                        newPoints
+                                    );
+                                }
+                            }
                             updateStatus(`Trimmed line successfully`, 'success');
                         } else {
                             updateStatus(`Failed to trim line`, 'error');
@@ -706,6 +842,31 @@ export function CADApplication() {
                         );
 
                         if (response.success) {
+                            // Calculate and update the extended line visualization
+                            const extendLineEndpoints = getElement2DEndpoints(currentActiveSketchId, lineToExtendId);
+                            const targetEndpoints = getElement2DEndpoints(currentActiveSketchId, targetLineId);
+
+                            if (extendLineEndpoints && targetEndpoints) {
+                                // Calculate intersection point
+                                const intersection = lineLineIntersection(
+                                    extendLineEndpoints.start, extendLineEndpoints.end,
+                                    targetEndpoints.start, targetEndpoints.end
+                                );
+
+                                if (intersection) {
+                                    // Create new endpoints based on extendStart
+                                    const newPoints = extendStart
+                                        ? [intersection, extendLineEndpoints.end]
+                                        : [extendLineEndpoints.start, intersection];
+
+                                    updateElementVisualization(
+                                        currentActiveSketchId,
+                                        lineToExtendId,
+                                        'line',
+                                        newPoints
+                                    );
+                                }
+                            }
                             updateStatus(`Extended line successfully`, 'success');
                         } else {
                             updateStatus(`Failed to extend line`, 'error');
@@ -739,7 +900,49 @@ export function CADApplication() {
                             true // keep original
                         );
 
-                        if (response.success) {
+                        if (response.success && response.data?.mirrored_element_ids?.length > 0) {
+                            // Calculate and visualize the mirrored element
+                            const originalEndpoints = getElement2DEndpoints(mirrorSketchId, selectedObject.id);
+
+                            if (originalEndpoints) {
+                                // Calculate mirror reflection across the axis defined by start -> end
+                                const mirrorPoint = (p: {x: number, y: number}): {x: number, y: number} => {
+                                    // Vector along mirror axis
+                                    const ax = end.x - start.x;
+                                    const ay = end.y - start.y;
+                                    const lenSq = ax * ax + ay * ay;
+                                    if (lenSq < 1e-10) return p;
+
+                                    // Vector from start to point
+                                    const dx = p.x - start.x;
+                                    const dy = p.y - start.y;
+
+                                    // Project point onto axis
+                                    const t = (dx * ax + dy * ay) / lenSq;
+                                    const projX = start.x + t * ax;
+                                    const projY = start.y + t * ay;
+
+                                    // Reflect point across axis
+                                    return {
+                                        x: 2 * projX - p.x,
+                                        y: 2 * projY - p.y
+                                    };
+                                };
+
+                                const mirroredPoints = [
+                                    mirrorPoint(originalEndpoints.start),
+                                    mirrorPoint(originalEndpoints.end)
+                                ];
+
+                                // Get the new element ID from response
+                                const newElementId = response.data.mirrored_element_ids[0];
+                                updateElementVisualization(
+                                    mirrorSketchId,
+                                    newElementId,
+                                    'line',
+                                    mirroredPoints
+                                );
+                            }
                             updateStatus(`Mirrored element successfully`, 'success');
                             // Clear selection after mirror
                             handleSelection(null, null);
@@ -769,7 +972,7 @@ export function CADApplication() {
             console.error('Interactive drawing error:', error);
             updateStatus(`Error creating ${tool}: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
         }
-    }, [activeSketchId, updateStatus, currentPolygonSides, currentArcType, findIntersectingLines]);
+    }, [activeSketchId, updateStatus, currentPolygonSides, currentArcType, findIntersectingLines, getElement2DEndpoints, updateElementVisualization, handleSelection]);
 
     // Update the renderer's drawing callback whenever the handler changes
     useEffect(() => {
@@ -910,7 +1113,41 @@ export function CADApplication() {
             updateStatus(`Offsetting element...`, 'info');
             const response = await clientRef.current.offsetElementDirectional(sketchId, elementId, valueInMm, direction);
 
-            if (response.success) {
+            if (response.success && response.data?.offset_element_id) {
+                // Get the original element's endpoints
+                const originalEndpoints = getElement2DEndpoints(sketchId, elementId);
+
+                if (originalEndpoints) {
+                    // Calculate perpendicular offset direction
+                    const dx = originalEndpoints.end.x - originalEndpoints.start.x;
+                    const dy = originalEndpoints.end.y - originalEndpoints.start.y;
+                    const len = Math.sqrt(dx * dx + dy * dy);
+
+                    if (len > 0) {
+                        // Perpendicular: rotate 90 degrees
+                        let perpX = -dy / len;
+                        let perpY = dx / len;
+
+                        // Flip direction if 'left'
+                        if (direction === 'left') {
+                            perpX = -perpX;
+                            perpY = -perpY;
+                        }
+
+                        // Create offset line
+                        const offsetPoints = [
+                            {x: originalEndpoints.start.x + perpX * valueInMm, y: originalEndpoints.start.y + perpY * valueInMm},
+                            {x: originalEndpoints.end.x + perpX * valueInMm, y: originalEndpoints.end.y + perpY * valueInMm}
+                        ];
+
+                        updateElementVisualization(
+                            sketchId,
+                            response.data.offset_element_id,
+                            'line',
+                            offsetPoints
+                        );
+                    }
+                }
                 updateStatus(`Offset element by ${value}${currentUnit} to the ${direction}`, 'success');
             } else {
                 updateStatus(`Failed to offset element`, 'error');
@@ -924,7 +1161,7 @@ export function CADApplication() {
                 rendererRef.current.setHighlight(null);
             }
         }
-    }, [pendingOffset, inlineOffsetValue, currentUnit, updateStatus]);
+    }, [pendingOffset, inlineOffsetValue, currentUnit, updateStatus, getElement2DEndpoints, updateElementVisualization]);
 
     // Handle inline copy/move submission
     const handleInlineCopyMove = useCallback(async () => {
@@ -956,17 +1193,38 @@ export function CADApplication() {
         try {
             updateStatus(`${tool === 'copy' ? 'Copying' : 'Moving'} element...`, 'info');
 
-            let response;
-            if (tool === 'copy') {
-                response = await clientRef.current.copyElement(sketchId, elementId, count, dirX, dirY, distance);
-            } else {
-                response = await clientRef.current.moveElement(sketchId, elementId, dirX, dirY, distance);
-            }
+            // Get the original element's endpoints before the operation
+            const originalEndpoints = getElement2DEndpoints(sketchId, elementId);
 
-            if (response.success) {
-                updateStatus(`${tool === 'copy' ? 'Copied' : 'Moved'} element by (${x}, ${y})${currentUnit}`, 'success');
+            if (tool === 'copy') {
+                const copyResponse = await clientRef.current.copyElement(sketchId, elementId, count, dirX, dirY, distance);
+                if (copyResponse.success && copyResponse.data?.copied_element_ids?.length > 0 && originalEndpoints) {
+                    // Create visualization for each copy
+                    copyResponse.data.copied_element_ids.forEach((copyId: string, idx: number) => {
+                        const copyOffset = (idx + 1) * distance;
+                        const copyPoints = [
+                            {x: originalEndpoints.start.x + dirX * copyOffset, y: originalEndpoints.start.y + dirY * copyOffset},
+                            {x: originalEndpoints.end.x + dirX * copyOffset, y: originalEndpoints.end.y + dirY * copyOffset}
+                        ];
+                        updateElementVisualization(sketchId, copyId, 'line', copyPoints);
+                    });
+                    updateStatus(`Copied element by (${x}, ${y})${currentUnit}`, 'success');
+                } else {
+                    updateStatus(`Failed to copy element`, 'error');
+                }
             } else {
-                updateStatus(`Failed to ${tool} element`, 'error');
+                const moveResponse = await clientRef.current.moveElement(sketchId, elementId, dirX, dirY, distance);
+                if (moveResponse.success && moveResponse.data?.moved_element_id && originalEndpoints) {
+                    // Update moved element's position
+                    const movedPoints = [
+                        {x: originalEndpoints.start.x + xInMm, y: originalEndpoints.start.y + yInMm},
+                        {x: originalEndpoints.end.x + xInMm, y: originalEndpoints.end.y + yInMm}
+                    ];
+                    updateElementVisualization(sketchId, moveResponse.data.moved_element_id, 'line', movedPoints);
+                    updateStatus(`Moved element by (${x}, ${y})${currentUnit}`, 'success');
+                } else {
+                    updateStatus(`Failed to move element`, 'error');
+                }
             }
         } catch (error) {
             console.error(`${tool} failed:`, error);
@@ -977,7 +1235,7 @@ export function CADApplication() {
                 rendererRef.current.setHighlight(null);
             }
         }
-    }, [pendingCopyMove, inlineCopyMoveX, inlineCopyMoveY, inlineCopyMoveCount, currentUnit, updateStatus]);
+    }, [pendingCopyMove, inlineCopyMoveX, inlineCopyMoveY, inlineCopyMoveCount, currentUnit, updateStatus, getElement2DEndpoints, updateElementVisualization]);
 
     const handlePaletteCreatePlane = useCallback(async (type: 'XZ' | 'XY' | 'YZ') => {
         if (!clientRef.current) return;
