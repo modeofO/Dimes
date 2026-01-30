@@ -1214,13 +1214,16 @@ export function CADApplication() {
                 }
             } else {
                 const moveResponse = await clientRef.current.moveElement(sketchId, elementId, dirX, dirY, distance);
-                if (moveResponse.success && moveResponse.data?.moved_element_id && originalEndpoints) {
+                if (moveResponse.success && originalEndpoints) {
                     // Update moved element's position
+                    // Use moved_element_id from response, or fall back to original elementId (element keeps same ID when moved)
+                    const responseData = moveResponse.data as Record<string, unknown> | undefined;
+                    const movedElementId = (responseData?.moved_element_id || responseData?.element_id || elementId) as string;
                     const movedPoints = [
                         {x: originalEndpoints.start.x + xInMm, y: originalEndpoints.start.y + yInMm},
                         {x: originalEndpoints.end.x + xInMm, y: originalEndpoints.end.y + yInMm}
                     ];
-                    updateElementVisualization(sketchId, moveResponse.data.moved_element_id, 'line', movedPoints);
+                    updateElementVisualization(sketchId, movedElementId, 'line', movedPoints);
                     updateStatus(`Moved element by (${x}, ${y})${currentUnit}`, 'success');
                 } else {
                     updateStatus(`Failed to move element`, 'error');
