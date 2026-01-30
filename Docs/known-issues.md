@@ -6,41 +6,37 @@
 - **Known Bug** - Identified but not yet fixed
 - **Needs Investigation** - Root cause not yet determined
 - **Architecture** - Structural issue requiring design decisions
+- **Fixed** - Issue has been resolved
 
 ---
 
-## 1. Fillet, Chamfer, Delete Not Working
+## 1. Fillet, Chamfer, Delete ~~Not Working~~ ✅ FIXED
 
-**Status:** Deferred
-**User said:** "the fillet, chamfer, delete functions don't work right now but we will handle those later"
+**Status:** Fixed
 
-### Fillet/Chamfer Issues
+### Fillet/Chamfer ✅
 
-The fillet and chamfer tools have a working UI flow (select two lines -> enter radius/distance), but the backend operations may not produce correct results or the visualization updates may not apply properly.
+Fillet and chamfer now work with a draw-to-select UX:
+1. User selects fillet/chamfer tool (F/H key) - cursor changes to 'cell'
+2. User draws a line across two sketch lines to select them
+3. Inline input appears for radius/distance (no more ugly `window.prompt()`)
+4. Backend creates the fillet arc or chamfer line with correct geometry
 
-**Current flow:**
-1. User selects fillet/chamfer tool (F/H key)
-2. Clicks two lines -> highlights them (orange + green)
-3. Prompts for radius/distance via `window.prompt()`
-4. Calls `client.addFilletToSketch()` / `client.addChamferToSketch()`
-5. Backend modifies line endpoints and creates connecting arc/line element
+**Fixes applied:**
+- Draw-to-select UX using 2D line-line intersection detection
+- Inline input UI (same pattern as extrude)
+- Fixed geometry calculation using angle bisector approach for fillet center
+- Fixed arc visualization to take shorter path (was going 270° instead of 90° on some corners)
 
-**Potential issues to investigate:**
-- The `window.prompt()` for radius/distance is a UX problem (blocks the thread, ugly browser dialog). Should use inline input like the extrude flow.
-- Backend response includes `updated_elements` array with modified line endpoints - need to verify these visualization updates are being applied correctly to the existing scene objects (replacing vs duplicating).
-- Fillet requires finding line intersection, computing tangent points, and creating an arc - complex geometry that may have edge cases with non-intersecting lines or lines at certain angles.
-- After fillet/chamfer, the modified shape's closed boundary must still work for extrusion.
+### Delete ✅
 
-### Delete Not Working
+Delete now works for sketch elements:
+- Press X or Delete key to delete selected element
+- Full stack implementation: Frontend → API Server → Python Backend
+- Handles composite shapes (deletes parent and all child lines)
+- Scene cleanup and state management
 
-`handleDeleteSelected()` in `cad-application.tsx` just shows "Delete not yet implemented" status message. Full implementation needs:
-- API endpoint to delete elements from sketch
-- Scene object removal
-- State cleanup (createdSketches, selectedObject)
-- Handle deletion of composite children (should delete parent and all siblings?)
-- Handle deletion of elements that have fillets/chamfers applied
-
-**Files:** `cad-application.tsx:462-468`, `cad-client.ts` (no delete method exists)
+**Files:** `cad-application.tsx`, `cad-client.ts`, `api-server/src/routes/cad.js`, `serverpy/app/src/geometry_engine.py`, `serverpy/app/src/api_server.py`
 
 ---
 
@@ -197,14 +193,42 @@ Sessions are in-memory only (Python `SessionManager` uses a dict). Closing the b
 **Status:** Known Bug
 **Location:** `cad-renderer.ts:310-314`
 
-When switching from 'select' tool to a drawing tool, hover highlights are cleared. But if the user switches tools while hovering over an element, the material change sticks until the next hover event. The `clearHoverHighlight()` call on tool switch should be sufficient, but edge cases may exist with rapid tool switching.
+~~When switching from 'select' tool to a drawing tool, hover highlights are cleared. But if the user switches tools while hovering over an element, the material change sticks until the next hover event. The `clearHoverHighlight()` call on tool switch should be sufficient, but edge cases may exist with rapid tool switching.~~
+
+**Status:** Fixed - `setDrawingTool()` now calls `clearHoverHighlight()` and resets cursor to inherit.
+
+---
+
+## 16. UX Improvements ✅ IMPLEMENTED
+
+These features were added to improve the user experience:
+
+### Drawing Tool Cursors ✅
+- **Crosshair** cursor for drawing tools (line, rectangle, circle, arc, polygon)
+- **Cell** cursor for modification tools (fillet, chamfer, trim)
+- **Pointer** cursor when hovering over selectable objects in select mode
+- **Default** cursor for select tool
+
+### Escape-to-Select Behavior ✅
+- Pressing Escape in sketch mode now returns to select tool first (instead of immediately exiting sketch)
+- Press Escape again to exit the sketch
+- This allows quickly switching between drawing and selecting without leaving sketch mode
+
+### Box/Drag Selection ✅
+- **Shift+drag** to create a selection rectangle
+- Works anywhere (even on plane/sketch)
+- Amber-colored selection box during drag
+- Composite shapes (rectangles, polygons) are grouped - selecting any part selects the whole shape
+- Highlight shows around entire composite shape, not just individual lines
+
+**Note:** Currently selects only one object at a time (first in selection box). True multi-selection would require state architecture changes.
 
 ---
 
 ## Priority Order (Suggested)
 
-1. **Fillet/Chamfer** - Core CAD workflow, backend exists
-2. **Delete** - Basic operation, blocking iterative design
+1. ~~**Fillet/Chamfer** - Core CAD workflow, backend exists~~ ✅ DONE
+2. ~~**Delete** - Basic operation, blocking iterative design~~ ✅ DONE
 3. **Sketch-on-Face normal mapping** - Limits 3D modeling capability
 4. **Trim/Extend** - Important for sketch cleanup
 5. **Export** - Users need to get their work out
