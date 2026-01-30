@@ -277,7 +277,8 @@ export function CADApplication() {
         setSelectedObject(newSelection);
 
         // Handle offset/copy/move tool clicks on elements
-        if (newSelection && type === 'element' && sketchId && activeSketchId) {
+        // Allow operation even when not in sketch editing mode - use the element's sketchId
+        if (newSelection && type === 'element' && sketchId) {
             if (currentDrawingTool === 'offset') {
                 setPendingOffset({
                     sketchId,
@@ -406,7 +407,19 @@ export function CADApplication() {
             }
         }
         setShowWelcome(false);
-    }, [currentArcType, currentPolygonSides]);
+
+        // Auto-enter sketch mode for draw-based tools if an element is selected
+        // This allows trim/extend/mirror to work without manually entering sketch mode
+        const drawBasedTools = ['trim', 'extend', 'mirror', 'fillet', 'chamfer'];
+        if (drawBasedTools.includes(tool) && !activeSketchId && selectedObject?.sketchId) {
+            const sketch = createdSketches.find(s => s.sketch_id === selectedObject.sketchId);
+            if (sketch?.visualization_data && rendererRef.current) {
+                setActiveSketchId(selectedObject.sketchId);
+                rendererRef.current.setActiveSketchPlane(selectedObject.sketchId, sketch.visualization_data);
+                updateStatus(`Entered sketch mode for ${tool} tool`, 'info');
+            }
+        }
+    }, [currentArcType, currentPolygonSides, activeSketchId, selectedObject, createdSketches, updateStatus]);
 
     const handleSetActiveSketch = useCallback((sketchId: string) => {
         setActiveSketchId(sketchId);
@@ -438,7 +451,15 @@ export function CADApplication() {
 
     const handleInteractiveDrawing = useCallback(async (tool: DrawingTool, points: THREE.Vector2[], arcType?: 'three_points' | 'endpoints_radius') => {
         const currentActiveSketchId = activeSketchId;
-        if (!clientRef.current || !currentActiveSketchId) return;
+        if (!clientRef.current) return;
+
+        // For sketch modification tools, provide feedback if not in sketch mode
+        const sketchModificationTools = ['trim', 'extend', 'mirror', 'fillet', 'chamfer', 'line', 'circle', 'rectangle', 'arc', 'polygon'];
+        if (!currentActiveSketchId && sketchModificationTools.includes(tool)) {
+            updateStatus('Double-click a sketch to enter edit mode first', 'info');
+            return;
+        }
+        if (!currentActiveSketchId) return;
 
         const requiredPoints = (tool === 'arc' && arcType === 'three_points') ? 3 : 2;
         if (points.length < requiredPoints) return;
@@ -702,11 +723,14 @@ export function CADApplication() {
                         return;
                     }
 
+                    // Use the selected element's sketch ID
+                    const mirrorSketchId = selectedObject.sketchId;
+
                     // Use the drawn line as the mirror axis
                     try {
                         updateStatus(`Mirroring element...`, 'info');
                         response = await clientRef.current.mirrorElementsByTwoPoints(
-                            currentActiveSketchId,
+                            mirrorSketchId,
                             [selectedObject.id],
                             start.x,
                             start.y,
