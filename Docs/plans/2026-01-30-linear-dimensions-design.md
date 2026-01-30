@@ -65,7 +65,7 @@ interface Sketch {
 
 ### Keyboard Shortcut
 
-- `D` - Activate dimension tool
+- `Shift+D` - Activate dimension tool (D is used for copy/duplicate)
 
 ## Visual Design
 
