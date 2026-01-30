@@ -1,6 +1,6 @@
-import { 
-    CADResponse, 
-    ModelCreateRequest, 
+import {
+    CADResponse,
+    ModelCreateRequest,
     ModelResponse,
     CreateSketchPlaneRequest,
     CreateSketchPlaneResponse,
@@ -29,7 +29,8 @@ import {
     CreateMirrorArrayRequest,
     CreateMirrorArrayResponse,
     ExtrudeFeatureRequest,
-    ExtrudeFeatureResponse
+    ExtrudeFeatureResponse,
+    DeleteElementResponse
 } from '../types/api';
 import { 
     MeshData, 
@@ -39,7 +40,7 @@ import {
     PlaneVisualizationData, 
     SketchVisualizationData, 
     SketchElementVisualizationData 
-} from '../../../../../shared/types/geometry';
+} from '@/types/geometry';
 
 export class CADClient {
     private baseUrl: string;
@@ -367,8 +368,23 @@ export class CADClient {
         return response;
     }
     
+    // ==================== DELETE OPERATIONS ====================
+
+    public async deleteSketchElement(sketchId: string, elementId: string): Promise<DeleteElementResponse> {
+        console.log(`🗑️ Deleting element ${elementId} from sketch ${sketchId}`);
+
+        const response = await this.makeRequest<DeleteElementResponse>(
+            `/api/v1/cad/sketches/${sketchId}/elements/${elementId}`,
+            'DELETE'
+        );
+
+        console.log('📨 Received deleteSketchElement response:', response);
+
+        return response;
+    }
+
     // ==================== POSITIONING TOOLS ====================
-    
+
     public async trimLineToLine(sketchId: string, lineToTrimId: string, cuttingLineId: string, keepStart: boolean = false): Promise<TrimLineResponse> {
         const request = {
             sketch_id: sketchId,
@@ -742,11 +758,16 @@ export class CADClient {
         }
         
         const response = await fetch(url, options);
-        
+
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            let errorDetail = response.statusText;
+            try {
+                const errorBody = await response.json();
+                errorDetail = errorBody.error || errorBody.details || errorBody.message || errorDetail;
+            } catch {}
+            throw new Error(`HTTP ${response.status}: ${errorDetail}`);
         }
-        
+
         return response.json() as Promise<T>;
     }
     

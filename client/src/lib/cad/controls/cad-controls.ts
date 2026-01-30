@@ -52,6 +52,12 @@ export class CADControls extends OrbitControls {
     private snapPoints: THREE.Vector3[] = [];
     private snapThreshold: number = 0.5; // Adjust as needed
     private snapHighlight?: THREE.Mesh;
+
+    // Bound event handlers
+    private boundPointerDown: EventListener;
+    private boundPointerMove: EventListener;
+    private boundPointerUp: EventListener;
+    private boundKeyDown: EventListener;
     
     // Callbacks
     public onDrawingComplete?: (tool: DrawingTool, points: THREE.Vector2[], arcType?: ArcType) => void;
@@ -64,19 +70,25 @@ export class CADControls extends OrbitControls {
 
     constructor(camera: THREE.Camera, domElement: HTMLElement, scene: THREE.Scene) {
         super(camera, domElement);
-        
+
         this.camera = camera;
         this.scene = scene;
         this.drawingState = {
             tool: 'select',
             isDrawing: false
         };
-        
+
+        // Bind event handlers once and store them
+        this.boundPointerDown = this.onPointerDown.bind(this) as EventListener;
+        this.boundPointerMove = this.onPointerMove.bind(this) as EventListener;
+        this.boundPointerUp = this.onPointerUp.bind(this) as EventListener;
+        this.boundKeyDown = this.onKeyDown.bind(this) as EventListener;
+
         // Disable orbit controls when drawing
         this.enablePan = true;
         this.enableRotate = true;
         this.enableZoom = true;
-        
+
         this.setupEventListeners();
     }
     
@@ -85,11 +97,11 @@ export class CADControls extends OrbitControls {
             console.error('CADControls: domElement is null, cannot setup event listeners');
             return;
         }
-        
-        this.domElement.addEventListener('pointerdown', this.onPointerDown.bind(this));
-        this.domElement.addEventListener('pointermove', this.onPointerMove.bind(this));
-        this.domElement.addEventListener('pointerup', this.onPointerUp.bind(this));
-        this.domElement.addEventListener('keydown', this.onKeyDown.bind(this));
+
+        this.domElement.addEventListener('pointerdown', this.boundPointerDown);
+        this.domElement.addEventListener('pointermove', this.boundPointerMove);
+        this.domElement.addEventListener('pointerup', this.boundPointerUp);
+        this.domElement.addEventListener('keydown', this.boundKeyDown);
     }
     
     public setDrawingTool(tool: DrawingTool): void {
@@ -279,7 +291,10 @@ export class CADControls extends OrbitControls {
     }
 
     private onPointerDown(event: PointerEvent): void {
-        if (this.drawingState.tool === 'select' || !this.drawingState.activeSketchPlane) {
+        // For select, offset, copy, and move tools, let the click fall through to the renderer
+        // for object selection instead of starting a drawing operation
+        const clickToSelectTools = ['select', 'offset', 'copy', 'move'];
+        if (clickToSelectTools.includes(this.drawingState.tool) || !this.drawingState.activeSketchPlane) {
             return;
         }
         
@@ -353,7 +368,13 @@ export class CADControls extends OrbitControls {
         if (this.drawingState.tool === 'arc' && (this.drawingState.arcType === 'three_points' || this.drawingState.arcType === 'endpoints_radius')) {
             return;
         }
-        
+
+        // Skip for click-to-select tools (they don't use drawing state)
+        const clickToSelectTools = ['select', 'offset', 'copy', 'move'];
+        if (clickToSelectTools.includes(this.drawingState.tool)) {
+            return;
+        }
+
         if (!this.drawingState.isDrawing || !this.drawingState.startPoint || !this.drawingState.currentPoint || !this.drawingState.activeSketchPlane) {
             console.log('❌ onPointerUp: Missing required drawing state');
             return;
@@ -566,15 +587,15 @@ export class CADControls extends OrbitControls {
     
     private createLinePreview(start: THREE.Vector3, end: THREE.Vector3): THREE.Object3D {
         const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-        const material = new THREE.LineBasicMaterial({ 
-            color: 0x00ff00, 
-            transparent: true, 
-            opacity: 0.7,
+        const material = new THREE.LineBasicMaterial({
+            color: 0x55ff88,
+            transparent: true,
+            opacity: 0.95,
             linewidth: 2
         });
         return new THREE.Line(geometry, material);
     }
-    
+
     private createRectanglePreview(start: THREE.Vector3, end: THREE.Vector3): THREE.Object3D {
         if (!this.drawingState.activeSketchPlane) return this.createLinePreview(start, end);
         
@@ -599,15 +620,15 @@ export class CADControls extends OrbitControls {
         const points = [corner1, corner2, corner3, corner4, corner1]; // Close the rectangle
         
         const geometry = new THREE.BufferGeometry().setFromPoints(points);
-        const material = new THREE.LineBasicMaterial({ 
-            color: 0x0066ff, 
-            transparent: true, 
-            opacity: 0.7,
+        const material = new THREE.LineBasicMaterial({
+            color: 0x66aaff,
+            transparent: true,
+            opacity: 0.95,
             linewidth: 2
         });
         return new THREE.LineLoop(geometry, material);
     }
-    
+
     private createCirclePreview(start: THREE.Vector3, end: THREE.Vector3): THREE.Object3D {
         const radius = start.distanceTo(end);
         const segments = 32;
@@ -629,15 +650,15 @@ export class CADControls extends OrbitControls {
         }
         
         const geometry = new THREE.BufferGeometry().setFromPoints(points);
-        const material = new THREE.LineBasicMaterial({ 
-            color: 0xff0000, 
-            transparent: true, 
-            opacity: 0.7,
+        const material = new THREE.LineBasicMaterial({
+            color: 0xff5577,
+            transparent: true,
+            opacity: 0.95,
             linewidth: 2
         });
         return new THREE.LineLoop(geometry, material);
     }
-    
+
     private createArcPreview(start: THREE.Vector3, end: THREE.Vector3): THREE.Object3D {
         const radius = start.distanceTo(end);
         const segments = 16;
@@ -671,15 +692,15 @@ export class CADControls extends OrbitControls {
         }
         
         const geometry = new THREE.BufferGeometry().setFromPoints(points);
-        const material = new THREE.LineBasicMaterial({ 
-            color: 0xffa500, 
-            transparent: true, 
-            opacity: 0.7,
+        const material = new THREE.LineBasicMaterial({
+            color: 0xffcc44,
+            transparent: true,
+            opacity: 0.95,
             linewidth: 2
         });
         return new THREE.Line(geometry, material);
     }
-    
+
     private createPolygonPreview(start: THREE.Vector3, end: THREE.Vector3): THREE.Object3D {
         const radius = start.distanceTo(end);
         const sides = this.drawingState.polygonSides || 6; // Use current polygon sides setting
@@ -701,10 +722,10 @@ export class CADControls extends OrbitControls {
         }
         
         const geometry = new THREE.BufferGeometry().setFromPoints(points);
-        const material = new THREE.LineBasicMaterial({ 
-            color: 0x800080, 
-            transparent: true, 
-            opacity: 0.7,
+        const material = new THREE.LineBasicMaterial({
+            color: 0xcc77ff,
+            transparent: true,
+            opacity: 0.95,
             linewidth: 2
         });
         return new THREE.LineLoop(geometry, material);
@@ -740,7 +761,7 @@ export class CADControls extends OrbitControls {
     private highlightSnapPoint(point: THREE.Vector3): void {
         this.removeSnapHighlight();
         const geometry = new THREE.SphereGeometry(0.1, 8, 8);
-        const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const material = new THREE.MeshBasicMaterial({ color: 0xff5577 });
         this.snapHighlight = new THREE.Mesh(geometry, material);
         this.snapHighlight.position.copy(point);
         this.scene.add(this.snapHighlight);
@@ -756,12 +777,12 @@ export class CADControls extends OrbitControls {
     public dispose(): void {
         this.removeSnapHighlight();
         if (this.domElement) {
-            this.domElement.removeEventListener('pointerdown', this.onPointerDown);
-            this.domElement.removeEventListener('pointermove', this.onPointerMove);
-            this.domElement.removeEventListener('pointerup', this.onPointerUp);
-            this.domElement.removeEventListener('keydown', this.onKeyDown);
+            this.domElement.removeEventListener('pointerdown', this.boundPointerDown);
+            this.domElement.removeEventListener('pointermove', this.boundPointerMove);
+            this.domElement.removeEventListener('pointerup', this.boundPointerUp);
+            this.domElement.removeEventListener('keydown', this.boundKeyDown);
         }
-        
+
         this.cancelDrawing();
         super.dispose();
     }

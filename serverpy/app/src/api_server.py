@@ -579,6 +579,29 @@ class CADAPIServer:
                     error=str(e)
                 )
         
+        @self.app.delete("/api/v1/sketches/{sketch_id}/elements/{element_id}")
+        async def delete_sketch_element(sketch_id: str, element_id: str, request: Request):
+            """Delete a sketch element by ID"""
+            try:
+                # Get session ID from header
+                session_id = request.headers.get("X-Session-ID", "default_session")
+
+                response_data = await self._handle_delete_sketch_element(session_id, sketch_id, element_id)
+
+                return APIResponse(
+                    success=True,
+                    timestamp=int(time.time()),
+                    data=response_data
+                )
+
+            except Exception as e:
+                print(f"❌ Error in delete_sketch_element: {e}")
+                return APIResponse(
+                    success=False,
+                    timestamp=int(time.time()),
+                    error=str(e)
+                )
+
         @self.app.post("/api/v1/trim-line-to-line")
         async def trim_line_to_line(request: TrimLineToLineRequest):
             """Trim line to line endpoint - handles simple line-to-line trim operations"""
@@ -1486,7 +1509,38 @@ class CADAPIServer:
         
         print(f"✅ Chamfer created successfully: {chamfer_id}")
         return response_data
-    
+
+    async def _handle_delete_sketch_element(self, session_id: str, sketch_id: str, element_id: str) -> Dict[str, Any]:
+        """Handle sketch element deletion"""
+        print(f"🗑️ Deleting element {element_id} from sketch {sketch_id}")
+
+        session_manager = SessionManager.get_instance()
+        engine = session_manager.get_or_create_session(session_id)
+
+        if engine is None:
+            raise Exception("Failed to get session")
+
+        # Validate that the sketch exists
+        if not engine.sketch_exists(sketch_id):
+            raise Exception(f"Sketch '{sketch_id}' does not exist")
+
+        # Delete the element
+        success = engine.delete_element_from_sketch(sketch_id, element_id)
+
+        if not success:
+            raise Exception(f"Failed to delete element '{element_id}' from sketch")
+
+        response_data = {
+            "element_id": element_id,
+            "sketch_id": sketch_id,
+            "session_id": session_id,
+            "deleted": True,
+            "message": f"Element {element_id} deleted successfully from sketch {sketch_id}"
+        }
+
+        print(f"✅ Element deleted successfully: {element_id}")
+        return response_data
+
     async def _handle_trim_line_to_line(self, request: TrimLineToLineRequest) -> Dict[str, Any]:
         """Handle line-to-line trim operation - Real implementation using geometry engine"""
         print(f"✂️ Trimming line: {request.line_to_trim_id} with line: {request.cutting_line_id}")

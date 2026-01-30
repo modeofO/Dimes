@@ -62,7 +62,7 @@ export default function(webSocketManager) {
   // Extrude validation
   const validateExtrude = [
     body('sketch_id').isString().notEmpty().withMessage('Sketch ID is required'),
-    body('element_id').optional().isString().withMessage('Element ID must be a string'),
+    body('element_id').isString().notEmpty().withMessage('Element ID is required'),
     body('distance').isFloat({ min: 0.001 }).withMessage('Distance must be a positive number'),
     body('direction').optional().isIn(['normal', 'custom']).withMessage('Invalid extrude direction'),
     handleValidationErrors,
@@ -454,6 +454,46 @@ export default function(webSocketManager) {
 
     } catch (error) {
       next(new ApiError(500, 'Failed to add chamfer', error.message));
+    }
+  });
+
+  /**
+   * DELETE /api/v1/cad/sketches/:sketchId/elements/:elementId
+   * Delete a sketch element
+   */
+  router.delete('/sketches/:sketchId/elements/:elementId', async (req, res, next) => {
+    try {
+      const sessionId = req.sessionId;
+      const { sketchId, elementId } = req.params;
+
+      logger.info(`Deleting element ${elementId} from sketch ${sketchId} for session ${sessionId}`);
+
+      const result = await cppBackend.deleteSketchElement(sessionId, sketchId, elementId);
+
+      console.log('🔍 Raw backend deleteSketchElement result:', JSON.stringify(result, null, 2));
+
+      // Send WebSocket notification for real-time updates
+      if (webSocketManager && result.success && result.data) {
+        console.log('🔊 Sending WebSocket notification for element deletion');
+        webSocketManager.sendToClient(sessionId, {
+          type: 'element_deleted',
+          payload: {
+            element_id: elementId,
+            sketch_id: sketchId,
+          },
+          timestamp: Date.now(),
+        });
+      }
+
+      res.json({
+        success: true,
+        session_id: sessionId,
+        timestamp: Date.now(),
+        data: result.data || result,
+      });
+
+    } catch (error) {
+      next(new ApiError(500, 'Failed to delete sketch element', error.message));
     }
   });
 
@@ -989,14 +1029,23 @@ export default function(webSocketManager) {
 
       // Send WebSocket notification for real-time updates
       if (webSocketManager && result.success && result.data) {
-        // Send geometry update if mesh data is available
-        if (result.data.mesh_data) {
+        // Check for visualization_data first, then fall back to mesh_data
+        if (result.data.visualization_data) {
+          console.log('🔊 Sending WebSocket visualization for boolean operation');
+          webSocketManager.sendToClient(sessionId, {
+            type: 'visualization_data',
+            payload: result.data.visualization_data,
+            timestamp: Date.now(),
+          });
+        } else if (result.data.mesh_data) {
           console.log('🔊 Sending WebSocket geometry update for boolean operation');
           webSocketManager.sendToClient(sessionId, {
             type: 'geometry_update',
-            data: result.data.mesh_data,
+            payload: result.data.mesh_data,
             timestamp: Date.now(),
           });
+        } else {
+          console.log('🔊 No visualization data available for boolean operation');
         }
       }
 

@@ -10,9 +10,18 @@ interface Message {
 interface ChatPanelProps {
     messages: Message[];
     onSendMessage: (message: string) => void;
+    onClose?: () => void;
 }
 
-export function ChatPanel({ messages, onSendMessage }: ChatPanelProps) {
+// Example prompts for the Builder panel
+const EXAMPLE_PROMPTS = [
+    'Create a 50mm cube',
+    'Extrude the rectangle by 20mm',
+    'Add a circle with radius 15',
+    'Make a hexagonal prism',
+];
+
+export function ChatPanel({ messages, onSendMessage, onClose }: ChatPanelProps) {
     const [inputValue, setInputValue] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -39,15 +48,60 @@ export function ChatPanel({ messages, onSendMessage }: ChatPanelProps) {
     return (
         <div className="flex flex-col h-full">
             {/* Header */}
-            <div className="p-3 border-b border-gray-300 bg-gray-50">
-                <h3 className="font-semibold text-gray-800">CAD Agent</h3>
+            <div
+                className="px-3 py-2 flex items-center justify-between flex-shrink-0"
+                style={{ borderBottom: '1px solid #2A2D3A', backgroundColor: '#1A1D27' }}
+            >
+                <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#6A6D7A' }}>Builder</h3>
+                {onClose && (
+                    <button
+                        onClick={onClose}
+                        className="transition-colors text-sm leading-none w-5 h-5 flex items-center justify-center rounded"
+                        style={{ color: '#5A5D6A' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = '#C8BDA0'; e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = '#5A5D6A'; e.currentTarget.style.backgroundColor = 'transparent'; }}
+                    >
+                        &times;
+                    </button>
+                )}
             </div>
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-3 space-y-2">
                 {messages.length === 0 ? (
-                    <div className="text-gray-500 text-center text-sm">
-                        Start a conversation with the CAD agent...
+                    <div className="py-4 space-y-4">
+                        <p className="text-xs text-center" style={{ color: '#8A8D9A' }}>
+                            Ask the builder to create geometry...
+                        </p>
+                        <div className="space-y-2">
+                            <p className="text-[10px] uppercase tracking-wider font-medium px-1" style={{ color: '#6A6D7A' }}>
+                                Try asking:
+                            </p>
+                            {EXAMPLE_PROMPTS.map((prompt, index) => (
+                                <button
+                                    key={index}
+                                    onClick={() => onSendMessage(prompt)}
+                                    className="w-full text-left px-3 py-2 rounded-md text-xs transition-colors"
+                                    style={{
+                                        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                                        color: '#B8BBCA',
+                                        border: '1px solid transparent'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.backgroundColor = 'rgba(212, 160, 23, 0.1)';
+                                        e.currentTarget.style.borderColor = 'rgba(212, 160, 23, 0.3)';
+                                        e.currentTarget.style.color = '#E8DCC8';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.03)';
+                                        e.currentTarget.style.borderColor = 'transparent';
+                                        e.currentTarget.style.color = '#B8BBCA';
+                                    }}
+                                >
+                                    &ldquo;{prompt}&rdquo;
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 ) : (
                     messages.map((message, index) => (
@@ -55,11 +109,15 @@ export function ChatPanel({ messages, onSendMessage }: ChatPanelProps) {
                             key={index}
                             className={`p-2 rounded-lg max-w-[85%] ${
                                 message.sender === 'user'
-                                    ? 'bg-blue-500 text-white ml-auto'
-                                    : 'bg-gray-200 text-gray-800 mr-auto'
+                                    ? 'ml-auto'
+                                    : 'mr-auto'
                             }`}
+                            style={message.sender === 'user'
+                                ? { backgroundColor: 'rgba(212, 160, 23, 0.2)', color: '#E8DCC8' }
+                                : { backgroundColor: 'rgba(255, 255, 255, 0.05)', color: '#C8BDA0' }
+                            }
                         >
-                            <div className="text-sm whitespace-pre-wrap">
+                            <div className="text-xs whitespace-pre-wrap">
                                 {message.text}
                             </div>
                         </div>
@@ -69,20 +127,30 @@ export function ChatPanel({ messages, onSendMessage }: ChatPanelProps) {
             </div>
 
             {/* Input */}
-            <form onSubmit={handleSubmit} className="p-3 border-t border-gray-300">
-                <div className="flex space-x-2">
+            <form onSubmit={handleSubmit} className="p-2 flex-shrink-0" style={{ borderTop: '1px solid #2A2D3A' }}>
+                <div className="flex space-x-1.5">
                     <input
                         type="text"
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
                         onKeyPress={handleKeyPress}
-                        placeholder="Talk to the agent..."
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Talk to the builder..."
+                        className="flex-1 px-2.5 py-1.5 rounded-md text-xs outline-none"
+                        style={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid #2A2D3A',
+                            color: '#E8DCC8',
+                        }}
                     />
                     <button
                         type="submit"
                         disabled={!inputValue.trim()}
-                        className="px-4 py-2 bg-blue-500 text-white rounded-md text-sm font-medium hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                        className="px-3 py-1.5 rounded-md text-xs font-medium transition-colors disabled:cursor-not-allowed"
+                        style={{
+                            backgroundColor: inputValue.trim() ? 'rgba(212, 160, 23, 0.3)' : '#1A1D27',
+                            color: inputValue.trim() ? '#D4A017' : '#5A5D6A',
+                            border: '1px solid #2A2D3A',
+                        }}
                     >
                         Send
                     </button>
@@ -90,4 +158,4 @@ export function ChatPanel({ messages, onSendMessage }: ChatPanelProps) {
             </form>
         </div>
     );
-} 
+}

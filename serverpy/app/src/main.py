@@ -1,10 +1,15 @@
 """
 Main entry point for CAD Engine Server - Python version of main.cpp
 """
+import os
 import sys
 import signal
 from api_server import CADAPIServer
 from session_manager import SessionManager
+
+# Configuration from environment
+PORT = int(os.environ.get("PORT", 8080))
+HOST = os.environ.get("HOST", "0.0.0.0")
 
 
 def signal_handler(signum, frame):
@@ -40,12 +45,12 @@ def main():
         
         print("🌐 Creating CAD API server...")
         # Create and start the API server
-        server = CADAPIServer(host="0.0.0.0", port=8080)
+        server = CADAPIServer(host=HOST, port=PORT)
         print("✅ CAD API server created")
-        
-        print("🎯 Server ready on port 8080")
-        print("🔗 Health check: http://localhost:8080/api/v1/health")
-        print("📖 API docs: http://localhost:8080/docs")
+
+        print(f"🎯 Server ready on {HOST}:{PORT}")
+        print(f"🔗 Health check: http://localhost:{PORT}/api/v1/health")
+        print(f"📖 API docs: http://localhost:{PORT}/docs")
         print("💡 Press Ctrl+C to stop...")
         print("=" * 50)
         

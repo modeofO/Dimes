@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { MeshData } from '../../../../../shared/types/geometry';
+import { MeshData } from '@/types/geometry';
 
 export class MeshManager {
     private scene: THREE.Scene;
@@ -14,30 +14,30 @@ export class MeshManager {
     }
     
     private initializeMaterials(): void {
-        // Metal material
+        // Metal material — matte CAD look, flat shading, minimal specular
         const metalMaterial = new THREE.MeshPhysicalMaterial({
-            color: 0x888888,
-            metalness: 0.9,
-            roughness: 0.1,
-            envMapIntensity: 1.0,
+            color: 0xb0b8c0,
+            metalness: 0.08,
+            roughness: 0.75,
+            envMapIntensity: 0.15,
             side: THREE.DoubleSide,
             flatShading: true
         });
         this.materialCache.set('metal', metalMaterial);
-        
+
         // Plastic material
         const plasticMaterial = new THREE.MeshPhysicalMaterial({
-            color: 0x4444ff,
+            color: 0x6688ff,
             metalness: 0.0,
             roughness: 0.3,
             envMapIntensity: 0.5,
             side: THREE.DoubleSide
         });
         this.materialCache.set('plastic', plasticMaterial);
-        
-        // Wireframe material
+
+        // Wireframe material — lighter for dark background
         const wireframeMaterial = new THREE.MeshBasicMaterial({
-            color: 0x000000,
+            color: 0x888888,
             wireframe: true
         });
         this.materialCache.set('wireframe', wireframeMaterial);
@@ -59,13 +59,23 @@ export class MeshManager {
         // Create mesh with default material
         const material = this.materialCache.get('metal') || new THREE.MeshBasicMaterial();
         const mesh = new THREE.Mesh(geometry, material);
-        
+
         mesh.name = id;
-        
+
         // Enable shadows
         mesh.castShadow = true;
         mesh.receiveShadow = true;
-        
+
+        // Add visible edge lines for clear shape definition
+        const edgesGeometry = new THREE.EdgesGeometry(geometry, 15);
+        const edgesMaterial = new THREE.LineBasicMaterial({
+            color: 0x222233,
+            transparent: true,
+            opacity: 0.7
+        });
+        const edgeLines = new THREE.LineSegments(edgesGeometry, edgesMaterial);
+        mesh.add(edgeLines);
+
         // Add to scene and cache
         this.scene.add(mesh);
         this.activeMeshes.set(id, mesh);

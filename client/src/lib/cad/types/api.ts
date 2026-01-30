@@ -12,7 +12,7 @@ import {
     PlaneVisualizationData,
     SketchVisualizationData,
     SketchElementVisualizationData
-} from '../../../../../shared/types/geometry';
+} from '@/types/geometry';
 
 export interface CADResponse {
     success: boolean;
@@ -329,6 +329,15 @@ export interface CreateMirrorArrayResponse extends CADResponse {
             point2: [number, number];
         };
         visualization_data?: SketchElementVisualizationData;
+    };
+}
+
+export interface DeleteElementResponse extends CADResponse {
+    data: {
+        element_id: string;
+        sketch_id: string;
+        deleted: boolean;
+        message?: string;
     };
 }
 

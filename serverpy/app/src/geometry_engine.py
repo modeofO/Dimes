@@ -484,7 +484,36 @@ class Sketch:
     def get_elements(self) -> List[SketchElement]:
         """Get all sketch elements"""
         return self.elements.copy()
-    
+
+    def remove_element(self, element_id: str) -> bool:
+        """
+        Remove a sketch element by ID.
+        If the element is a composite parent, also removes all child elements.
+        If the element is a child of a composite, removes only that child.
+
+        Returns:
+            True if element was found and removed, False otherwise
+        """
+        element = self.get_element_by_id(element_id)
+        if not element:
+            print(f"❌ Element {element_id} not found in sketch {self.sketch_id}")
+            return False
+
+        elements_to_remove = [element_id]
+
+        # If this is a composite parent, collect all child IDs
+        if element.is_composite_parent and element.child_ids:
+            elements_to_remove.extend(element.child_ids)
+            print(f"🗑️ Removing composite element {element_id} with {len(element.child_ids)} children")
+
+        # Remove all collected elements
+        original_count = len(self.elements)
+        self.elements = [e for e in self.elements if e.id not in elements_to_remove]
+        removed_count = original_count - len(self.elements)
+
+        print(f"✅ Removed {removed_count} element(s) from sketch {self.sketch_id}")
+        return removed_count > 0
+
     def get_visualization_data(self) -> Dict[str, Any]:
         """Get visualization data for the sketch - matches SketchVisualizationData interface"""
         # Get coordinate system from the associated plane
@@ -685,134 +714,118 @@ class Sketch:
             l1_end = line1.end_point
             l2_start = line2.start_point
             l2_end = line2.end_point
-            
+
             if not all([l1_start, l1_end, l2_start, l2_end]):
                 return None
-            
+
             # Convert to regular coordinates for calculation
             l1_x1, l1_y1 = l1_start.X(), l1_start.Y()
             l1_x2, l1_y2 = l1_end.X(), l1_end.Y()
             l2_x1, l2_y1 = l2_start.X(), l2_start.Y()
             l2_x2, l2_y2 = l2_end.X(), l2_end.Y()
-            
-            # Calculate line directions (unit vectors)
-            l1_dx = l1_x2 - l1_x1
-            l1_dy = l1_y2 - l1_y1
-            l1_len = math.sqrt(l1_dx**2 + l1_dy**2)
-            if l1_len < 1e-10:
-                return None
-            l1_dx /= l1_len
-            l1_dy /= l1_len
-            
-            l2_dx = l2_x2 - l2_x1
-            l2_dy = l2_y2 - l2_y1
-            l2_len = math.sqrt(l2_dx**2 + l2_dy**2)
-            if l2_len < 1e-10:
-                return None
-            l2_dx /= l2_len
-            l2_dy /= l2_len
-            
+
             # Find intersection point of the two lines (extended if necessary)
             intersection = self._find_line_intersection(
                 l1_x1, l1_y1, l1_x2, l1_y2,
                 l2_x1, l2_y1, l2_x2, l2_y2
             )
-            
+
             if not intersection:
                 print("❌ Lines are parallel - cannot create fillet")
                 return None
-            
+
             int_x, int_y = intersection
-            
-            # Calculate angle between lines
-            dot_product = l1_dx * l2_dx + l1_dy * l2_dy
-            cross_product = l1_dx * l2_dy - l1_dy * l2_dx
-            angle = math.atan2(abs(cross_product), dot_product)
-            
-            if angle < 1e-6:  # Lines are parallel
-                return None
-            
-            # Calculate distance from intersection to tangent points
-            tan_dist = radius / math.tan(angle / 2)
-            
-            # For each line, determine which direction to move from intersection to get inward tangent point
-            # We want to move towards the endpoint that is farther from the intersection
-            
-            # Line 1: determine direction to move from intersection
+
+            # For each line, determine which direction points AWAY from the intersection
+            # (i.e., toward the "body" of the line, not toward the corner)
+
+            # Line 1: calculate direction pointing away from intersection along the line
             dist1_to_start = math.sqrt((int_x - l1_x1)**2 + (int_y - l1_y1)**2)
             dist1_to_end = math.sqrt((int_x - l1_x2)**2 + (int_y - l1_y2)**2)
-            
+
             if dist1_to_start > dist1_to_end:
-                # Move towards start point (opposite to line direction)
-                l1_dir_x, l1_dir_y = -l1_dx, -l1_dy
+                # Start is farther - direction points toward start
+                l1_away_x, l1_away_y = l1_x1 - int_x, l1_y1 - int_y
             else:
-                # Move towards end point (same as line direction)
-                l1_dir_x, l1_dir_y = l1_dx, l1_dy
-            
-            # Line 2: determine direction to move from intersection  
+                # End is farther - direction points toward end
+                l1_away_x, l1_away_y = l1_x2 - int_x, l1_y2 - int_y
+
+            # Normalize
+            l1_away_len = math.sqrt(l1_away_x**2 + l1_away_y**2)
+            if l1_away_len < 1e-10:
+                return None
+            l1_away_x /= l1_away_len
+            l1_away_y /= l1_away_len
+
+            # Line 2: calculate direction pointing away from intersection along the line
             dist2_to_start = math.sqrt((int_x - l2_x1)**2 + (int_y - l2_y1)**2)
             dist2_to_end = math.sqrt((int_x - l2_x2)**2 + (int_y - l2_y2)**2)
-            
+
             if dist2_to_start > dist2_to_end:
-                # Move towards start point (opposite to line direction)
-                l2_dir_x, l2_dir_y = -l2_dx, -l2_dy
+                # Start is farther - direction points toward start
+                l2_away_x, l2_away_y = l2_x1 - int_x, l2_y1 - int_y
             else:
-                # Move towards end point (same as line direction)
-                l2_dir_x, l2_dir_y = l2_dx, l2_dy
-            
-            # Calculate tangent points by moving inward along each line
-            t1_x = int_x + tan_dist * l1_dir_x
-            t1_y = int_y + tan_dist * l1_dir_y
-            t2_x = int_x + tan_dist * l2_dir_x
-            t2_y = int_y + tan_dist * l2_dir_y
-            
-            # Calculate fillet center using the traditional method:
-            # The center is at the intersection of two lines perpendicular to the original lines
-            # and passing through the respective tangent points
-            
-            # Line perpendicular to line1 passing through t1
-            # If line1 direction is (dx1, dy1), perpendicular is (-dy1, dx1)
-            perp1_dx = -l1_dy
-            perp1_dy = l1_dx
-            
-            # Line perpendicular to line2 passing through t2
-            # If line2 direction is (dx2, dy2), perpendicular is (-dy2, dx2)
-            perp2_dx = -l2_dy
-            perp2_dy = l2_dx
-            
-            # Find intersection of the two perpendicular lines
-            # Line 1: t1 + s * perp1_direction
-            # Line 2: t2 + t * perp2_direction
-            # t1_x + s * perp1_dx = t2_x + t * perp2_dx
-            # t1_y + s * perp1_dy = t2_y + t * perp2_dy
-            
-            # Solve the system:
-            # s * perp1_dx - t * perp2_dx = t2_x - t1_x
-            # s * perp1_dy - t * perp2_dy = t2_y - t1_y
-            
-            det = perp1_dx * (-perp2_dy) - perp1_dy * (-perp2_dx)
-            if abs(det) < 1e-10:
-                print("❌ Perpendicular lines are parallel - cannot find center")
+                # End is farther - direction points toward end
+                l2_away_x, l2_away_y = l2_x2 - int_x, l2_y2 - int_y
+
+            # Normalize
+            l2_away_len = math.sqrt(l2_away_x**2 + l2_away_y**2)
+            if l2_away_len < 1e-10:
                 return None
-            
-            # Solve for s using Cramer's rule
-            rhs_x = t2_x - t1_x
-            rhs_y = t2_y - t1_y
-            s = (rhs_x * (-perp2_dy) - rhs_y * (-perp2_dx)) / det
-            
-            # Calculate center
-            center_x = t1_x + s * perp1_dx
-            center_y = t1_y + s * perp1_dy
-            
+            l2_away_x /= l2_away_len
+            l2_away_y /= l2_away_len
+
+            # Calculate angle between the two "away" directions
+            dot_product = l1_away_x * l2_away_x + l1_away_y * l2_away_y
+            cross_product = l1_away_x * l2_away_y - l1_away_y * l2_away_x
+
+            # The angle between the away directions - this is the interior angle of the corner
+            angle = math.acos(max(-1.0, min(1.0, dot_product)))
+
+            if angle < 1e-6 or angle > math.pi - 1e-6:  # Lines are parallel or anti-parallel
+                return None
+
+            # Calculate distance from intersection to tangent points
+            # For a fillet inscribed in the corner, tan_dist = radius / tan(angle/2)
+            tan_dist = radius / math.tan(angle / 2)
+
+            # Calculate tangent points by moving away from intersection along each line
+            t1_x = int_x + tan_dist * l1_away_x
+            t1_y = int_y + tan_dist * l1_away_y
+            t2_x = int_x + tan_dist * l2_away_x
+            t2_y = int_y + tan_dist * l2_away_y
+
+            # Calculate the fillet center
+            # The center lies on the angle bisector at distance radius/sin(angle/2) from intersection
+            # The bisector direction is the normalized sum of the two away directions
+            bisector_x = l1_away_x + l2_away_x
+            bisector_y = l1_away_y + l2_away_y
+            bisector_len = math.sqrt(bisector_x**2 + bisector_y**2)
+
+            if bisector_len < 1e-10:
+                # This shouldn't happen for non-parallel lines, but handle it
+                return None
+
+            bisector_x /= bisector_len
+            bisector_y /= bisector_len
+
+            # Distance from intersection to center along the bisector
+            center_dist = radius / math.sin(angle / 2)
+
+            center_x = int_x + center_dist * bisector_x
+            center_y = int_y + center_dist * bisector_y
+
             # Create result points
             new_line1_end = gp_Pnt2d(t1_x, t1_y)
             new_line2_start = gp_Pnt2d(t2_x, t2_y)
             arc_start = gp_Pnt2d(t1_x, t1_y)
             arc_end = gp_Pnt2d(t2_x, t2_y)
             arc_center = gp_Pnt2d(center_x, center_y)
-            
+
+            print(f"✅ Fillet geometry: tangent1=({t1_x:.2f},{t1_y:.2f}), tangent2=({t2_x:.2f},{t2_y:.2f}), center=({center_x:.2f},{center_y:.2f})")
+
             return (new_line1_end, new_line2_start, arc_start, arc_end, arc_center)
-            
+
         except Exception as e:
             print(f"❌ Error calculating fillet geometry: {e}")
             return None
@@ -849,85 +862,83 @@ class Sketch:
             l1_end = line1.end_point
             l2_start = line2.start_point
             l2_end = line2.end_point
-            
+
             if not all([l1_start, l1_end, l2_start, l2_end]):
                 return None
-            
+
             # Convert to regular coordinates for calculation
             l1_x1, l1_y1 = l1_start.X(), l1_start.Y()
             l1_x2, l1_y2 = l1_end.X(), l1_end.Y()
             l2_x1, l2_y1 = l2_start.X(), l2_start.Y()
             l2_x2, l2_y2 = l2_end.X(), l2_end.Y()
-            
-            # Calculate line directions (unit vectors)
-            l1_dx = l1_x2 - l1_x1
-            l1_dy = l1_y2 - l1_y1
-            l1_len = math.sqrt(l1_dx**2 + l1_dy**2)
-            if l1_len < 1e-10:
-                return None
-            l1_dx /= l1_len
-            l1_dy /= l1_len
-            
-            l2_dx = l2_x2 - l2_x1
-            l2_dy = l2_y2 - l2_y1
-            l2_len = math.sqrt(l2_dx**2 + l2_dy**2)
-            if l2_len < 1e-10:
-                return None
-            l2_dx /= l2_len
-            l2_dy /= l2_len
-            
+
             # Find intersection point of the two lines (extended if necessary)
             intersection = self._find_line_intersection(
                 l1_x1, l1_y1, l1_x2, l1_y2,
                 l2_x1, l2_y1, l2_x2, l2_y2
             )
-            
+
             if not intersection:
                 print("❌ Lines are parallel - cannot create chamfer")
                 return None
-            
+
             int_x, int_y = intersection
-            
-            # Calculate chamfer points at specified distance from intersection
-            # For each line, determine which direction to move from intersection to get inward chamfer point
-            # We want to move towards the endpoint that is farther from the intersection
-            
-            # Line 1: determine direction to move from intersection
+
+            # For each line, calculate direction pointing AWAY from intersection
+            # (toward the "body" of the line, not toward the corner)
+
+            # Line 1: calculate direction pointing away from intersection along the line
             dist1_to_start = math.sqrt((int_x - l1_x1)**2 + (int_y - l1_y1)**2)
             dist1_to_end = math.sqrt((int_x - l1_x2)**2 + (int_y - l1_y2)**2)
-            
+
             if dist1_to_start > dist1_to_end:
-                # Move towards start point (opposite to line direction)
-                l1_chamfer_dir_x, l1_chamfer_dir_y = -l1_dx, -l1_dy
+                # Start is farther - direction points toward start
+                l1_away_x, l1_away_y = l1_x1 - int_x, l1_y1 - int_y
             else:
-                # Move towards end point (same as line direction)
-                l1_chamfer_dir_x, l1_chamfer_dir_y = l1_dx, l1_dy
-            
-            # Line 2: determine direction to move from intersection  
+                # End is farther - direction points toward end
+                l1_away_x, l1_away_y = l1_x2 - int_x, l1_y2 - int_y
+
+            # Normalize
+            l1_away_len = math.sqrt(l1_away_x**2 + l1_away_y**2)
+            if l1_away_len < 1e-10:
+                return None
+            l1_away_x /= l1_away_len
+            l1_away_y /= l1_away_len
+
+            # Line 2: calculate direction pointing away from intersection along the line
             dist2_to_start = math.sqrt((int_x - l2_x1)**2 + (int_y - l2_y1)**2)
             dist2_to_end = math.sqrt((int_x - l2_x2)**2 + (int_y - l2_y2)**2)
-            
+
             if dist2_to_start > dist2_to_end:
-                # Move towards start point (opposite to line direction)
-                l2_chamfer_dir_x, l2_chamfer_dir_y = -l2_dx, -l2_dy
+                # Start is farther - direction points toward start
+                l2_away_x, l2_away_y = l2_x1 - int_x, l2_y1 - int_y
             else:
-                # Move towards end point (same as line direction)
-                l2_chamfer_dir_x, l2_chamfer_dir_y = l2_dx, l2_dy
-            
-            # Calculate chamfer points by moving inward along each line
-            c1_x = int_x + distance * l1_chamfer_dir_x
-            c1_y = int_y + distance * l1_chamfer_dir_y
-            c2_x = int_x + distance * l2_chamfer_dir_x
-            c2_y = int_y + distance * l2_chamfer_dir_y
-            
+                # End is farther - direction points toward end
+                l2_away_x, l2_away_y = l2_x2 - int_x, l2_y2 - int_y
+
+            # Normalize
+            l2_away_len = math.sqrt(l2_away_x**2 + l2_away_y**2)
+            if l2_away_len < 1e-10:
+                return None
+            l2_away_x /= l2_away_len
+            l2_away_y /= l2_away_len
+
+            # Calculate chamfer points by moving away from intersection along each line
+            c1_x = int_x + distance * l1_away_x
+            c1_y = int_y + distance * l1_away_y
+            c2_x = int_x + distance * l2_away_x
+            c2_y = int_y + distance * l2_away_y
+
             # Create result points
             new_line1_end = gp_Pnt2d(c1_x, c1_y)
             new_line2_start = gp_Pnt2d(c2_x, c2_y)
             chamfer_start = gp_Pnt2d(c1_x, c1_y)
             chamfer_end = gp_Pnt2d(c2_x, c2_y)
-            
+
+            print(f"✅ Chamfer geometry: point1=({c1_x:.2f},{c1_y:.2f}), point2=({c2_x:.2f},{c2_y:.2f})")
+
             return (new_line1_end, new_line2_start, chamfer_start, chamfer_end)
-            
+
         except Exception as e:
             print(f"❌ Error calculating chamfer geometry: {e}")
             return None
@@ -3286,11 +3297,43 @@ class OCCTEngine:
                 print(f"❌ Failed to add chamfer to sketch {sketch_id}")
             
             return chamfer_id
-            
+
         except Exception as e:
             print(f"❌ Error adding chamfer to sketch: {e}")
             return ""
-    
+
+    def delete_element_from_sketch(self, sketch_id: str, element_id: str) -> bool:
+        """
+        Delete a sketch element by ID.
+
+        Args:
+            sketch_id: Sketch identifier
+            element_id: Element identifier to delete
+
+        Returns:
+            True if element was deleted, False otherwise
+        """
+        print(f"🗑️ Deleting element {element_id} from sketch {sketch_id}")
+
+        if not self.sketch_exists(sketch_id):
+            print(f"❌ Sketch not found: {sketch_id}")
+            return False
+
+        try:
+            sketch = self.sketches[sketch_id]
+            success = sketch.remove_element(element_id)
+
+            if success:
+                print(f"✅ Successfully deleted element {element_id} from sketch {sketch_id}")
+            else:
+                print(f"❌ Failed to delete element {element_id} from sketch {sketch_id}")
+
+            return success
+
+        except Exception as e:
+            print(f"❌ Error deleting element from sketch: {e}")
+            return False
+
     def trim_line_to_line_in_sketch(self, sketch_id: str, line_to_trim_id: str, cutting_line_id: str, keep_start: bool = True) -> bool:
         """
         Trim a line at its intersection with another line - equivalent to C++ trimLineToLine
@@ -3599,23 +3642,23 @@ class OCCTEngine:
                 
                 # Determine arc direction and generate points
                 segments = 16
-                
-                # Normalize angles to [0, 2π)
-                while start_angle < 0:
-                    start_angle += 2 * math.pi
-                while end_angle < 0:
-                    end_angle += 2 * math.pi
-                while start_angle >= 2 * math.pi:
-                    start_angle -= 2 * math.pi
-                while end_angle >= 2 * math.pi:
-                    end_angle -= 2 * math.pi
-                
-                # Calculate angle span (always positive, going counterclockwise)
-                if end_angle <= start_angle:
-                    angle_span = end_angle + 2 * math.pi - start_angle
+
+                # Calculate both possible angle spans (counterclockwise and clockwise)
+                # and choose the shorter path
+                ccw_span = end_angle - start_angle
+                if ccw_span < 0:
+                    ccw_span += 2 * math.pi
+                cw_span = start_angle - end_angle
+                if cw_span < 0:
+                    cw_span += 2 * math.pi
+
+                # Use the shorter path (< 180° for any corner)
+                # Positive angle_span = counterclockwise, negative = clockwise
+                if ccw_span <= cw_span:
+                    angle_span = ccw_span
                 else:
-                    angle_span = end_angle - start_angle
-                
+                    angle_span = -cw_span
+
                 # Generate arc points
                 for i in range(segments + 1):
                     t = i / segments

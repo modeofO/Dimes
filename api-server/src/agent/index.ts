@@ -24,7 +24,7 @@ export async function initializeAgent(webSocketManager: WebSocketManager) {
 
   const agent = createDreams({
     logLevel: LogLevel.DEBUG,
-    model: openrouter("google/gemini-2.0-flash-001"),
+    model: openrouter("google/gemini-2.5-flash"),
     extensions: [webChatExtension],
     contexts: [webChatContext],
     actions: cadActions,

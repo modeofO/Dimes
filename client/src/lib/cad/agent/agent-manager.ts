@@ -1,5 +1,3 @@
-import { v4 as uuidv4 } from 'uuid';
-
 type AgentMessageHandler = (message: any) => void;
 
 export class AgentManager {
@@ -13,7 +11,7 @@ export class AgentManager {
     private maxReconnectAttempts: number = 10;
 
     constructor(private serverUrl: string, sessionId?: string) {
-        this.sessionId = sessionId || `ws-session-${uuidv4()}`;
+        this.sessionId = sessionId || `ws-session-${crypto.randomUUID()}`;
         this.connect();
     }
 
