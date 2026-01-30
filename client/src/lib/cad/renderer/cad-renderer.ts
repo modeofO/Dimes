@@ -304,15 +304,13 @@ export class CADRenderer {
         this.pointerDownPos.set(event.clientX, event.clientY);
         this.boxSelectStartValid = false; // Reset on every pointer down
 
-        // Start box selection only in select mode when clicking on empty space
+        // Shift+click in select mode starts box selection (works anywhere, even on plane/sketch)
         const drawingState = this.controls.getDrawingState();
-        if (drawingState.tool === 'select' && !drawingState.isDrawing) {
-            const result = this.raycastNamedObject(event);
-            if (!result) {
-                // Clicked on empty space - prepare for potential box selection
-                this.boxSelectStart.set(event.clientX, event.clientY);
-                this.boxSelectStartValid = true;
-            }
+        if (drawingState.tool === 'select' && !drawingState.isDrawing && event.shiftKey) {
+            this.boxSelectStart.set(event.clientX, event.clientY);
+            this.boxSelectStartValid = true;
+            // Disable orbit controls immediately to prevent rotation
+            this.controls.enabled = false;
         }
     }
 
@@ -325,6 +323,11 @@ export class CADRenderer {
             return;
         }
 
+        // Re-enable controls if they were disabled for potential box select
+        if (!this.controls.enabled) {
+            this.controls.enabled = true;
+        }
+
         if (this.pointerDownPos.distanceTo(pointerUpPos) > 2) {
             return; // It was a drag, not a click
         }
@@ -334,7 +337,7 @@ export class CADRenderer {
     private onPointerMove = (event: PointerEvent): void => {
         const drawingState = this.controls.getDrawingState();
 
-        // Check for box selection start (if dragging from empty space in select mode)
+        // Check for box selection start (Shift+drag in select mode)
         if (drawingState.tool === 'select' && !drawingState.isDrawing && event.buttons === 1 && this.boxSelectStartValid) {
             const dragDist = Math.hypot(event.clientX - this.boxSelectStart.x, event.clientY - this.boxSelectStart.y);
             if (dragDist > 5 && !this.isBoxSelecting) {
@@ -437,9 +440,9 @@ export class CADRenderer {
             });
             this.hoveredOriginalMaterials.clear();
             this.hoveredObject = null;
-            // Use inherit so parent viewport cursor (based on tool) takes effect
-            this.renderer.domElement.style.cursor = 'inherit';
         }
+        // Always reset cursor to inherit so parent viewport cursor (based on tool) takes effect
+        this.renderer.domElement.style.cursor = 'inherit';
     }
 
     // Box selection methods
@@ -787,6 +790,9 @@ export class CADRenderer {
     // Interactive drawing methods
     public setDrawingTool(tool: DrawingTool): void {
         this.controls.setDrawingTool(tool);
+        // Reset cursor to inherit so parent viewport's tool cursor takes effect
+        this.renderer.domElement.style.cursor = 'inherit';
+        this.clearHoverHighlight();
     }
     
     public highlightSelectedLine(lineId: string, isFirstLine: boolean): void {
