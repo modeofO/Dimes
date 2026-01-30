@@ -155,12 +155,13 @@ Backend supports creating linear arrays (copy elements in a pattern) and mirror 
 
 ---
 
-## 11. Model ID Collision Risk
+## 11. Model ID Collision Risk ✅ FIXED
 
-**Status:** Known Bug
-**Location:** `cad-application.tsx:563`
+**Status:** Fixed
 
-When geometry updates arrive, model IDs are generated as `model-${Date.now()}`. If two extrusions complete within the same millisecond, they'll get the same ID and overwrite each other. Should use a counter or UUID.
+Model IDs are now generated with both timestamp and counter: `model-${Date.now()}-${++modelIdCounter}`. This prevents collisions even when geometry updates arrive within the same millisecond.
+
+**Files:** `client/src/components/cad-application.tsx`
 
 ---
 

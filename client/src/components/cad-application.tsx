@@ -57,6 +57,9 @@ interface CreatedSketch {
     visualization_data?: SketchVisualizationData;
 }
 
+// Counter for unique model IDs to avoid collisions when geometry updates arrive rapidly
+let modelIdCounter = 0;
+
 export function CADApplication() {
     const viewportRef = useRef<HTMLDivElement>(null);
     const rendererRef = useRef<CADRenderer | null>(null);
@@ -855,7 +858,7 @@ export function CADApplication() {
                 const client = new CADClient(apiUrl, sessionId);
 
                 client.onGeometryUpdate((meshData: MeshData) => {
-                    const modelId = `model-${Date.now()}`;
+                    const modelId = `model-${Date.now()}-${++modelIdCounter}`;
                     renderer.updateGeometry(modelId, meshData);
                     const shape: CreatedShape = {
                         id: modelId,
