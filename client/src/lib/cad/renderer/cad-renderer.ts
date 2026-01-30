@@ -30,6 +30,7 @@ export class CADRenderer {
     // Box selection state
     private isBoxSelecting = false;
     private boxSelectStart = new THREE.Vector2();
+    private boxSelectStartValid = false; // Track if boxSelectStart was set this interaction
     private boxSelectOverlay: HTMLDivElement | null = null;
 
     // Visual feedback for selected lines
@@ -301,6 +302,7 @@ export class CADRenderer {
 
     private onPointerDown = (event: PointerEvent): void => {
         this.pointerDownPos.set(event.clientX, event.clientY);
+        this.boxSelectStartValid = false; // Reset on every pointer down
 
         // Start box selection only in select mode when clicking on empty space
         const drawingState = this.controls.getDrawingState();
@@ -309,6 +311,7 @@ export class CADRenderer {
             if (!result) {
                 // Clicked on empty space - prepare for potential box selection
                 this.boxSelectStart.set(event.clientX, event.clientY);
+                this.boxSelectStartValid = true;
             }
         }
     }
@@ -332,14 +335,10 @@ export class CADRenderer {
         const drawingState = this.controls.getDrawingState();
 
         // Check for box selection start (if dragging from empty space in select mode)
-        if (drawingState.tool === 'select' && !drawingState.isDrawing && event.buttons === 1) {
+        if (drawingState.tool === 'select' && !drawingState.isDrawing && event.buttons === 1 && this.boxSelectStartValid) {
             const dragDist = Math.hypot(event.clientX - this.boxSelectStart.x, event.clientY - this.boxSelectStart.y);
             if (dragDist > 5 && !this.isBoxSelecting) {
-                // Check if we started from empty space (boxSelectStart was set in pointerDown)
-                const startResult = this.raycastAtScreenPos(this.boxSelectStart.x, this.boxSelectStart.y);
-                if (!startResult) {
-                    this.startBoxSelection();
-                }
+                this.startBoxSelection();
             }
 
             if (this.isBoxSelecting) {
@@ -365,7 +364,10 @@ export class CADRenderer {
 
         if (hitObj && result && (result.parsed.type === 'element' || result.parsed.type === 'sketch' || result.parsed.type === 'feature' || result.parsed.type === 'mesh')) {
             this.hoveredObject = hitObj;
-            this.renderer.domElement.style.cursor = 'pointer';
+            // Only show pointer cursor when in select mode (parent handles tool cursors)
+            if (drawingState.tool === 'select') {
+                this.renderer.domElement.style.cursor = 'pointer';
+            }
 
             // Collect objects to highlight — include siblings of composite shapes
             const objectsToHighlight: THREE.Object3D[] = [hitObj];
@@ -406,7 +408,8 @@ export class CADRenderer {
                 });
             }
         } else {
-            this.renderer.domElement.style.cursor = 'default';
+            // Use inherit so parent viewport cursor (based on tool) takes effect
+            this.renderer.domElement.style.cursor = 'inherit';
         }
     }
 
@@ -434,7 +437,8 @@ export class CADRenderer {
             });
             this.hoveredOriginalMaterials.clear();
             this.hoveredObject = null;
-            this.renderer.domElement.style.cursor = 'default';
+            // Use inherit so parent viewport cursor (based on tool) takes effect
+            this.renderer.domElement.style.cursor = 'inherit';
         }
     }
 
@@ -502,6 +506,7 @@ export class CADRenderer {
 
     private finishBoxSelection(event: PointerEvent): void {
         this.isBoxSelecting = false;
+        this.boxSelectStartValid = false;
         this.controls.enabled = true;
 
         if (this.boxSelectOverlay) {
