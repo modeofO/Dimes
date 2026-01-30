@@ -291,7 +291,10 @@ export class CADControls extends OrbitControls {
     }
 
     private onPointerDown(event: PointerEvent): void {
-        if (this.drawingState.tool === 'select' || !this.drawingState.activeSketchPlane) {
+        // For select, offset, copy, and move tools, let the click fall through to the renderer
+        // for object selection instead of starting a drawing operation
+        const clickToSelectTools = ['select', 'offset', 'copy', 'move'];
+        if (clickToSelectTools.includes(this.drawingState.tool) || !this.drawingState.activeSketchPlane) {
             return;
         }
         
