@@ -27,6 +27,7 @@ const TOOL_COLORS: Record<DrawingTool, string> = {
     offset: '#F39C12',
     copy: '#95A5A6',
     move: '#95A5A6',
+    dimension: '#4A9EFF', // blue - matches dimension color
 };
 
 const TOOL_LABELS: Record<DrawingTool, string> = {
@@ -44,6 +45,7 @@ const TOOL_LABELS: Record<DrawingTool, string> = {
     offset: 'OFFSET',
     copy: 'COPY',
     move: 'MOVE',
+    dimension: 'DIMENSION',
 };
 
 const KEY_HINTS = [
@@ -51,6 +53,7 @@ const KEY_HINTS = [
     { key: 'L', label: 'line' },
     { key: 'C', label: 'circle' },
     { key: 'R', label: 'rect' },
+    { key: 'Shift+D', label: 'dimension' },
     { key: 'E', label: 'extrude' },
     { key: 'Space', label: 'commands' },
 ];
@@ -68,6 +71,7 @@ const ALL_SHORTCUTS = [
         { key: 'R', label: 'Rectangle' },
         { key: 'A', label: 'Arc' },
         { key: 'P', label: 'Polygon' },
+        { key: 'Shift+D', label: 'Dimension' },
     ]},
     { category: 'Modification', items: [
         { key: 'F', label: 'Fillet' },
