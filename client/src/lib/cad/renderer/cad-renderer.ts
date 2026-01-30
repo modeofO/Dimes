@@ -778,6 +778,11 @@ export class CADRenderer {
             return;
         }
 
+        // Skip selection of planes and sketches - only allow element selection
+        if (selectedType === 'plane' || selectedType === 'sketch') {
+            return;
+        }
+
         if (this.onObjectSelected) {
             this.onObjectSelected(selectedId, selectedType, selectedSketchId);
         }
