@@ -1654,6 +1654,14 @@ export function CADApplication() {
         };
     }, [sessionId, updateStatus]);
 
+    // Update renderer's selection callback when handleSelection changes
+    // This ensures the callback has the current value of currentDrawingTool
+    useEffect(() => {
+        if (rendererRef.current) {
+            rendererRef.current.onObjectSelected = handleSelection;
+        }
+    }, [handleSelection]);
+
     // Handle window resize
     useEffect(() => {
         const handleResize = () => {
