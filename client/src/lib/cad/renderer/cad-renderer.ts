@@ -2,9 +2,10 @@ import * as THREE from 'three';
 import { MeshManager } from '../mesh/mesh-manager';
 import { CADControls, DrawingTool } from '../controls/cad-controls';
 import { VisualizationManager } from './visualization-manager';
-import { 
-    PlaneVisualizationData, 
-    SketchVisualizationData, 
+import { DimensionManager } from '../dimensions/dimension-manager';
+import {
+    PlaneVisualizationData,
+    SketchVisualizationData,
     SketchElementVisualizationData,
     MeshData
 } from '@/types/geometry';
@@ -16,6 +17,7 @@ export class CADRenderer {
     private controls!: CADControls;
     private meshManager!: MeshManager;
     private visualizationManager!: VisualizationManager;
+    private dimensionManager!: DimensionManager;
     private container: HTMLElement;
     private raycaster: THREE.Raycaster;
     private pointerDownPos = new THREE.Vector2();
@@ -270,6 +272,7 @@ export class CADRenderer {
     private setupMeshManager(): void {
         this.meshManager = new MeshManager(this.scene);
         this.visualizationManager = new VisualizationManager(this.scene);
+        this.dimensionManager = new DimensionManager(this.scene);
     }
     
     private animate = (): void => {
@@ -864,6 +867,7 @@ export class CADRenderer {
         this.controls.dispose();
         this.meshManager.dispose();
         this.visualizationManager.dispose();
+        this.dimensionManager.dispose();
         this.renderer.dispose();
 
         this.renderer.domElement.removeEventListener('pointerdown', this.onPointerDown);
@@ -1014,5 +1018,28 @@ export class CADRenderer {
 
     public getScene(): THREE.Scene {
         return this.scene;
+    }
+
+    public getDimensionManager(): DimensionManager {
+        return this.dimensionManager;
+    }
+
+    public createDimensionForLine(
+        sketchId: string,
+        elementId: string,
+        offset: number,
+        offsetDirection: 1 | -1
+    ): void {
+        this.dimensionManager.createDimension(sketchId, elementId, offset, offsetDirection);
+    }
+
+    public getDimensionAtScreenPosition(screenX: number, screenY: number): string | null {
+        const rect = this.renderer.domElement.getBoundingClientRect();
+        const mouse = new THREE.Vector2(
+            ((screenX - rect.left) / rect.width) * 2 - 1,
+            -((screenY - rect.top) / rect.height) * 2 + 1
+        );
+        this.raycaster.setFromCamera(mouse, this.camera);
+        return this.dimensionManager.getDimensionAtPosition(this.raycaster);
     }
 } 
