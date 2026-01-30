@@ -840,6 +840,14 @@ export function CADApplication() {
                 renderer.onFaceSelected = handleFaceSelected;
                 renderer.onChamferRequested = handleInteractiveChamfer;
                 renderer.onFilletRequested = handleInteractiveFillet;
+                renderer.onBoxSelection = (items) => {
+                    // For now, select the first element in the box selection
+                    // Future: support multi-selection
+                    if (items.length > 0) {
+                        const first = items[0];
+                        handleSelection(first.id, first.type, first.sketchId);
+                    }
+                };
                 rendererRef.current = renderer;
 
                 updateStatus('Connecting to CAD server...', 'info');
@@ -1213,7 +1221,11 @@ export function CADApplication() {
                 ref={viewportRef}
                 className="w-full h-full relative"
                 style={{
-                    cursor: currentDrawingTool !== 'select' ? 'crosshair' : 'default'
+                    cursor: ['fillet', 'chamfer', 'trim'].includes(currentDrawingTool)
+                        ? 'cell'
+                        : currentDrawingTool !== 'select'
+                            ? 'crosshair'
+                            : 'default'
                 }}
             >
                 {/* Sketch Mode Indicator */}

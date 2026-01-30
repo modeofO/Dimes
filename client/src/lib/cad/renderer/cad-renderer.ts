@@ -25,6 +25,12 @@ export class CADRenderer {
     public onDrawingComplete: ((tool: DrawingTool, points: THREE.Vector2[], arcType?: 'three_points' | 'endpoints_radius') => void) | null = null;
     public onChamferRequested: ((sketchId: string, line1Id: string, line2Id: string) => void) | null = null;
     public onFilletRequested: ((sketchId: string, line1Id: string, line2Id: string) => void) | null = null;
+    public onBoxSelection: ((items: Array<{ id: string; type: string; sketchId?: string }>) => void) | null = null;
+
+    // Box selection state
+    private isBoxSelecting = false;
+    private boxSelectStart = new THREE.Vector2();
+    private boxSelectOverlay: HTMLDivElement | null = null;
 
     // Visual feedback for selected lines
     private selectedLineHighlights: { [lineId: string]: THREE.LineSegments } = {};
@@ -295,10 +301,27 @@ export class CADRenderer {
 
     private onPointerDown = (event: PointerEvent): void => {
         this.pointerDownPos.set(event.clientX, event.clientY);
+
+        // Start box selection only in select mode when clicking on empty space
+        const drawingState = this.controls.getDrawingState();
+        if (drawingState.tool === 'select' && !drawingState.isDrawing) {
+            const result = this.raycastNamedObject(event);
+            if (!result) {
+                // Clicked on empty space - prepare for potential box selection
+                this.boxSelectStart.set(event.clientX, event.clientY);
+            }
+        }
     }
 
     private onPointerUp = (event: PointerEvent): void => {
         const pointerUpPos = new THREE.Vector2(event.clientX, event.clientY);
+
+        // If we were box selecting, finish it
+        if (this.isBoxSelecting) {
+            this.finishBoxSelection(event);
+            return;
+        }
+
         if (this.pointerDownPos.distanceTo(pointerUpPos) > 2) {
             return; // It was a drag, not a click
         }
@@ -306,9 +329,27 @@ export class CADRenderer {
     }
 
     private onPointerMove = (event: PointerEvent): void => {
-        // Only show hover when in select mode and NOT actively drawing
         const drawingState = this.controls.getDrawingState();
-        if (drawingState.tool !== 'select' || drawingState.isDrawing) {
+
+        // Check for box selection start (if dragging from empty space in select mode)
+        if (drawingState.tool === 'select' && !drawingState.isDrawing && event.buttons === 1) {
+            const dragDist = Math.hypot(event.clientX - this.boxSelectStart.x, event.clientY - this.boxSelectStart.y);
+            if (dragDist > 5 && !this.isBoxSelecting) {
+                // Check if we started from empty space (boxSelectStart was set in pointerDown)
+                const startResult = this.raycastAtScreenPos(this.boxSelectStart.x, this.boxSelectStart.y);
+                if (!startResult) {
+                    this.startBoxSelection();
+                }
+            }
+
+            if (this.isBoxSelecting) {
+                this.updateBoxSelection(event.clientX, event.clientY);
+                return;
+            }
+        }
+
+        // Only show hover when in select mode and NOT actively drawing or box selecting
+        if (drawingState.tool !== 'select' || drawingState.isDrawing || this.isBoxSelecting) {
             this.clearHoverHighlight();
             return;
         }
@@ -394,6 +435,130 @@ export class CADRenderer {
             this.hoveredOriginalMaterials.clear();
             this.hoveredObject = null;
             this.renderer.domElement.style.cursor = 'default';
+        }
+    }
+
+    // Box selection methods
+    private raycastAtScreenPos(clientX: number, clientY: number): { object: THREE.Object3D; parsed: { id: string; type: string; sketchId?: string } } | null {
+        const rect = this.renderer.domElement.getBoundingClientRect();
+        const mouse = new THREE.Vector2();
+        mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+        this.raycaster.setFromCamera(mouse, this.camera);
+        const intersects = this.raycaster.intersectObjects(this.scene.children, true);
+
+        for (const intersect of intersects) {
+            let obj: THREE.Object3D | null = intersect.object;
+            while (obj) {
+                if (obj.name && !obj.userData.isHitTest) {
+                    const parsed = this.parseObjectName(obj.name);
+                    if (parsed) {
+                        return { object: obj, parsed };
+                    }
+                }
+                obj = obj.parent;
+            }
+        }
+        return null;
+    }
+
+    private startBoxSelection(): void {
+        this.isBoxSelecting = true;
+        this.controls.enabled = false; // Disable orbit controls during box selection
+
+        // Create overlay if it doesn't exist
+        if (!this.boxSelectOverlay) {
+            this.boxSelectOverlay = document.createElement('div');
+            this.boxSelectOverlay.style.position = 'absolute';
+            this.boxSelectOverlay.style.border = '1px solid #d4a017';
+            this.boxSelectOverlay.style.backgroundColor = 'rgba(212, 160, 23, 0.1)';
+            this.boxSelectOverlay.style.pointerEvents = 'none';
+            this.boxSelectOverlay.style.zIndex = '1000';
+            this.container.appendChild(this.boxSelectOverlay);
+        }
+        this.boxSelectOverlay.style.display = 'block';
+    }
+
+    private updateBoxSelection(clientX: number, clientY: number): void {
+        if (!this.boxSelectOverlay) return;
+
+        const rect = this.container.getBoundingClientRect();
+        const startX = this.boxSelectStart.x - rect.left;
+        const startY = this.boxSelectStart.y - rect.top;
+        const endX = clientX - rect.left;
+        const endY = clientY - rect.top;
+
+        const left = Math.min(startX, endX);
+        const top = Math.min(startY, endY);
+        const width = Math.abs(endX - startX);
+        const height = Math.abs(endY - startY);
+
+        this.boxSelectOverlay.style.left = `${left}px`;
+        this.boxSelectOverlay.style.top = `${top}px`;
+        this.boxSelectOverlay.style.width = `${width}px`;
+        this.boxSelectOverlay.style.height = `${height}px`;
+    }
+
+    private finishBoxSelection(event: PointerEvent): void {
+        this.isBoxSelecting = false;
+        this.controls.enabled = true;
+
+        if (this.boxSelectOverlay) {
+            this.boxSelectOverlay.style.display = 'none';
+        }
+
+        // Get box bounds in screen space
+        const rect = this.container.getBoundingClientRect();
+        const startX = this.boxSelectStart.x - rect.left;
+        const startY = this.boxSelectStart.y - rect.top;
+        const endX = event.clientX - rect.left;
+        const endY = event.clientY - rect.top;
+
+        const boxLeft = Math.min(startX, endX);
+        const boxRight = Math.max(startX, endX);
+        const boxTop = Math.min(startY, endY);
+        const boxBottom = Math.max(startY, endY);
+
+        // Find all objects whose screen projection falls within the box
+        const selectedItems: Array<{ id: string; type: string; sketchId?: string }> = [];
+        const processedIds = new Set<string>();
+
+        this.scene.traverse((obj) => {
+            if (!obj.name || obj.userData.isHitTest) return;
+
+            const parsed = this.parseObjectName(obj.name);
+            if (!parsed) return;
+
+            // Skip planes and certain types for box selection
+            if (parsed.type === 'plane') return;
+
+            // Create unique key to avoid duplicates
+            const uniqueKey = parsed.sketchId ? `${parsed.sketchId}-${parsed.id}` : parsed.id;
+            if (processedIds.has(uniqueKey)) return;
+
+            // Get object center in world space
+            const worldPos = new THREE.Vector3();
+            obj.getWorldPosition(worldPos);
+
+            // Project to screen coordinates
+            const screenPos = worldPos.clone().project(this.camera);
+            const screenX = ((screenPos.x + 1) / 2) * rect.width;
+            const screenY = ((-screenPos.y + 1) / 2) * rect.height;
+
+            // Check if within selection box
+            if (screenX >= boxLeft && screenX <= boxRight && screenY >= boxTop && screenY <= boxBottom) {
+                processedIds.add(uniqueKey);
+                selectedItems.push(parsed);
+            }
+        });
+
+        // Call the callback if we found items
+        if (selectedItems.length > 0 && this.onBoxSelection) {
+            this.onBoxSelection(selectedItems);
+        } else if (selectedItems.length === 0 && this.onObjectSelected) {
+            // Clear selection if box was empty
+            this.onObjectSelected(null, null);
         }
     }
 
@@ -573,13 +738,19 @@ export class CADRenderer {
         this.meshManager.dispose();
         this.visualizationManager.dispose();
         this.renderer.dispose();
-        
+
         this.renderer.domElement.removeEventListener('pointerdown', this.onPointerDown);
         this.renderer.domElement.removeEventListener('pointerup', this.onPointerUp);
         this.renderer.domElement.removeEventListener('pointermove', this.onPointerMove);
 
         if (this.renderer.domElement.parentNode) {
             this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
+        }
+
+        // Clean up box selection overlay
+        if (this.boxSelectOverlay && this.boxSelectOverlay.parentNode) {
+            this.boxSelectOverlay.parentNode.removeChild(this.boxSelectOverlay);
+            this.boxSelectOverlay = null;
         }
     }
     
