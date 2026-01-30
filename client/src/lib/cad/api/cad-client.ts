@@ -152,19 +152,46 @@ export class CADClient {
                 x1, y1, x2, y2
             }
         };
-        
+
         console.log('📏 Adding line to sketch:', request);
-        
+
         const response = await this.makeRequest<AddSketchElementResponse>('/api/v1/cad/sketch-elements', 'POST', request);
-        
+
         console.log('📨 Received addLineToSketch response:', response);
-        
+
         // If visualization data is included, trigger visualization callback
         if (response.data?.visualization_data && this.elementVisualizationCallback) {
             console.log('🎯 Updating element visualization with data:', response.data.visualization_data);
             this.elementVisualizationCallback(response.data.visualization_data);
         }
-        
+
+        return response;
+    }
+
+    public async updateLineEndpoints(
+        sketchId: string,
+        elementId: string,
+        x1: number, y1: number,
+        x2: number, y2: number
+    ): Promise<AddSketchElementResponse> {
+        const request = {
+            sketch_id: sketchId,
+            element_id: elementId,
+            x1, y1, x2, y2
+        };
+
+        console.log('📏 Updating line endpoints:', request);
+
+        const response = await this.makeRequest<AddSketchElementResponse>(
+            '/api/v1/cad/sketch-elements/line',
+            'PUT',
+            request
+        );
+
+        if (response.data?.visualization_data && this.elementVisualizationCallback) {
+            this.elementVisualizationCallback(response.data.visualization_data);
+        }
+
         return response;
     }
     
