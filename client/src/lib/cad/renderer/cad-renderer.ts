@@ -292,11 +292,57 @@ export class CADRenderer {
             return;
         }
 
-        // Find and highlight new object
-        const objectToHighlight = this.scene.getObjectByName(id);
+        // Find and highlight new object - try exact match first
+        let objectToHighlight = this.scene.getObjectByName(id);
+
+        if (!objectToHighlight) {
+            // No exact match - look for children of composite shapes (e.g., rectangle lines)
+            // Create a temporary group to hold all matching children for the bounding box
+            const childObjects: THREE.Object3D[] = [];
+            const prefix = id + '_'; // e.g., "element-sketch_1-rectangle_1_1438_"
+
+            this.scene.traverse((obj) => {
+                if (obj.name && obj.name.startsWith(prefix)) {
+                    childObjects.push(obj);
+                }
+            });
+
+            if (childObjects.length > 0) {
+                // Create a temporary group containing all children for BoxHelper
+                const group = new THREE.Group();
+                group.name = '__highlight_group__';
+
+                // Calculate combined bounding box
+                const combinedBox = new THREE.Box3();
+                for (const child of childObjects) {
+                    const childBox = new THREE.Box3().setFromObject(child);
+                    combinedBox.union(childBox);
+                }
+
+                // Create a box mesh to represent the combined bounds
+                const size = new THREE.Vector3();
+                const center = new THREE.Vector3();
+                combinedBox.getSize(size);
+                combinedBox.getCenter(center);
+
+                const boxGeom = new THREE.BoxGeometry(size.x, size.y, size.z);
+                const boxMesh = new THREE.Mesh(boxGeom, new THREE.MeshBasicMaterial({ visible: false }));
+                boxMesh.position.copy(center);
+                group.add(boxMesh);
+
+                this.scene.add(group);
+                objectToHighlight = group;
+            }
+        }
+
         if (objectToHighlight) {
             this.selectionBox = new THREE.BoxHelper(objectToHighlight, 0xd4a017);
             this.scene.add(this.selectionBox);
+
+            // Clean up temporary group if we created one
+            if (objectToHighlight.name === '__highlight_group__') {
+                this.scene.remove(objectToHighlight);
+            }
         }
     }
 
