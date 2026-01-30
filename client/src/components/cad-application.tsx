@@ -1098,7 +1098,12 @@ export function CADApplication() {
                     } else if (isSceneTreeOpen) {
                         setIsSceneTreeOpen(false);
                     } else if (activeSketchId) {
-                        exitSketchMode();
+                        // If using a drawing tool in sketch mode, return to select first
+                        if (currentDrawingTool !== 'select') {
+                            handleSetDrawingTool('select');
+                        } else {
+                            exitSketchMode();
+                        }
                     } else if (currentDrawingTool !== 'select') {
                         handleSetDrawingTool('select');
                     } else {
@@ -1207,6 +1212,9 @@ export function CADApplication() {
             <div
                 ref={viewportRef}
                 className="w-full h-full relative"
+                style={{
+                    cursor: currentDrawingTool !== 'select' ? 'crosshair' : 'default'
+                }}
             >
                 {/* Sketch Mode Indicator */}
                 {activeSketchId && (
