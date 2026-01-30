@@ -438,12 +438,18 @@ export function CADApplication() {
                 const sketch = createdSketches.find(s => s.sketch_id === sketchId);
                 const element = sketch?.elements.find(e => e.id === newSelection.id);
                 if (element?.type === 'line') {
-                    setPendingDimension({
-                        sketchId,
-                        elementId: newSelection.id,
-                        elementType: 'line'
-                    });
-                    updateStatus('Move mouse to set dimension offset, then click to place', 'info');
+                    // Create dimension immediately with default offset
+                    if (rendererRef.current) {
+                        const defaultOffset = 3; // Default offset distance
+                        const defaultDirection = 1 as const; // Default to one side
+                        rendererRef.current.createDimensionForLine(
+                            sketchId,
+                            newSelection.id,
+                            defaultOffset,
+                            defaultDirection
+                        );
+                        updateStatus('Dimension created - double-click to edit value', 'success');
+                    }
                 } else {
                     updateStatus('Dimensions can only be added to lines', 'warning');
                 }
@@ -2007,6 +2013,13 @@ export function CADApplication() {
                             : currentDrawingTool !== 'select'
                                 ? 'crosshair'
                                 : 'default'
+                }}
+                onDoubleClick={(e) => {
+                    if (!rendererRef.current) return;
+                    const dimensionId = rendererRef.current.getDimensionAtScreenPosition(e.clientX, e.clientY);
+                    if (dimensionId) {
+                        handleDimensionDoubleClick(dimensionId, e.clientX, e.clientY);
+                    }
                 }}
             >
                 {/* Sketch Mode Indicator */}
