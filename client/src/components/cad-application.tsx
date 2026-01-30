@@ -1757,6 +1757,26 @@ export function CADApplication() {
         }
     }, [handleSelection]);
 
+    // Set up dimension manager callbacks for line resize
+    useEffect(() => {
+        if (!rendererRef.current) return;
+
+        const dimensionManager = rendererRef.current.getDimensionManager();
+        dimensionManager.setCallbacks({
+            onLineResizeRequested: async (sketchId, elementId, newX1, newY1, newX2, newY2) => {
+                if (!clientRef.current) return;
+
+                try {
+                    await clientRef.current.updateLineEndpoints(sketchId, elementId, newX1, newY1, newX2, newY2);
+                    updateStatus('Line resized via dimension', 'success');
+                } catch (error) {
+                    console.error('Failed to resize line:', error);
+                    updateStatus('Failed to resize line', 'error');
+                }
+            }
+        });
+    }, [updateStatus]);
+
     // Handle window resize
     useEffect(() => {
         const handleResize = () => {
