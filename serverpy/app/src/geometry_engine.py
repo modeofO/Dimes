@@ -3642,23 +3642,23 @@ class OCCTEngine:
                 
                 # Determine arc direction and generate points
                 segments = 16
-                
-                # Normalize angles to [0, 2π)
-                while start_angle < 0:
-                    start_angle += 2 * math.pi
-                while end_angle < 0:
-                    end_angle += 2 * math.pi
-                while start_angle >= 2 * math.pi:
-                    start_angle -= 2 * math.pi
-                while end_angle >= 2 * math.pi:
-                    end_angle -= 2 * math.pi
-                
-                # Calculate angle span (always positive, going counterclockwise)
-                if end_angle <= start_angle:
-                    angle_span = end_angle + 2 * math.pi - start_angle
+
+                # Calculate both possible angle spans (counterclockwise and clockwise)
+                # and choose the shorter path
+                ccw_span = end_angle - start_angle
+                if ccw_span < 0:
+                    ccw_span += 2 * math.pi
+                cw_span = start_angle - end_angle
+                if cw_span < 0:
+                    cw_span += 2 * math.pi
+
+                # Use the shorter path (< 180° for any corner)
+                # Positive angle_span = counterclockwise, negative = clockwise
+                if ccw_span <= cw_span:
+                    angle_span = ccw_span
                 else:
-                    angle_span = end_angle - start_angle
-                
+                    angle_span = -cw_span
+
                 # Generate arc points
                 for i in range(segments + 1):
                     t = i / segments
