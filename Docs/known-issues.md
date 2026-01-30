@@ -54,16 +54,15 @@ Implementation would require:
 
 ---
 
-## 3. API Server WebSocket Inconsistency: `data` vs `payload` Key
+## 3. API Server WebSocket Inconsistency: `data` vs `payload` Key ✅ FIXED
 
-**Status:** Known Bug
+**Status:** Fixed
 
-The API server uses inconsistent keys when sending WebSocket messages:
-- Most messages use `payload` key for the data
-- Boolean operations (`geometry_update`) use `data` key (`cad.js:993-1000`)
-- Extrude uses `payload` key for both `visualization_data` and `geometry_update`
+All WebSocket messages now consistently use the `payload` key for data:
+- Boolean operations in `cad.js` updated to use `payload` instead of `data`
+- Client `cad-application.tsx` updated to expect `payload` for `geometry_update` messages
 
-The client's `CADClient.handleVisualizationData()` handles this via the visualization data router, but direct WebSocket consumers (like AgentManager) need to check both `message.data` and `message.payload`.
+**Files:** `api-server/src/routes/cad.js`, `client/src/components/cad-application.tsx`
 
 ---
 

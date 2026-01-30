@@ -987,10 +987,10 @@ export function CADApplication() {
                         setUnreadMessages(prev => prev + 1);
                     }
 
-                    if (message.type === 'geometry_update' && message.data) {
+                    if (message.type === 'geometry_update' && message.payload) {
                         updateStatus('Agent created 3D geometry', 'success');
                         if (clientRef.current?.geometryUpdateCallback) {
-                            clientRef.current.geometryUpdateCallback(message.data);
+                            clientRef.current.geometryUpdateCallback(message.payload);
                         }
                     }
 

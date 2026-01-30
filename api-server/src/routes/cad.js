@@ -1034,7 +1034,7 @@ export default function(webSocketManager) {
           console.log('🔊 Sending WebSocket geometry update for boolean operation');
           webSocketManager.sendToClient(sessionId, {
             type: 'geometry_update',
-            data: result.data.mesh_data,
+            payload: result.data.mesh_data,
             timestamp: Date.now(),
           });
         }
