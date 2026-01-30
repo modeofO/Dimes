@@ -39,6 +39,9 @@ export class CADRenderer {
     // Hover highlight state
     private hoveredObject: THREE.Object3D | null = null;
     private hoveredOriginalMaterials: Map<THREE.Object3D, THREE.Material | THREE.Material[]> = new Map();
+
+    // Selection highlight state (for composite shapes)
+    private selectedOriginalMaterials: Map<THREE.Object3D, THREE.Material | THREE.Material[]> = new Map();
     
     // Current active sketch plane for drawing
     private activeSketchPlane: {
@@ -288,50 +291,81 @@ export class CADRenderer {
             this.selectionBox = null;
         }
 
+        // Clear hover state first to avoid material conflicts
+        // (hover saves material before we apply selection)
+        this.clearHoverHighlight();
+
+        // Restore previously selected materials
+        this.selectedOriginalMaterials.forEach((origMat, child) => {
+            (child as THREE.Mesh).material = origMat;
+        });
+        this.selectedOriginalMaterials.clear();
+
         if (id === null) {
             return;
         }
 
-        // Find and highlight new object - try exact match first
-        let objectToHighlight = this.scene.getObjectByName(id);
+        // Check if this is a child element ID (contains _line_ or _arc_)
+        // If so, extract parent prefix to find all siblings
+        let lookupId = id;
+        const lineIdx = id.lastIndexOf('_line_');
+        const arcIdx = id.lastIndexOf('_arc_');
+        if (lineIdx !== -1) {
+            lookupId = id.substring(0, lineIdx);
+        } else if (arcIdx !== -1) {
+            lookupId = id.substring(0, arcIdx);
+        }
 
-        if (!objectToHighlight) {
-            // No exact match - look for children of composite shapes (e.g., rectangle lines)
-            // Create a temporary group to hold all matching children for the bounding box
-            const childObjects: THREE.Object3D[] = [];
-            const prefix = id + '_'; // e.g., "element-sketch_1-rectangle_1_1438_"
+        // Find and highlight new object - try exact match first (for parent container)
+        let objectToHighlight = this.scene.getObjectByName(lookupId);
+        const objectsToHighlightMaterials: THREE.Object3D[] = [];
+        const childObjects: THREE.Object3D[] = [];
 
-            this.scene.traverse((obj) => {
-                if (obj.name && obj.name.startsWith(prefix)) {
-                    childObjects.push(obj);
-                }
-            });
+        // Always look for children of composite shapes (e.g., rectangle lines)
+        const prefix = lookupId + '_'; // e.g., "element-sketch_1-rectangle_1_1438_"
 
-            if (childObjects.length > 0) {
-                // Create a temporary group containing all children for BoxHelper
-                const group = new THREE.Group();
-                group.name = '__highlight_group__';
+        this.scene.traverse((obj) => {
+            if (obj.name && obj.name.startsWith(prefix)) {
+                childObjects.push(obj);
+            }
+        });
 
-                // Calculate combined bounding box
-                const combinedBox = new THREE.Box3();
-                for (const child of childObjects) {
-                    const childBox = new THREE.Box3().setFromObject(child);
-                    combinedBox.union(childBox);
-                }
+        if (childObjects.length > 0) {
+            // Composite shape - collect all children for highlighting
+            objectsToHighlightMaterials.push(...childObjects);
 
-                // Create a box mesh to represent the combined bounds
-                const size = new THREE.Vector3();
-                const center = new THREE.Vector3();
-                combinedBox.getSize(size);
-                combinedBox.getCenter(center);
+            // Create a temporary group containing all children for BoxHelper
+            const group = new THREE.Group();
+            group.name = '__highlight_group__';
 
-                const boxGeom = new THREE.BoxGeometry(size.x, size.y, size.z);
-                const boxMesh = new THREE.Mesh(boxGeom, new THREE.MeshBasicMaterial({ visible: false }));
-                boxMesh.position.copy(center);
-                group.add(boxMesh);
+            // Calculate combined bounding box
+            const combinedBox = new THREE.Box3();
+            for (const child of childObjects) {
+                const childBox = new THREE.Box3().setFromObject(child);
+                combinedBox.union(childBox);
+            }
 
-                this.scene.add(group);
-                objectToHighlight = group;
+            // Create a box mesh to represent the combined bounds
+            const size = new THREE.Vector3();
+            const center = new THREE.Vector3();
+            combinedBox.getSize(size);
+            combinedBox.getCenter(center);
+
+            const boxGeom = new THREE.BoxGeometry(size.x, size.y, size.z);
+            const boxMesh = new THREE.Mesh(boxGeom, new THREE.MeshBasicMaterial({ visible: false }));
+            boxMesh.position.copy(center);
+            group.add(boxMesh);
+
+            this.scene.add(group);
+            objectToHighlight = group;
+        } else if (objectToHighlight) {
+            // Single object found (no children) - highlight it directly
+            objectsToHighlightMaterials.push(objectToHighlight);
+        } else {
+            // Try to find exact match with original ID (for non-composite elements like lines, circles)
+            objectToHighlight = this.scene.getObjectByName(id);
+            if (objectToHighlight) {
+                objectsToHighlightMaterials.push(objectToHighlight);
             }
         }
 
@@ -343,6 +377,23 @@ export class CADRenderer {
             if (objectToHighlight.name === '__highlight_group__') {
                 this.scene.remove(objectToHighlight);
             }
+        }
+
+        // Apply selection material highlighting to all objects
+        for (const obj of objectsToHighlightMaterials) {
+            obj.traverse((child) => {
+                if (child instanceof THREE.Mesh && child.userData.isHitTest) return;
+                if (child instanceof THREE.Mesh || child instanceof THREE.Line || child instanceof THREE.LineLoop || child instanceof THREE.LineSegments) {
+                    if (this.selectedOriginalMaterials.has(child)) return; // already highlighted
+                    this.selectedOriginalMaterials.set(child, child.material);
+                    const origMat = child.material as THREE.LineBasicMaterial | THREE.MeshBasicMaterial;
+                    const selectMat = origMat.clone();
+                    selectMat.color.set(0xd4a017); // golden amber for selection (matches BoxHelper)
+                    if ('opacity' in selectMat) selectMat.opacity = 1.0;
+                    if ('transparent' in selectMat) selectMat.transparent = false;
+                    child.material = selectMat;
+                }
+            });
         }
     }
 
