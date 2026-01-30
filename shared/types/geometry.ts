@@ -156,6 +156,33 @@ export interface Sketch {
     elements: SketchElement[];
 }
 
+// Dimension types
+export type DimensionType = 'linear';
+
+export interface LinearDimension {
+    id: string;
+    type: 'linear';
+    element_id: string;        // The line being dimensioned
+    sketch_id: string;         // Parent sketch
+    value: number;             // Current length value (in mm)
+    offset: number;            // Perpendicular distance from line
+    offset_direction: 1 | -1;  // Which side of the line
+}
+
+export interface DimensionVisualizationData {
+    dimension_id: string;
+    dimension_type: DimensionType;
+    sketch_id: string;
+    element_id: string;
+    value: number;
+    offset: number;
+    offset_direction: 1 | -1;
+    // 3D coordinates for rendering
+    line_start_3d: [number, number, number];
+    line_end_3d: [number, number, number];
+    text_position_3d: [number, number, number];
+}
+
 export interface ExtrudeParameters {
     distance: number;
     direction?: 'normal' | 'custom';

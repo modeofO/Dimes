@@ -108,6 +108,17 @@ export default function(webSocketManager) {
     handleValidationErrors,
   ];
 
+  // Update line endpoint validation
+  const validateUpdateLine = [
+    body('sketch_id').isString().notEmpty().withMessage('Sketch ID is required'),
+    body('element_id').isString().notEmpty().withMessage('Element ID is required'),
+    body('x1').isFloat().withMessage('X1 must be a number'),
+    body('y1').isFloat().withMessage('Y1 must be a number'),
+    body('x2').isFloat().withMessage('X2 must be a number'),
+    body('y2').isFloat().withMessage('Y2 must be a number'),
+    handleValidationErrors,
+  ];
+
   // Trim line to line validation
   const validateTrimLineToLine = [
     body('sketch_id').isString().notEmpty().withMessage('Sketch ID is required'),
@@ -454,6 +465,29 @@ export default function(webSocketManager) {
 
     } catch (error) {
       next(new ApiError(500, 'Failed to add chamfer', error.message));
+    }
+  });
+
+  /**
+   * PUT /api/v1/cad/sketch-elements/line
+   * Update line endpoint (for dimension-driven resize)
+   */
+  router.put('/sketch-elements/line', sessionValidator, validateUpdateLine, async (req, res, next) => {
+    try {
+      const { sketch_id, element_id, x1, y1, x2, y2 } = req.body;
+      const sessionId = req.sessionId;
+
+      logger.info(`Updating line ${element_id} in sketch ${sketch_id}`);
+
+      const result = await cadBackend.updateLine(sessionId, sketch_id, element_id, x1, y1, x2, y2);
+
+      res.json({
+        success: true,
+        data: result,
+        timestamp: Date.now()
+      });
+    } catch (error) {
+      next(error);
     }
   });
 

@@ -13,6 +13,7 @@ import { BottomHud } from '@/components/bottom-hud';
 import { MeshData, SketchVisualizationData } from '@/types/geometry';
 import { DrawingTool } from '@/lib/cad/controls/cad-controls';
 import { Unit, toMillimeters } from '@/lib/utils/units';
+import { DimensionInput } from '@/components/dimension-input';
 
 interface CreatedShape {
     id: string;
@@ -155,6 +156,18 @@ export function CADApplication() {
     const [inlineCopyMoveY, setInlineCopyMoveY] = useState('0');
     const [inlineCopyMoveCount, setInlineCopyMoveCount] = useState('1');
     const inlineCopyMoveXRef = useRef<HTMLInputElement>(null);
+
+    // Dimension state
+    const [pendingDimension, setPendingDimension] = useState<{
+        sketchId: string;
+        elementId: string;
+        elementType: string;
+    } | null>(null);
+    const [editingDimension, setEditingDimension] = useState<{
+        dimensionId: string;
+        value: number;
+        screenPosition: { x: number; y: number };
+    } | null>(null);
 
     // Resolve a clicked element to its extrudable parent (if it's a child of a composite shape)
     const resolveExtrudableElement = useCallback((elementId: string, sketchId: string): SketchElementInfo | null => {
@@ -420,6 +433,21 @@ export function CADApplication() {
                 setInlineCopyMoveY('0');
                 setTimeout(() => inlineCopyMoveXRef.current?.focus(), 50);
                 return;
+            } else if (currentDrawingTool === 'dimension' && type === 'element' && sketchId) {
+                // Check if element is a line
+                const sketch = createdSketches.find(s => s.sketch_id === sketchId);
+                const element = sketch?.elements.find(e => e.id === newSelection.id);
+                if (element?.type === 'line') {
+                    setPendingDimension({
+                        sketchId,
+                        elementId: newSelection.id,
+                        elementType: 'line'
+                    });
+                    updateStatus('Move mouse to set dimension offset, then click to place', 'info');
+                } else {
+                    updateStatus('Dimensions can only be added to lines', 'warning');
+                }
+                return;
             }
         }
 
@@ -521,7 +549,7 @@ export function CADApplication() {
 
         // Auto-enter sketch mode for draw-based tools if an element is selected
         // This allows trim/extend/mirror to work without manually entering sketch mode
-        const drawBasedTools = ['trim', 'extend', 'mirror', 'fillet', 'chamfer'];
+        const drawBasedTools = ['trim', 'extend', 'mirror', 'fillet', 'chamfer', 'dimension'];
         if (drawBasedTools.includes(tool) && !activeSketchId && selectedObject?.sketchId) {
             const sketch = createdSketches.find(s => s.sketch_id === selectedObject.sketchId);
             if (sketch?.visualization_data && rendererRef.current) {
@@ -1240,6 +1268,55 @@ export function CADApplication() {
         }
     }, [pendingCopyMove, inlineCopyMoveX, inlineCopyMoveY, inlineCopyMoveCount, currentUnit, updateStatus, getElement2DEndpoints, updateElementVisualization]);
 
+    // Handle dimension placement
+    const handleDimensionPlacement = useCallback((offset: number, offsetDirection: 1 | -1) => {
+        if (!pendingDimension || !rendererRef.current) return;
+
+        rendererRef.current.createDimensionForLine(
+            pendingDimension.sketchId,
+            pendingDimension.elementId,
+            offset,
+            offsetDirection
+        );
+
+        setPendingDimension(null);
+        updateStatus('Dimension created - double-click to edit', 'success');
+    }, [pendingDimension, updateStatus]);
+
+    // Handle dimension double-click for editing
+    const handleDimensionDoubleClick = useCallback((dimensionId: string, screenX: number, screenY: number) => {
+        if (!rendererRef.current) return;
+
+        const dimension = rendererRef.current.getDimensionManager().getDimension(dimensionId);
+        if (!dimension) return;
+
+        setEditingDimension({
+            dimensionId,
+            value: dimension.value,
+            screenPosition: { x: screenX, y: screenY }
+        });
+    }, []);
+
+    // Handle dimension value submission
+    const handleDimensionValueSubmit = useCallback(async (newValue: number) => {
+        if (!editingDimension || !rendererRef.current || !clientRef.current) return;
+
+        const dimensionManager = rendererRef.current.getDimensionManager();
+        const dimension = dimensionManager.getDimension(editingDimension.dimensionId);
+        if (!dimension) return;
+
+        // Update dimension (this will trigger line resize)
+        dimensionManager.updateDimensionValue(editingDimension.dimensionId, newValue);
+
+        setEditingDimension(null);
+        updateStatus(`Line resized to ${newValue.toFixed(2)} mm`, 'success');
+    }, [editingDimension, updateStatus]);
+
+    // Handle dimension edit cancel
+    const handleDimensionEditCancel = useCallback(() => {
+        setEditingDimension(null);
+    }, []);
+
     const handlePaletteCreatePlane = useCallback(async (type: 'XZ' | 'XY' | 'YZ') => {
         if (!clientRef.current) return;
         try {
@@ -1504,6 +1581,9 @@ export function CADApplication() {
                 client.onSketchVisualization((data) => {
                     renderer.addSketchVisualization(data);
                     renderer.setActiveSketchPlane(data.sketch_id, data);
+
+                    // Pass sketch visualization data to dimension manager
+                    rendererRef.current?.getDimensionManager().setSketchVisualizationData(data.sketch_id, data);
                     setActiveSketchId(data.sketch_id);
                     renderer.viewTop();
                     updateStatus('Switched to top-down view for sketch', 'info');
@@ -1524,6 +1604,18 @@ export function CADApplication() {
 
                 client.onElementVisualization((data) => {
                     renderer.addSketchElementVisualization(data);
+
+                    // Track line data for dimension manager
+                    if (data.element_type === 'line' && data.parameters_2d) {
+                        const { x1, y1, x2, y2 } = data.parameters_2d;
+                        if (x1 !== undefined && y1 !== undefined && x2 !== undefined && y2 !== undefined) {
+                            rendererRef.current?.getDimensionManager().setElementData(
+                                data.element_id,
+                                data.sketch_id,
+                                x1, y1, x2, y2
+                            );
+                        }
+                    }
 
                     if (data.element_id && data.sketch_id && data.element_type) {
                         setCreatedSketches(prev => prev.map(sketch =>
@@ -1665,6 +1757,26 @@ export function CADApplication() {
         }
     }, [handleSelection]);
 
+    // Set up dimension manager callbacks for line resize
+    useEffect(() => {
+        if (!rendererRef.current) return;
+
+        const dimensionManager = rendererRef.current.getDimensionManager();
+        dimensionManager.setCallbacks({
+            onLineResizeRequested: async (sketchId, elementId, newX1, newY1, newX2, newY2) => {
+                if (!clientRef.current) return;
+
+                try {
+                    await clientRef.current.updateLineEndpoints(sketchId, elementId, newX1, newY1, newX2, newY2);
+                    updateStatus('Line resized via dimension', 'success');
+                } catch (error) {
+                    console.error('Failed to resize line:', error);
+                    updateStatus('Failed to resize line', 'error');
+                }
+            }
+        });
+    }, [updateStatus]);
+
     // Handle window resize
     useEffect(() => {
         const handleResize = () => {
@@ -1695,6 +1807,13 @@ export function CADApplication() {
                 return;
             }
 
+            // Shift+D for dimension tool
+            if (event.shiftKey && event.key === 'D') {
+                event.preventDefault();
+                handleSetDrawingTool('dimension');
+                return;
+            }
+
             // Ctrl/Cmd combos: only undo/redo
             if (event.ctrlKey || event.metaKey) {
                 if (event.key === 'z' && event.shiftKey) {
@@ -1720,7 +1839,14 @@ export function CADApplication() {
                     break;
                 case 'Escape':
                     event.preventDefault();
-                    if (pendingFilletChamfer) {
+                    if (editingDimension) {
+                        setEditingDimension(null);
+                    } else if (pendingDimension) {
+                        setPendingDimension(null);
+                        if (rendererRef.current) {
+                            rendererRef.current.setHighlight(null);
+                        }
+                    } else if (pendingFilletChamfer) {
                         setPendingFilletChamfer(null);
                         if (rendererRef.current) {
                             rendererRef.current.setHighlight(null);
@@ -1865,7 +1991,7 @@ export function CADApplication() {
 
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [isPaletteOpen, isSceneTreeOpen, activeSketchId, currentDrawingTool, showInlineExtrude, pendingFace, pendingFilletChamfer, pendingOffset, pendingCopyMove, handleConfirmSketchOnFace, handleSetDrawingTool, handleDeleteSelected, handleSelection, exitSketchMode, updateStatus]);
+    }, [isPaletteOpen, isSceneTreeOpen, activeSketchId, currentDrawingTool, showInlineExtrude, pendingFace, pendingFilletChamfer, pendingOffset, pendingCopyMove, pendingDimension, editingDimension, handleConfirmSketchOnFace, handleSetDrawingTool, handleDeleteSelected, handleSelection, exitSketchMode, updateStatus]);
 
     return (
         <div className="h-screen w-screen overflow-hidden" style={{ backgroundColor: '#12141C' }}>
@@ -2128,6 +2254,16 @@ export function CADApplication() {
                             <span className="text-[#5A5D6A] text-[10px]">Enter to apply</span>
                         </div>
                     </div>
+                )}
+
+                {/* Dimension Edit Input */}
+                {editingDimension && (
+                    <DimensionInput
+                        value={editingDimension.value}
+                        position={editingDimension.screenPosition}
+                        onSubmit={handleDimensionValueSubmit}
+                        onCancel={handleDimensionEditCancel}
+                    />
                 )}
 
                 {/* Sketch-on-Face Confirmation */}

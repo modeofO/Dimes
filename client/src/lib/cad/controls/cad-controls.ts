@@ -1,12 +1,12 @@
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import * as THREE from 'three';
 
-export type DrawingTool = 
-    | 'select' 
-    | 'line' 
-    | 'circle' 
-    | 'rectangle' 
-    | 'arc' 
+export type DrawingTool =
+    | 'select'
+    | 'line'
+    | 'circle'
+    | 'rectangle'
+    | 'arc'
     | 'polygon'
     | 'fillet'
     | 'chamfer'
@@ -15,7 +15,8 @@ export type DrawingTool =
     | 'mirror'
     | 'offset'
     | 'copy'
-    | 'move';
+    | 'move'
+    | 'dimension';
 
 export type ArcType = 'three_points' | 'endpoints_radius';
 
