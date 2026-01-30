@@ -119,6 +119,7 @@ export function CommandPalette({
         { id: 'offset', label: 'Offset', icon: '⇉', category: 'tool', action: () => onSetDrawingTool('offset') },
         { id: 'copy', label: 'Copy', icon: '⎘', category: 'tool', action: () => onSetDrawingTool('copy') },
         { id: 'move', label: 'Move', icon: '✥', category: 'tool', action: () => onSetDrawingTool('move') },
+        { id: 'dimension', label: 'Dimension', shortcut: '⇧D', icon: '📏', category: 'tool', action: () => onSetDrawingTool('dimension') },
         // 3D Operations
         { id: 'extrude', label: 'Extrude', shortcut: 'E', icon: '⬆', category: 'operation', action: () => setExtrudeInputMode(true) },
         { id: 'delete', label: 'Delete selected', shortcut: 'X', icon: '✕', category: 'operation', action: () => onDeleteSelected() },
