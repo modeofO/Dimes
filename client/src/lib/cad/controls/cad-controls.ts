@@ -368,7 +368,13 @@ export class CADControls extends OrbitControls {
         if (this.drawingState.tool === 'arc' && (this.drawingState.arcType === 'three_points' || this.drawingState.arcType === 'endpoints_radius')) {
             return;
         }
-        
+
+        // Skip for click-to-select tools (they don't use drawing state)
+        const clickToSelectTools = ['select', 'offset', 'copy', 'move'];
+        if (clickToSelectTools.includes(this.drawingState.tool)) {
+            return;
+        }
+
         if (!this.drawingState.isDrawing || !this.drawingState.startPoint || !this.drawingState.currentPoint || !this.drawingState.activeSketchPlane) {
             console.log('❌ onPointerUp: Missing required drawing state');
             return;
