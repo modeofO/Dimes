@@ -532,19 +532,28 @@ export class CADRenderer {
         const selectedItems: Array<{ id: string; type: string; sketchId?: string }> = [];
         const processedIds = new Set<string>();
 
-        console.log('🔍 Box selection bounds:', { boxLeft, boxRight, boxTop, boxBottom });
-
         this.scene.traverse((obj) => {
             if (!obj.name || obj.userData.isHitTest) return;
 
             const parsed = this.parseObjectName(obj.name);
             if (!parsed) return;
 
-            // Skip planes and sketches for box selection (only select elements/features)
+            // Skip planes, sketches, grid, and highlight objects for box selection
             if (parsed.type === 'plane' || parsed.type === 'sketch') return;
+            if (obj.name.includes('grid') || obj.name.includes('highlight')) return;
 
-            // Create unique key to avoid duplicates
-            const uniqueKey = parsed.sketchId ? `${parsed.sketchId}-${parsed.id}` : parsed.id;
+            // For child elements (e.g., rectangle_1_1438_line_bottom), extract parent ID
+            let elementId = parsed.id;
+            const lineIdx = elementId.lastIndexOf('_line_');
+            const arcIdx = elementId.lastIndexOf('_arc_');
+            if (lineIdx !== -1) {
+                elementId = elementId.substring(0, lineIdx);
+            } else if (arcIdx !== -1) {
+                elementId = elementId.substring(0, arcIdx);
+            }
+
+            // Create unique key using parent ID to avoid duplicates from child elements
+            const uniqueKey = parsed.sketchId ? `${parsed.sketchId}-${elementId}` : elementId;
             if (processedIds.has(uniqueKey)) return;
 
             // Get bounding box center for more accurate position
@@ -557,13 +566,15 @@ export class CADRenderer {
             const screenX = ((screenPos.x + 1) / 2) * rect.width;
             const screenY = ((-screenPos.y + 1) / 2) * rect.height;
 
-            console.log(`📦 Object: ${obj.name}, screen: (${screenX.toFixed(0)}, ${screenY.toFixed(0)}), parsed:`, parsed);
-
             // Check if within selection box
             if (screenX >= boxLeft && screenX <= boxRight && screenY >= boxTop && screenY <= boxBottom) {
                 processedIds.add(uniqueKey);
-                selectedItems.push(parsed);
-                console.log('✅ Selected:', parsed);
+                // Use parent ID for composite shapes
+                selectedItems.push({
+                    id: elementId,
+                    type: parsed.type,
+                    sketchId: parsed.sketchId
+                });
             }
         });
 
