@@ -66,23 +66,26 @@ All WebSocket messages now consistently use the `payload` key for data:
 
 ---
 
-## 4. element_id Optional in API Validation but Required by Backend
+## 4. element_id Optional in API Validation but Required by Backend ✅ FIXED
 
-**Status:** Known Bug
-**Location:** `api-server/src/routes/cad.js:65` (validation), Python backend `geometry_engine.py`
+**Status:** Fixed
 
-The extrude endpoint's validation marks `element_id` as optional, but the Python backend's `extrude_feature()` requires it to find the correct face for extrusion. If `element_id` is not provided, the backend tries to extrude the entire sketch which may fail or produce unexpected results.
+The extrude endpoint's `element_id` validation is now required (not optional) to match the backend's requirement. The backend needs `element_id` to find the correct face for extrusion.
 
-**Fix:** Either make `element_id` required in validation, or implement a fallback in the backend that finds the first extrudable element.
+**Files:** `api-server/src/routes/cad.js`
 
 ---
 
-## 5. Missing Response Validation for mesh_data/visualization_data
+## 5. Missing Response Validation for mesh_data/visualization_data ✅ FIXED
 
-**Status:** Known Bug
-**Location:** `api-server/src/routes/cad.js` (extrude handler, lines 943-963)
+**Status:** Fixed
 
-The extrude handler checks for `visualization_data` first, then falls back to `mesh_data`, and gracefully handles missing data. But other handlers (like boolean operations) don't have this fallback logic and may fail silently if the response structure doesn't match expectations.
+The boolean operations handler now has the same fallback logic as extrude:
+- Checks for `visualization_data` first
+- Falls back to `mesh_data`
+- Logs if neither is available
+
+**Files:** `api-server/src/routes/cad.js`
 
 ---
 
