@@ -1,13 +1,13 @@
 # Dimes CAD API Server
 
-This is the Node.js API layer for the Dimes CAD application. It acts as a secure gateway between the frontend client and the C++ OpenCascade backend, providing authentication, validation, rate limiting, and protocol translation.
+This is the Node.js API layer for the Dimes CAD application. It acts as a secure gateway between the frontend client and the Python/pythonOCC CAD backend, providing authentication, validation, rate limiting, and protocol translation.
 
 ## Architecture Overview
 
 ```
 ┌─────────────────┐    HTTP/WebSocket    ┌─────────────────┐    HTTP    ┌─────────────────┐
 │                 │ ──────────────────► │                 │ ─────────► │                 │
-│  Frontend       │                     │  Node.js API    │            │  C++ OpenCascade│
+│  Frontend       │                     │  Node.js API    │            │  Python/pythonOCC│
 │  (React/Vue/JS) │                     │  Server         │            │  Backend        │
 │                 │ ◄────────────────── │                 │ ◄───────── │                 │
 └─────────────────┘                     └─────────────────┘            └─────────────────┘
@@ -16,8 +16,8 @@ This is the Node.js API layer for the Dimes CAD application. It acts as a secure
 ### Benefits of This Architecture
 
 1. **Security**: The Node.js layer handles authentication, rate limiting, and input validation
-2. **Protocol Translation**: Converts between web protocols and C++ backend communication
-3. **Scalability**: Can handle multiple frontend clients and load balance to C++ backends
+2. **Protocol Translation**: Converts between web protocols and CAD backend communication
+3. **Scalability**: Can handle multiple frontend clients and load balance to CAD backends
 4. **Monitoring**: Centralized logging, metrics, and health checks
 5. **Development**: Easier to add features like caching, WebSocket support, and API versioning
 
@@ -32,14 +32,14 @@ This is the Node.js API layer for the Dimes CAD application. It acts as a secure
 - ✅ Rate limiting and security headers
 - ✅ Health checks and monitoring
 - ✅ Error handling and logging
-- ✅ C++ backend communication with retry logic
+- ✅ CAD backend communication with retry logic
 - ✅ MCP (Model Context Protocol) server for AI integration
 
 ## Prerequisites
 
 - Node.js 18.0.0 or higher
 - npm or yarn
-- Running C++ OpenCascade backend (on port 8080 by default)
+- Running Python/pythonOCC CAD backend (on port 8080 by default)
 
 ## Installation
 
@@ -62,8 +62,8 @@ This is the Node.js API layer for the Dimes CAD application. It acts as a secure
    Edit `.env` file with your configuration:
    ```env
    PORT=3000
-   CPP_BACKEND_HOST=localhost
-   CPP_BACKEND_PORT=8080
+   CAD_BACKEND_HOST=localhost
+   CAD_BACKEND_PORT=8080
    CORS_ORIGIN=http://localhost:5173
    ```
 
@@ -83,7 +83,7 @@ This is the Node.js API layer for the Dimes CAD application. It acts as a secure
 - `GET /api/v1/health` - Overall health check
 - `GET /api/v1/health/ready` - Readiness probe
 - `GET /api/v1/health/live` - Liveness probe
-- `GET /api/v1/cad/backend/status` - C++ backend status
+- `GET /api/v1/cad/backend/status` - CAD backend status
 
 ### Sketch-Based CAD Operations (Professional Workflow)
 
@@ -266,9 +266,9 @@ const extrudeResponse = await fetch('/api/v1/cad/extrude', {
 |----------|---------|-------------|
 | `PORT` | 3000 | API server port |
 | `NODE_ENV` | development | Environment mode |
-| `CPP_BACKEND_HOST` | localhost | C++ backend hostname |
-| `CPP_BACKEND_PORT` | 8080 | C++ backend port |
-| `CPP_BACKEND_TIMEOUT` | 30000 | Backend request timeout (ms) |
+| `CAD_BACKEND_HOST` | localhost | CAD backend hostname |
+| `CAD_BACKEND_PORT` | 8080 | CAD backend port |
+| `CAD_BACKEND_TIMEOUT` | 30000 | Backend request timeout (ms) |
 | `CORS_ORIGIN` | http://localhost:5173 | Allowed CORS origin |
 | `API_RATE_LIMIT_MAX_REQUESTS` | 100 | Rate limit per window |
 | `API_RATE_LIMIT_WINDOW_MS` | 900000 | Rate limit window (ms) |
@@ -295,7 +295,7 @@ src/
 │   ├── health.js          # Health check routes
 │   └── cad.js             # CAD operation routes
 ├── services/
-│   ├── cppBackendClient.js # C++ backend communication
+│   ├── cadBackendClient.js # CAD backend communication
 │   └── websocketManager.js # WebSocket handling
 ├── middleware/
 │   ├── errorHandler.js    # Error handling middleware
@@ -349,8 +349,8 @@ The MCP server provides AI agents with structured tools to create CAD models usi
    ```bash
    export NODE_ENV=production
    export PORT=3000
-   export CPP_BACKEND_HOST=your-cpp-backend-host
-   export CPP_BACKEND_PORT=8080
+   export CAD_BACKEND_HOST=your-cad-backend-host
+   export CAD_BACKEND_PORT=8080
    ```
 
 2. **Start the server**:
@@ -459,7 +459,7 @@ const ws = new WebSocket('ws://localhost:3000/ws?sessionId=your-session-id');
 Update your frontend client to connect to the Node.js API server:
 
 ```javascript
-// Before (direct C++ connection)
+// Before (direct CAD backend connection)
 const client = new CADClient('http://localhost:8080', sessionId);
 
 // After (Node.js API layer)
@@ -473,8 +473,8 @@ The API maintains backward compatibility with existing client code while adding 
 ### Common Issues
 
 1. **Backend Connection Failed**
-   - Check if C++ backend is running on configured port
-   - Verify `CPP_BACKEND_HOST` and `CPP_BACKEND_PORT` settings
+   - Check if CAD backend is running on configured port
+   - Verify `CAD_BACKEND_HOST` and `CAD_BACKEND_PORT` settings
    - Check network connectivity
 
 2. **CORS Errors**

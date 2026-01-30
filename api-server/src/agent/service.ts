@@ -1,8 +1,8 @@
 import { service } from "@daydreamsai/core";
-import { CppBackendClient } from "../services/cppBackendClient.js";
+import { CadBackendClient } from "../services/cadBackendClient.js";
 
-export const cppBackendService = service({
+export const cadBackendService = service({
   register(container) {
-    container.singleton("cppBackend", () => new CppBackendClient());
+    container.singleton("cadBackend", () => new CadBackendClient());
   },
 }); 

@@ -21,7 +21,7 @@ cleanup() {
 # Set up trap for cleanup
 trap cleanup SIGINT SIGTERM
 
-# Start the C++ CAD server
+# Start the CAD server (Python)
 echo -e "${BLUE}Starting CAD Server...${NC}"
 cd server/build
 ./cad-server &

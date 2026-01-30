@@ -112,7 +112,7 @@ Client HTTP Request
   -> Session ID extraction (header/body/url)
   -> Request validation
   -> Parameter flattening
-  -> cppBackendClient.method(sessionId, flattenedParams)
+  -> cadBackendClient.method(sessionId, flattenedParams)
   -> WebSocket broadcast (if visualization/geometry data present)
   -> HTTP response to client
 ```
@@ -155,11 +155,11 @@ Message types sent to client:
 
 ### Backend Client
 
-File: `api-server/src/services/cppBackendClient.js`
+File: `api-server/src/services/cadBackendClient.js`
 
 Despite the filename, this connects to the **Python** backend (legacy naming).
 
-- Base URL: `http://{CPP_BACKEND_HOST}:{CPP_BACKEND_PORT}` (default `localhost:8080`)
+- Base URL: `http://{CAD_BACKEND_HOST}:{CAD_BACKEND_PORT}` (default `localhost:8080`)
 - Timeout: 30s
 - Retry: 3 attempts with 1s delay
 - HTTP keep-alive enabled
@@ -298,7 +298,7 @@ CADClient.addRectangleToSketch(sketchId, corner, width, height)
 API Server (cad.js)
   - validates request
   - flattens: {x, y, width, height}
-  - calls cppBackendClient.addSketchElement(sessionId, data)
+  - calls cadBackendClient.addSketchElement(sessionId, data)
   |
   v
 Python Backend (api_server.py -> geometry_engine.py)
@@ -372,7 +372,7 @@ CADClient.extrudeFeature("sketch_1", 10, "rectangle_1_2345")
   v
 API Server (cad.js)
   - Flattens params
-  - cppBackendClient.extrudeFeature(sessionId, data)
+  - cadBackendClient.extrudeFeature(sessionId, data)
   |
   v
 Python Backend
@@ -510,9 +510,9 @@ Sketch visualization received
 | `NEXT_PUBLIC_API_URL` | `http://localhost:3000` | Client | API server URL |
 | `PORT` | `3000` | API Server | Listen port |
 | `HOST` | `0.0.0.0` | API Server | Bind address |
-| `CPP_BACKEND_HOST` | `localhost` | API Server | Python backend host |
-| `CPP_BACKEND_PORT` | `8080` | API Server | Python backend port |
-| `CPP_BACKEND_TIMEOUT` | `30000` | API Server | Request timeout (ms) |
+| `CAD_BACKEND_HOST` | `localhost` | API Server | Python backend host |
+| `CAD_BACKEND_PORT` | `8080` | API Server | Python backend port |
+| `CAD_BACKEND_TIMEOUT` | `30000` | API Server | Request timeout (ms) |
 | `WS_HEARTBEAT_INTERVAL` | `30000` | API Server | WebSocket ping interval (ms) |
 | `CORS_ORIGIN` | `http://localhost:3001` | API Server | Allowed CORS origin |
 
