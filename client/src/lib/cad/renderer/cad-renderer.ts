@@ -532,32 +532,38 @@ export class CADRenderer {
         const selectedItems: Array<{ id: string; type: string; sketchId?: string }> = [];
         const processedIds = new Set<string>();
 
+        console.log('🔍 Box selection bounds:', { boxLeft, boxRight, boxTop, boxBottom });
+
         this.scene.traverse((obj) => {
             if (!obj.name || obj.userData.isHitTest) return;
 
             const parsed = this.parseObjectName(obj.name);
             if (!parsed) return;
 
-            // Skip planes and certain types for box selection
-            if (parsed.type === 'plane') return;
+            // Skip planes and sketches for box selection (only select elements/features)
+            if (parsed.type === 'plane' || parsed.type === 'sketch') return;
 
             // Create unique key to avoid duplicates
             const uniqueKey = parsed.sketchId ? `${parsed.sketchId}-${parsed.id}` : parsed.id;
             if (processedIds.has(uniqueKey)) return;
 
-            // Get object center in world space
+            // Get bounding box center for more accurate position
+            const box = new THREE.Box3().setFromObject(obj);
             const worldPos = new THREE.Vector3();
-            obj.getWorldPosition(worldPos);
+            box.getCenter(worldPos);
 
             // Project to screen coordinates
             const screenPos = worldPos.clone().project(this.camera);
             const screenX = ((screenPos.x + 1) / 2) * rect.width;
             const screenY = ((-screenPos.y + 1) / 2) * rect.height;
 
+            console.log(`📦 Object: ${obj.name}, screen: (${screenX.toFixed(0)}, ${screenY.toFixed(0)}), parsed:`, parsed);
+
             // Check if within selection box
             if (screenX >= boxLeft && screenX <= boxRight && screenY >= boxTop && screenY <= boxBottom) {
                 processedIds.add(uniqueKey);
                 selectedItems.push(parsed);
+                console.log('✅ Selected:', parsed);
             }
         });
 
