@@ -110,24 +110,34 @@ For a proper implementation, the backend would need to support arbitrary sketch 
 
 ---
 
-## 7. Trim, Extend, Mirror, Offset, Copy, Move Tools
+## 7. Trim, Extend, Mirror, Offset, Copy, Move Tools ✅ FIXED
 
-**Status:** Deferred (partially)
+**Status:** Fixed
 
-These tools have backend endpoints and client API methods, but the frontend interactive flow for most of them just shows "Please select elements first for {tool} operations" (`cad-application.tsx:325`).
+All sketch modification tools now have interactive UIs:
 
 | Tool | Backend | Client API | Frontend UX |
 |------|---------|------------|-------------|
-| Trim (line-to-line) | Yes | Yes | Not interactive |
-| Trim (line-to-geometry) | Yes | Yes | Not interactive |
-| Extend (line-to-line) | Yes | Yes | Not interactive |
-| Extend (line-to-geometry) | Yes | Yes | Not interactive |
-| Mirror | Yes | Yes | Not interactive |
-| Offset | Yes | Yes | Not interactive |
-| Copy | Yes | Yes | Not interactive |
-| Move | Yes | Yes | Not interactive |
+| Trim (line-to-line) | Yes | Yes | ✅ Draw across two lines |
+| Extend (line-to-line) | Yes | Yes | ✅ Draw from line to target |
+| Mirror | Yes | Yes | ✅ Select element, draw axis |
+| Offset | Yes | Yes | ✅ Click element, inline distance + L/R |
+| Copy | Yes | Yes | ✅ Click element, inline X/Y/count |
+| Move | Yes | Yes | ✅ Click element, inline X/Y |
 
-These need proper two-step selection UIs similar to the fillet/chamfer flow.
+**Keyboard shortcuts:**
+- T = Trim (draw across two lines, keeps side where draw started)
+- W = Extend (draw from line toward target)
+- M = Mirror (select element first, then draw mirror axis)
+- O = Offset (click element, enter distance, choose left/right)
+- D = Duplicate/Copy (click element, enter X/Y offset and count)
+- G = Move (click element, enter X/Y offset)
+
+**Implementation pattern:**
+- Draw-to-select tools (Trim, Extend, Mirror): Use same pattern as fillet/chamfer - draw a line across elements
+- Click + input tools (Offset, Copy, Move): Click an element to select it, then inline input UI appears
+
+**Files:** `cad-application.tsx`, `cad-controls.ts`, `bottom-hud.tsx`
 
 ---
 
@@ -236,10 +246,10 @@ These features were added to improve the user experience:
 1. ~~**Fillet/Chamfer** - Core CAD workflow, backend exists~~ ✅ DONE
 2. ~~**Delete** - Basic operation, blocking iterative design~~ ✅ DONE
 3. **Sketch-on-Face normal mapping** - Limits 3D modeling capability
-4. **Trim/Extend** - Important for sketch cleanup
+4. ~~**Trim/Extend** - Important for sketch cleanup~~ ✅ DONE
 5. **Export** - Users need to get their work out
 6. **Undo/Redo** - Expected in any design tool
-7. **Mirror/Offset/Copy/Move** - Productivity features
+7. ~~**Mirror/Offset/Copy/Move** - Productivity features~~ ✅ DONE
 8. **Boolean operations** - Advanced 3D modeling
 9. **Linear/Mirror arrays** - Pattern creation
 10. **Constraint system** - Parametric modeling

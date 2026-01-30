@@ -136,6 +136,26 @@ export function CADApplication() {
     const [inlineFilletValue, setInlineFilletValue] = useState('2');
     const inlineFilletRef = useRef<HTMLInputElement>(null);
 
+    // Inline offset state — shown when clicking an element with offset tool
+    const [pendingOffset, setPendingOffset] = useState<{
+        sketchId: string;
+        elementId: string;
+        direction: 'left' | 'right';
+    } | null>(null);
+    const [inlineOffsetValue, setInlineOffsetValue] = useState('5');
+    const inlineOffsetRef = useRef<HTMLInputElement>(null);
+
+    // Inline copy/move state — shown when clicking an element with copy or move tool
+    const [pendingCopyMove, setPendingCopyMove] = useState<{
+        tool: 'copy' | 'move';
+        sketchId: string;
+        elementId: string;
+    } | null>(null);
+    const [inlineCopyMoveX, setInlineCopyMoveX] = useState('10');
+    const [inlineCopyMoveY, setInlineCopyMoveY] = useState('0');
+    const [inlineCopyMoveCount, setInlineCopyMoveCount] = useState('1');
+    const inlineCopyMoveXRef = useRef<HTMLInputElement>(null);
+
     // Resolve a clicked element to its extrudable parent (if it's a child of a composite shape)
     const resolveExtrudableElement = useCallback((elementId: string, sketchId: string): SketchElementInfo | null => {
         const sketch = createdSketches.find(s => s.sketch_id === sketchId);
@@ -256,6 +276,41 @@ export function CADApplication() {
         const newSelection = id && type ? { id, type, sketchId: sketchId ?? undefined } : null;
         setSelectedObject(newSelection);
 
+        // Handle offset/copy/move tool clicks on elements
+        if (newSelection && type === 'element' && sketchId && activeSketchId) {
+            if (currentDrawingTool === 'offset') {
+                setPendingOffset({
+                    sketchId,
+                    elementId: newSelection.id,
+                    direction: 'right'
+                });
+                setInlineOffsetValue('5');
+                setTimeout(() => inlineOffsetRef.current?.focus(), 50);
+                return;
+            } else if (currentDrawingTool === 'copy') {
+                setPendingCopyMove({
+                    tool: 'copy',
+                    sketchId,
+                    elementId: newSelection.id
+                });
+                setInlineCopyMoveX('10');
+                setInlineCopyMoveY('0');
+                setInlineCopyMoveCount('1');
+                setTimeout(() => inlineCopyMoveXRef.current?.focus(), 50);
+                return;
+            } else if (currentDrawingTool === 'move') {
+                setPendingCopyMove({
+                    tool: 'move',
+                    sketchId,
+                    elementId: newSelection.id
+                });
+                setInlineCopyMoveX('10');
+                setInlineCopyMoveY('0');
+                setTimeout(() => inlineCopyMoveXRef.current?.focus(), 50);
+                return;
+            }
+        }
+
         // Auto-show inline extrude when a closed element (or child of one) is clicked outside sketch mode
         if (newSelection && type === 'element' && sketchId && !activeSketchId) {
             const extrudable = resolveExtrudableElement(newSelection.id, sketchId);
@@ -268,7 +323,7 @@ export function CADApplication() {
         } else {
             setShowInlineExtrude(false);
         }
-    }, [activeSketchId, resolveExtrudableElement]);
+    }, [activeSketchId, resolveExtrudableElement, currentDrawingTool]);
 
     const handleChatMessage = useCallback((message: string) => {
         setChatMessages(prev => [...prev, { sender: 'user', text: message }]);
@@ -479,13 +534,204 @@ export function CADApplication() {
                     updateStatus(`Selected lines for ${tool}. Enter ${tool === 'fillet' ? 'radius' : 'distance'}.`, 'info');
                     return;
                 }
-                case 'trim':
-                case 'extend':
-                case 'mirror':
+                case 'trim': {
+                    // Find lines that the drawn segment intersects
+                    const trimIntersectingLines = findIntersectingLines(currentActiveSketchId, start, end);
+                    console.log(`✂️ Trim: found ${trimIntersectingLines.length} intersecting lines:`, trimIntersectingLines);
+
+                    if (trimIntersectingLines.length < 2) {
+                        updateStatus(`Draw across two lines to trim (found ${trimIntersectingLines.length})`, 'info');
+                        return;
+                    }
+
+                    // First line hit is the line to trim, second is the cutting line
+                    const [lineToTrimId, cuttingLineId] = trimIntersectingLines.slice(0, 2);
+
+                    // Determine keep_start based on draw direction
+                    // We need to figure out which end of the line_to_trim is closer to the draw start point
+                    const sketch = createdSketches.find(s => s.sketch_id === currentActiveSketchId);
+                    let keepStart = true; // Default: keep the start side
+
+                    if (sketch && rendererRef.current) {
+                        const scene = rendererRef.current.getScene();
+                        const elementName = `element-${currentActiveSketchId}-${lineToTrimId}`;
+                        const elementObject = scene.getObjectByName(elementName);
+
+                        if (elementObject) {
+                            let lineStartWorld: THREE.Vector3 | null = null;
+                            let lineEndWorld: THREE.Vector3 | null = null;
+
+                            elementObject.traverse((child) => {
+                                if (child instanceof THREE.Line && child.geometry?.attributes?.position) {
+                                    const positions = child.geometry.attributes.position;
+                                    if (positions.count >= 2) {
+                                        lineStartWorld = new THREE.Vector3().fromBufferAttribute(positions, 0);
+                                        lineEndWorld = new THREE.Vector3().fromBufferAttribute(positions, positions.count - 1);
+                                    }
+                                }
+                            });
+
+                            if (lineStartWorld && lineEndWorld && sketch.visualization_data) {
+                                // Convert line endpoints to 2D
+                                const origin = new THREE.Vector3(...sketch.visualization_data.origin);
+                                const uAxis = new THREE.Vector3(...sketch.visualization_data.u_axis);
+                                const vAxis = new THREE.Vector3(...sketch.visualization_data.v_axis);
+
+                                const worldTo2D = (worldPoint: THREE.Vector3): THREE.Vector2 => {
+                                    const relative = worldPoint.clone().sub(origin);
+                                    return new THREE.Vector2(relative.dot(uAxis), relative.dot(vAxis));
+                                };
+
+                                const lineStart2D = worldTo2D(lineStartWorld);
+                                const lineEnd2D = worldTo2D(lineEndWorld);
+
+                                // Determine which end is closer to the draw start point
+                                const distToStart = start.distanceTo(lineStart2D);
+                                const distToEnd = start.distanceTo(lineEnd2D);
+
+                                // Keep the side closer to where the user started drawing
+                                keepStart = distToStart < distToEnd;
+                                console.log(`✂️ Trim decision: keepStart=${keepStart} (distToStart=${distToStart.toFixed(2)}, distToEnd=${distToEnd.toFixed(2)})`);
+                            }
+                        }
+                    }
+
+                    try {
+                        updateStatus(`Trimming line...`, 'info');
+                        response = await clientRef.current.trimLineToLine(
+                            currentActiveSketchId,
+                            lineToTrimId,
+                            cuttingLineId,
+                            keepStart
+                        );
+
+                        if (response.success) {
+                            updateStatus(`Trimmed line successfully`, 'success');
+                        } else {
+                            updateStatus(`Failed to trim line`, 'error');
+                        }
+                    } catch (trimError) {
+                        console.error('Trim failed:', trimError);
+                        updateStatus(`Trim error: ${trimError instanceof Error ? trimError.message : 'Unknown error'}`, 'error');
+                    }
+                    return;
+                }
+                case 'extend': {
+                    // Find lines that the drawn segment intersects
+                    const extendIntersectingLines = findIntersectingLines(currentActiveSketchId, start, end);
+                    console.log(`🔗 Extend: found ${extendIntersectingLines.length} intersecting lines:`, extendIntersectingLines);
+
+                    if (extendIntersectingLines.length < 2) {
+                        updateStatus(`Draw from line to extend toward target line (found ${extendIntersectingLines.length})`, 'info');
+                        return;
+                    }
+
+                    // First line hit is the line to extend, second is the target
+                    const [lineToExtendId, targetLineId] = extendIntersectingLines.slice(0, 2);
+
+                    // Determine extend_start based on draw direction
+                    const extendSketch = createdSketches.find(s => s.sketch_id === currentActiveSketchId);
+                    let extendStart = true;
+
+                    if (extendSketch && rendererRef.current) {
+                        const scene = rendererRef.current.getScene();
+                        const elementName = `element-${currentActiveSketchId}-${lineToExtendId}`;
+                        const elementObject = scene.getObjectByName(elementName);
+
+                        if (elementObject) {
+                            let lineStartWorld: THREE.Vector3 | null = null;
+                            let lineEndWorld: THREE.Vector3 | null = null;
+
+                            elementObject.traverse((child) => {
+                                if (child instanceof THREE.Line && child.geometry?.attributes?.position) {
+                                    const positions = child.geometry.attributes.position;
+                                    if (positions.count >= 2) {
+                                        lineStartWorld = new THREE.Vector3().fromBufferAttribute(positions, 0);
+                                        lineEndWorld = new THREE.Vector3().fromBufferAttribute(positions, positions.count - 1);
+                                    }
+                                }
+                            });
+
+                            if (lineStartWorld && lineEndWorld && extendSketch.visualization_data) {
+                                const origin = new THREE.Vector3(...extendSketch.visualization_data.origin);
+                                const uAxis = new THREE.Vector3(...extendSketch.visualization_data.u_axis);
+                                const vAxis = new THREE.Vector3(...extendSketch.visualization_data.v_axis);
+
+                                const worldTo2D = (worldPoint: THREE.Vector3): THREE.Vector2 => {
+                                    const relative = worldPoint.clone().sub(origin);
+                                    return new THREE.Vector2(relative.dot(uAxis), relative.dot(vAxis));
+                                };
+
+                                const lineStart2D = worldTo2D(lineStartWorld);
+                                const lineEnd2D = worldTo2D(lineEndWorld);
+
+                                // Extend the end that's closer to where the draw ended (toward target)
+                                const distStartToDrawEnd = end.distanceTo(lineStart2D);
+                                const distEndToDrawEnd = end.distanceTo(lineEnd2D);
+
+                                extendStart = distStartToDrawEnd < distEndToDrawEnd;
+                                console.log(`🔗 Extend decision: extendStart=${extendStart} (distStartToDrawEnd=${distStartToDrawEnd.toFixed(2)}, distEndToDrawEnd=${distEndToDrawEnd.toFixed(2)})`);
+                            }
+                        }
+                    }
+
+                    try {
+                        updateStatus(`Extending line...`, 'info');
+                        response = await clientRef.current.extendLineToLine(
+                            currentActiveSketchId,
+                            lineToExtendId,
+                            targetLineId,
+                            extendStart
+                        );
+
+                        if (response.success) {
+                            updateStatus(`Extended line successfully`, 'success');
+                        } else {
+                            updateStatus(`Failed to extend line`, 'error');
+                        }
+                    } catch (extendError) {
+                        console.error('Extend failed:', extendError);
+                        updateStatus(`Extend error: ${extendError instanceof Error ? extendError.message : 'Unknown error'}`, 'error');
+                    }
+                    return;
+                }
+                case 'mirror': {
+                    // Mirror requires pre-selected elements, then draw the mirror axis
+                    if (!selectedObject || selectedObject.type !== 'element' || !selectedObject.sketchId) {
+                        updateStatus('Select an element first, then draw the mirror axis', 'info');
+                        return;
+                    }
+
+                    // Use the drawn line as the mirror axis
+                    try {
+                        updateStatus(`Mirroring element...`, 'info');
+                        response = await clientRef.current.mirrorElementsByTwoPoints(
+                            currentActiveSketchId,
+                            [selectedObject.id],
+                            start.x,
+                            start.y,
+                            end.x,
+                            end.y,
+                            true // keep original
+                        );
+
+                        if (response.success) {
+                            updateStatus(`Mirrored element successfully`, 'success');
+                            // Clear selection after mirror
+                            handleSelection(null, null);
+                        } else {
+                            updateStatus(`Failed to mirror element`, 'error');
+                        }
+                    } catch (mirrorError) {
+                        console.error('Mirror failed:', mirrorError);
+                        updateStatus(`Mirror error: ${mirrorError instanceof Error ? mirrorError.message : 'Unknown error'}`, 'error');
+                    }
+                    return;
+                }
                 case 'offset':
                 case 'copy':
                 case 'move':
-                    updateStatus(`Please select elements first for ${tool} operations`, 'info');
+                    updateStatus(`Click on an element to ${tool} it`, 'info');
                     return;
                 default:
                     updateStatus(`Interactive ${tool} not yet implemented`, 'warning');
@@ -622,6 +868,92 @@ export function CADApplication() {
             }
         }
     }, [pendingFilletChamfer, inlineFilletValue, currentUnit, updateStatus]);
+
+    // Handle inline offset submission
+    const handleInlineOffset = useCallback(async () => {
+        if (!pendingOffset || !clientRef.current) return;
+
+        const value = parseFloat(inlineOffsetValue);
+        if (isNaN(value) || value <= 0) {
+            updateStatus('Invalid offset distance', 'error');
+            return;
+        }
+
+        const { sketchId, elementId, direction } = pendingOffset;
+        const valueInMm = toMillimeters(value, currentUnit);
+
+        try {
+            updateStatus(`Offsetting element...`, 'info');
+            const response = await clientRef.current.offsetElementDirectional(sketchId, elementId, valueInMm, direction);
+
+            if (response.success) {
+                updateStatus(`Offset element by ${value}${currentUnit} to the ${direction}`, 'success');
+            } else {
+                updateStatus(`Failed to offset element`, 'error');
+            }
+        } catch (error) {
+            console.error('Offset failed:', error);
+            updateStatus(`Offset error: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+        } finally {
+            setPendingOffset(null);
+            if (rendererRef.current) {
+                rendererRef.current.setHighlight(null);
+            }
+        }
+    }, [pendingOffset, inlineOffsetValue, currentUnit, updateStatus]);
+
+    // Handle inline copy/move submission
+    const handleInlineCopyMove = useCallback(async () => {
+        if (!pendingCopyMove || !clientRef.current) return;
+
+        const x = parseFloat(inlineCopyMoveX);
+        const y = parseFloat(inlineCopyMoveY);
+        const count = pendingCopyMove.tool === 'copy' ? parseInt(inlineCopyMoveCount) : 1;
+
+        if (isNaN(x) || isNaN(y)) {
+            updateStatus('Invalid X or Y value', 'error');
+            return;
+        }
+
+        if (pendingCopyMove.tool === 'copy' && (isNaN(count) || count < 1)) {
+            updateStatus('Invalid copy count', 'error');
+            return;
+        }
+
+        const { tool, sketchId, elementId } = pendingCopyMove;
+        const xInMm = toMillimeters(x, currentUnit);
+        const yInMm = toMillimeters(y, currentUnit);
+
+        // Calculate distance and direction
+        const distance = Math.sqrt(xInMm * xInMm + yInMm * yInMm);
+        const dirX = distance > 0 ? xInMm / distance : 1;
+        const dirY = distance > 0 ? yInMm / distance : 0;
+
+        try {
+            updateStatus(`${tool === 'copy' ? 'Copying' : 'Moving'} element...`, 'info');
+
+            let response;
+            if (tool === 'copy') {
+                response = await clientRef.current.copyElement(sketchId, elementId, count, dirX, dirY, distance);
+            } else {
+                response = await clientRef.current.moveElement(sketchId, elementId, dirX, dirY, distance);
+            }
+
+            if (response.success) {
+                updateStatus(`${tool === 'copy' ? 'Copied' : 'Moved'} element by (${x}, ${y})${currentUnit}`, 'success');
+            } else {
+                updateStatus(`Failed to ${tool} element`, 'error');
+            }
+        } catch (error) {
+            console.error(`${tool} failed:`, error);
+            updateStatus(`${tool} error: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+        } finally {
+            setPendingCopyMove(null);
+            if (rendererRef.current) {
+                rendererRef.current.setHighlight(null);
+            }
+        }
+    }, [pendingCopyMove, inlineCopyMoveX, inlineCopyMoveY, inlineCopyMoveCount, currentUnit, updateStatus]);
 
     const handlePaletteCreatePlane = useCallback(async (type: 'XZ' | 'XY' | 'YZ') => {
         if (!clientRef.current) return;
@@ -1100,6 +1432,16 @@ export function CADApplication() {
                         if (rendererRef.current) {
                             rendererRef.current.setHighlight(null);
                         }
+                    } else if (pendingOffset) {
+                        setPendingOffset(null);
+                        if (rendererRef.current) {
+                            rendererRef.current.setHighlight(null);
+                        }
+                    } else if (pendingCopyMove) {
+                        setPendingCopyMove(null);
+                        if (rendererRef.current) {
+                            rendererRef.current.setHighlight(null);
+                        }
                     } else if (pendingFace) {
                         setPendingFace(null);
                     } else if (showInlineExtrude) {
@@ -1156,6 +1498,21 @@ export function CADApplication() {
                     break;
                 case 't': case 'T':
                     handleSetDrawingTool('trim');
+                    break;
+                case 'w': case 'W':
+                    handleSetDrawingTool('extend');
+                    break;
+                case 'm': case 'M':
+                    handleSetDrawingTool('mirror');
+                    break;
+                case 'o': case 'O':
+                    handleSetDrawingTool('offset');
+                    break;
+                case 'd': case 'D':
+                    handleSetDrawingTool('copy');
+                    break;
+                case 'g': case 'G':
+                    handleSetDrawingTool('move');
                     break;
 
                 // Sketch workflow
@@ -1215,7 +1572,7 @@ export function CADApplication() {
 
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [isPaletteOpen, isSceneTreeOpen, activeSketchId, currentDrawingTool, showInlineExtrude, pendingFace, pendingFilletChamfer, handleConfirmSketchOnFace, handleSetDrawingTool, handleDeleteSelected, handleSelection, exitSketchMode, updateStatus]);
+    }, [isPaletteOpen, isSceneTreeOpen, activeSketchId, currentDrawingTool, showInlineExtrude, pendingFace, pendingFilletChamfer, pendingOffset, pendingCopyMove, handleConfirmSketchOnFace, handleSetDrawingTool, handleDeleteSelected, handleSelection, exitSketchMode, updateStatus]);
 
     return (
         <div className="h-screen w-screen overflow-hidden" style={{ backgroundColor: '#12141C' }}>
@@ -1224,11 +1581,13 @@ export function CADApplication() {
                 ref={viewportRef}
                 className="w-full h-full relative"
                 style={{
-                    cursor: ['fillet', 'chamfer', 'trim'].includes(currentDrawingTool)
+                    cursor: ['fillet', 'chamfer', 'trim', 'extend', 'mirror'].includes(currentDrawingTool)
                         ? 'cell'
-                        : currentDrawingTool !== 'select'
-                            ? 'crosshair'
-                            : 'default'
+                        : ['offset', 'copy', 'move'].includes(currentDrawingTool)
+                            ? 'pointer'
+                            : currentDrawingTool !== 'select'
+                                ? 'crosshair'
+                                : 'default'
                 }}
             >
                 {/* Sketch Mode Indicator */}
@@ -1326,6 +1685,154 @@ export function CADApplication() {
                             <span className="text-[#5A5D6A] text-[10px]">
                                 {pendingFilletChamfer.tool === 'fillet' ? 'radius' : 'distance'} · Enter to apply
                             </span>
+                        </div>
+                    </div>
+                )}
+
+                {/* Inline Offset Input — appears after clicking an element with offset tool */}
+                {pendingOffset && (
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30">
+                        <div
+                            className="flex items-center gap-3 px-4 py-3 rounded-lg shadow-2xl shadow-black/60"
+                            style={{ backgroundColor: '#1A1D27', border: '1px solid #2A2D3A' }}
+                        >
+                            <span className="text-[#D4A017] text-sm font-medium">Offset</span>
+                            <input
+                                ref={inlineOffsetRef}
+                                type="number"
+                                value={inlineOffsetValue}
+                                onChange={(e) => setInlineOffsetValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleInlineOffset();
+                                    }
+                                    if (e.key === 'Escape') {
+                                        e.preventDefault();
+                                        setPendingOffset(null);
+                                        if (rendererRef.current) {
+                                            rendererRef.current.setHighlight(null);
+                                        }
+                                    }
+                                }}
+                                className="w-16 bg-[#12141C] text-[#E8DCC8] text-sm px-2 py-1 rounded outline-none border border-[#2A2D3A] focus:border-[#D4A017] transition-colors"
+                                style={{ caretColor: '#D4A017' }}
+                                autoFocus
+                            />
+                            <span className="text-[#5A5D6A] text-xs">{currentUnit}</span>
+                            <div className="flex gap-1">
+                                <button
+                                    onClick={() => setPendingOffset(prev => prev ? { ...prev, direction: 'left' } : null)}
+                                    className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                                        pendingOffset.direction === 'left'
+                                            ? 'bg-[#D4A017] text-[#12141C]'
+                                            : 'bg-[#2A2D3A] text-[#A0A3B0] hover:bg-[#3A3D4A]'
+                                    }`}
+                                >
+                                    ←
+                                </button>
+                                <button
+                                    onClick={() => setPendingOffset(prev => prev ? { ...prev, direction: 'right' } : null)}
+                                    className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                                        pendingOffset.direction === 'right'
+                                            ? 'bg-[#D4A017] text-[#12141C]'
+                                            : 'bg-[#2A2D3A] text-[#A0A3B0] hover:bg-[#3A3D4A]'
+                                    }`}
+                                >
+                                    →
+                                </button>
+                            </div>
+                            <span className="text-[#5A5D6A] text-[10px]">Enter to apply</span>
+                        </div>
+                    </div>
+                )}
+
+                {/* Inline Copy/Move Input — appears after clicking an element with copy or move tool */}
+                {pendingCopyMove && (
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30">
+                        <div
+                            className="flex items-center gap-3 px-4 py-3 rounded-lg shadow-2xl shadow-black/60"
+                            style={{ backgroundColor: '#1A1D27', border: '1px solid #2A2D3A' }}
+                        >
+                            <span className="text-[#D4A017] text-sm font-medium capitalize">
+                                {pendingCopyMove.tool}
+                            </span>
+                            <div className="flex items-center gap-1">
+                                <span className="text-[#6A6D7A] text-xs">X:</span>
+                                <input
+                                    ref={inlineCopyMoveXRef}
+                                    type="number"
+                                    value={inlineCopyMoveX}
+                                    onChange={(e) => setInlineCopyMoveX(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleInlineCopyMove();
+                                        }
+                                        if (e.key === 'Escape') {
+                                            e.preventDefault();
+                                            setPendingCopyMove(null);
+                                            if (rendererRef.current) {
+                                                rendererRef.current.setHighlight(null);
+                                            }
+                                        }
+                                    }}
+                                    className="w-14 bg-[#12141C] text-[#E8DCC8] text-sm px-2 py-1 rounded outline-none border border-[#2A2D3A] focus:border-[#D4A017] transition-colors"
+                                    style={{ caretColor: '#D4A017' }}
+                                    autoFocus
+                                />
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <span className="text-[#6A6D7A] text-xs">Y:</span>
+                                <input
+                                    type="number"
+                                    value={inlineCopyMoveY}
+                                    onChange={(e) => setInlineCopyMoveY(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleInlineCopyMove();
+                                        }
+                                        if (e.key === 'Escape') {
+                                            e.preventDefault();
+                                            setPendingCopyMove(null);
+                                            if (rendererRef.current) {
+                                                rendererRef.current.setHighlight(null);
+                                            }
+                                        }
+                                    }}
+                                    className="w-14 bg-[#12141C] text-[#E8DCC8] text-sm px-2 py-1 rounded outline-none border border-[#2A2D3A] focus:border-[#D4A017] transition-colors"
+                                    style={{ caretColor: '#D4A017' }}
+                                />
+                            </div>
+                            {pendingCopyMove.tool === 'copy' && (
+                                <div className="flex items-center gap-1">
+                                    <span className="text-[#6A6D7A] text-xs">#:</span>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        value={inlineCopyMoveCount}
+                                        onChange={(e) => setInlineCopyMoveCount(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                handleInlineCopyMove();
+                                            }
+                                            if (e.key === 'Escape') {
+                                                e.preventDefault();
+                                                setPendingCopyMove(null);
+                                                if (rendererRef.current) {
+                                                    rendererRef.current.setHighlight(null);
+                                                }
+                                            }
+                                        }}
+                                        className="w-10 bg-[#12141C] text-[#E8DCC8] text-sm px-2 py-1 rounded outline-none border border-[#2A2D3A] focus:border-[#D4A017] transition-colors"
+                                        style={{ caretColor: '#D4A017' }}
+                                    />
+                                </div>
+                            )}
+                            <span className="text-[#5A5D6A] text-xs">{currentUnit}</span>
+                            <span className="text-[#5A5D6A] text-[10px]">Enter to apply</span>
                         </div>
                     </div>
                 )}

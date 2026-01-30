@@ -73,6 +73,11 @@ const ALL_SHORTCUTS = [
         { key: 'F', label: 'Fillet' },
         { key: 'H', label: 'Chamfer' },
         { key: 'T', label: 'Trim' },
+        { key: 'W', label: 'Extend' },
+        { key: 'M', label: 'Mirror' },
+        { key: 'O', label: 'Offset' },
+        { key: 'D', label: 'Copy (Duplicate)' },
+        { key: 'G', label: 'Move' },
     ]},
     { category: '3D Operations', items: [
         { key: 'E', label: 'Extrude' },

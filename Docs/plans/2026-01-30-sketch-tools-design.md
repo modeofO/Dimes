@@ -61,14 +61,14 @@ const [pendingOperation, setPendingOperation] = useState<{
 
 ## Keyboard Shortcuts
 
-| Key | Tool |
-|-----|------|
-| T | Trim |
-| X | Extend |
-| M | Mirror |
-| O | Offset |
-| C | Copy (in sketch mode) |
-| V | Move |
+| Key | Tool | Notes |
+|-----|------|-------|
+| T | Trim | Already exists |
+| W | Extend | "Widen" (X is delete, E is extrude) |
+| M | Mirror | |
+| O | Offset | |
+| D | Copy | "Duplicate" (C is circle) |
+| G | Move | "Go" (V is select) |
 
 ## Files to Modify
 
