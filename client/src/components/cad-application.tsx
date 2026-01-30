@@ -57,6 +57,9 @@ interface CreatedSketch {
     visualization_data?: SketchVisualizationData;
 }
 
+// Counter for unique model IDs to avoid collisions when geometry updates arrive rapidly
+let modelIdCounter = 0;
+
 export function CADApplication() {
     const viewportRef = useRef<HTMLDivElement>(null);
     const rendererRef = useRef<CADRenderer | null>(null);
@@ -855,7 +858,7 @@ export function CADApplication() {
                 const client = new CADClient(apiUrl, sessionId);
 
                 client.onGeometryUpdate((meshData: MeshData) => {
-                    const modelId = `model-${Date.now()}`;
+                    const modelId = `model-${Date.now()}-${++modelIdCounter}`;
                     renderer.updateGeometry(modelId, meshData);
                     const shape: CreatedShape = {
                         id: modelId,
@@ -987,10 +990,10 @@ export function CADApplication() {
                         setUnreadMessages(prev => prev + 1);
                     }
 
-                    if (message.type === 'geometry_update' && message.data) {
+                    if (message.type === 'geometry_update' && message.payload) {
                         updateStatus('Agent created 3D geometry', 'success');
                         if (clientRef.current?.geometryUpdateCallback) {
-                            clientRef.current.geometryUpdateCallback(message.data);
+                            clientRef.current.geometryUpdateCallback(message.payload);
                         }
                     }
 

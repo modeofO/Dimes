@@ -54,36 +54,38 @@ Implementation would require:
 
 ---
 
-## 3. API Server WebSocket Inconsistency: `data` vs `payload` Key
+## 3. API Server WebSocket Inconsistency: `data` vs `payload` Key ✅ FIXED
 
-**Status:** Known Bug
+**Status:** Fixed
 
-The API server uses inconsistent keys when sending WebSocket messages:
-- Most messages use `payload` key for the data
-- Boolean operations (`geometry_update`) use `data` key (`cad.js:993-1000`)
-- Extrude uses `payload` key for both `visualization_data` and `geometry_update`
+All WebSocket messages now consistently use the `payload` key for data:
+- Boolean operations in `cad.js` updated to use `payload` instead of `data`
+- Client `cad-application.tsx` updated to expect `payload` for `geometry_update` messages
 
-The client's `CADClient.handleVisualizationData()` handles this via the visualization data router, but direct WebSocket consumers (like AgentManager) need to check both `message.data` and `message.payload`.
-
----
-
-## 4. element_id Optional in API Validation but Required by Backend
-
-**Status:** Known Bug
-**Location:** `api-server/src/routes/cad.js:65` (validation), Python backend `geometry_engine.py`
-
-The extrude endpoint's validation marks `element_id` as optional, but the Python backend's `extrude_feature()` requires it to find the correct face for extrusion. If `element_id` is not provided, the backend tries to extrude the entire sketch which may fail or produce unexpected results.
-
-**Fix:** Either make `element_id` required in validation, or implement a fallback in the backend that finds the first extrudable element.
+**Files:** `api-server/src/routes/cad.js`, `client/src/components/cad-application.tsx`
 
 ---
 
-## 5. Missing Response Validation for mesh_data/visualization_data
+## 4. element_id Optional in API Validation but Required by Backend ✅ FIXED
 
-**Status:** Known Bug
-**Location:** `api-server/src/routes/cad.js` (extrude handler, lines 943-963)
+**Status:** Fixed
 
-The extrude handler checks for `visualization_data` first, then falls back to `mesh_data`, and gracefully handles missing data. But other handlers (like boolean operations) don't have this fallback logic and may fail silently if the response structure doesn't match expectations.
+The extrude endpoint's `element_id` validation is now required (not optional) to match the backend's requirement. The backend needs `element_id` to find the correct face for extrusion.
+
+**Files:** `api-server/src/routes/cad.js`
+
+---
+
+## 5. Missing Response Validation for mesh_data/visualization_data ✅ FIXED
+
+**Status:** Fixed
+
+The boolean operations handler now has the same fallback logic as extrude:
+- Checks for `visualization_data` first
+- Falls back to `mesh_data`
+- Logs if neither is available
+
+**Files:** `api-server/src/routes/cad.js`
 
 ---
 
@@ -153,20 +155,25 @@ Backend supports creating linear arrays (copy elements in a pattern) and mirror 
 
 ---
 
-## 11. Model ID Collision Risk
+## 11. Model ID Collision Risk ✅ FIXED
 
-**Status:** Known Bug
-**Location:** `cad-application.tsx:563`
+**Status:** Fixed
 
-When geometry updates arrive, model IDs are generated as `model-${Date.now()}`. If two extrusions complete within the same millisecond, they'll get the same ID and overwrite each other. Should use a counter or UUID.
+Model IDs are now generated with both timestamp and counter: `model-${Date.now()}-${++modelIdCounter}`. This prevents collisions even when geometry updates arrive within the same millisecond.
+
+**Files:** `client/src/components/cad-application.tsx`
 
 ---
 
 ## 12. Agent WebSocket Message Handling
 
-**Status:** Needs Investigation
+**Status:** Partially Fixed
 
-The AgentManager connects to the same WebSocket server but uses `agent_message` type. When the agent creates geometry, it sends back `geometry_update` and `visualization_data` messages. The handling in `cad-application.tsx:695-707` checks for `message.data` and `message.payload` but the data flow through the agent path hasn't been fully tested.
+The `data` vs `payload` inconsistency has been fixed (see #3). Agent message handling now consistently uses:
+- `message.data.content` for `agent_message` type (chat responses)
+- `message.payload` for `geometry_update` and `visualization_data`
+
+The data flow through the agent path still needs end-to-end testing.
 
 ---
 
@@ -188,14 +195,13 @@ Sessions are in-memory only (Python `SessionManager` uses a dict). Closing the b
 
 ---
 
-## 15. Hover Highlight Cleanup on Tool Switch
+## 15. Hover Highlight Cleanup on Tool Switch ✅ FIXED
 
-**Status:** Known Bug
-**Location:** `cad-renderer.ts:310-314`
+**Status:** Fixed
 
-~~When switching from 'select' tool to a drawing tool, hover highlights are cleared. But if the user switches tools while hovering over an element, the material change sticks until the next hover event. The `clearHoverHighlight()` call on tool switch should be sufficient, but edge cases may exist with rapid tool switching.~~
+`setDrawingTool()` now calls `clearHoverHighlight()` and resets cursor to inherit.
 
-**Status:** Fixed - `setDrawingTool()` now calls `clearHoverHighlight()` and resets cursor to inherit.
+**Files:** `client/src/lib/cad/renderer/cad-renderer.ts`
 
 ---
 
