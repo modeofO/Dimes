@@ -4,7 +4,7 @@ info:
   description: |-
     This is the Node.js API layer for the Dimes CAD application, providing functionalities for creating,
     modifying, and exporting 3D models. This API acts as a secure gateway between the frontend
-    and the C++ OpenCascade backend, handling authentication, validation, and protocol translation.
+    and the CAD backend, handling authentication, validation, and protocol translation.
     It also includes endpoints for AI-driven operations through the Daydreams AI framework.
   version: 1.0.0
 servers:
@@ -24,7 +24,7 @@ tags:
   - name: CAD AI
     description: AI-powered CAD operations via Daydreams
   - name: Backend
-    description: C++ Backend status and monitoring
+    description: CAD Backend status and monitoring
 components:
   schemas:
     Vector3d:
@@ -111,7 +111,7 @@ paths:
       tags:
         - Health
       summary: Check API Health
-      description: Returns the health status of the Node.js API server and C++ backend.
+      description: Returns the health status of the Node.js API server and CAD backend.
       operationId: getHealth
       responses:
         '200':
@@ -150,10 +150,10 @@ paths:
                         enum: [healthy, unhealthy, unknown]
                       health:
                         type: object
-                        description: C++ backend health data
+                        description: CAD backend health data
                       url:
                         type: string
-                        description: C++ backend URL
+                        description: CAD backend URL
                   performance:
                     type: object
                     properties:
@@ -170,7 +170,7 @@ paths:
       tags:
         - CAD Models
       summary: Create a new 3D model
-      description: Creates a new 3D model using sketch-based modeling workflow via the C++ backend.
+      description: Creates a new 3D model using sketch-based modeling workflow via the CAD backend.
       operationId: createModel
       requestBody:
         description: Parameters for creating the new model.
@@ -222,7 +222,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '503':
-          description: C++ backend unavailable.
+          description: CAD backend unavailable.
           content:
             application/json:
               schema:
@@ -238,7 +238,7 @@ paths:
       tags:
         - CAD Operations
       summary: Perform a boolean operation
-      description: Performs a boolean operation (union, cut, intersect) between two models via the C++ backend.
+      description: Performs a boolean operation (union, cut, intersect) between two models via the CAD backend.
       operationId: performBooleanOperation
       requestBody:
         description: Parameters for the boolean operation.
@@ -288,7 +288,7 @@ paths:
       tags:
         - CAD Models
       summary: Tessellate a model
-      description: Generates a mesh representation of a model for visualization via the C++ backend.
+      description: Generates a mesh representation of a model for visualization via the CAD backend.
       operationId: tessellateModel
       requestBody:
         description: Parameters for tessellation.
@@ -336,7 +336,7 @@ paths:
       tags:
         - CAD Export
       summary: Export a model
-      description: Exports a model to a specified format (e.g., STEP, STL) via the C++ backend.
+      description: Exports a model to a specified format (e.g., STEP, STL) via the CAD backend.
       operationId: exportModel
       parameters:
         - name: sessionId
@@ -381,7 +381,7 @@ paths:
       tags:
         - CAD AI
       summary: AI-powered CAD operation
-      description: Executes a CAD operation based on a natural language instruction via the Daydreams AI framework and C++ backend.
+      description: Executes a CAD operation based on a natural language instruction via the Daydreams AI framework and CAD backend.
       operationId: daydreamsCad
       requestBody:
         description: The instruction for the AI.
@@ -428,7 +428,7 @@ paths:
       tags:
         - CAD Models
       summary: Update model parameters
-      description: Updates parameters of existing models via the C++ backend.
+      description: Updates parameters of existing models via the CAD backend.
       operationId: updateParameters
       requestBody:
         description: Parameters to update.
@@ -467,7 +467,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '503':
-          description: C++ backend unavailable.
+          description: CAD backend unavailable.
           content:
             application/json:
               schema:
@@ -482,8 +482,8 @@ paths:
     get:
       tags:
         - Backend
-      summary: Check C++ backend status
-      description: Returns the status and health of the C++ OpenCascade backend.
+      summary: Check CAD backend status
+      description: Returns the status and health of the CAD backend.
       operationId: getBackendStatus
       responses:
         '200':
@@ -501,7 +501,7 @@ paths:
                     enum: [available, unavailable]
                   backend_health:
                     type: object
-                    description: Health data from C++ backend
+                    description: Health data from CAD backend
                   timestamp:
                     type: integer
                     format: int64

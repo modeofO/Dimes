@@ -1,9 +1,9 @@
 import { action, AnyAgent } from "@daydreamsai/core";
 import { z } from "zod";
-import { CppBackendClient } from "../services/cppBackendClient.js";
+import { CadBackendClient } from "../services/cadBackendClient.js";
 import type { WebSocketManager } from "../services/websocketManager.js";
 
-interface CppBackendResponse {
+interface CadBackendResponse {
   success: boolean;
   data?: any;
 }
@@ -68,10 +68,10 @@ const createModelAction = action({
     rotation: z.array(z.number()).length(3).optional().describe("An array of 3 numbers for the [x, y, z] rotation in degrees.")
   }),
   async handler(parameters, ctx, agent) {
-    const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
+    const cadBackend = agent.container.resolve<CadBackendClient>("cadBackend");
     const agentSessionId = ctx.id;
     const backendSessionId = agentSessionId.replace('web-chat:', '');
-    const result = await cppBackend.createModel(backendSessionId, parameters) as CppBackendResponse;
+    const result = await cadBackend.createModel(backendSessionId, parameters) as CadBackendResponse;
     if (result.success && result.data) {
       sendVisualizationData(agent, agentSessionId, result.data);
       return result.data;
@@ -88,10 +88,10 @@ const createSketchPlaneAction = action({
         origin: z.array(z.number()).length(3).optional().describe("An array of 3 numbers for the [x, y, z] origin of the plane.")
     }),
     async handler(planeData, ctx, agent) {
-        const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
+        const cadBackend = agent.container.resolve<CadBackendClient>("cadBackend");
         const agentSessionId = ctx.id;
         const backendSessionId = agentSessionId.replace('web-chat:', '');
-        const result = await cppBackend.createSketchPlane(backendSessionId, planeData) as CppBackendResponse;
+        const result = await cadBackend.createSketchPlane(backendSessionId, planeData) as CadBackendResponse;
         if (result.success && result.data) {
           sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
@@ -107,10 +107,10 @@ const createSketchAction = action({
         plane_id: z.string().describe("The ID of the plane to create the sketch on.")
     }),
     async handler(sketchData, ctx, agent) {
-        const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
+        const cadBackend = agent.container.resolve<CadBackendClient>("cadBackend");
         const agentSessionId = ctx.id;
         const backendSessionId = agentSessionId.replace('web-chat:', '');
-        const result = await cppBackend.createSketch(backendSessionId, sketchData) as CppBackendResponse;
+        const result = await cadBackend.createSketch(backendSessionId, sketchData) as CadBackendResponse;
         if (result.success && result.data) {
           sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
@@ -128,10 +128,10 @@ const addSketchElementAction = action({
         parameters: z.object({}).passthrough().describe("Geometric parameters. For circles: { \"x\": number, \"y\": number, \"radius\": number }. For lines: { \"start\": [number, number], \"end\": [number, number] }. For rectangles: { \"corner\": [number, number], \"width\": number, \"height\": number }. For arcs: { \"center\": [number, number], \"radius\": number, \"start_angle\": number, \"end_angle\": number } or { \"start\": [number, number], \"end\": [number, number], \"radius\": number }. For polygons: { \"center\": [number, number], \"sides\": number, \"radius\": number }.")
     }),
     async handler(elementData, ctx, agent) {
-        const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
+        const cadBackend = agent.container.resolve<CadBackendClient>("cadBackend");
         const agentSessionId = ctx.id;
         const backendSessionId = agentSessionId.replace('web-chat:', '');
-        const result = await cppBackend.addSketchElement(backendSessionId, elementData) as CppBackendResponse;
+        const result = await cadBackend.addSketchElement(backendSessionId, elementData) as CadBackendResponse;
         if (result.success && result.data) {
           sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
@@ -150,7 +150,7 @@ const createRectangleAction = action({
         height: z.number().gt(0).describe("Height of the rectangle.")
     }),
     async handler(params, ctx, agent) {
-        const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
+        const cadBackend = agent.container.resolve<CadBackendClient>("cadBackend");
         const agentSessionId = ctx.id;
         const backendSessionId = agentSessionId.replace('web-chat:', '');
         const elementData = {
@@ -162,7 +162,7 @@ const createRectangleAction = action({
                 height: params.height
             }
         };
-        const result = await cppBackend.addSketchElement(backendSessionId, elementData) as CppBackendResponse;
+        const result = await cadBackend.addSketchElement(backendSessionId, elementData) as CadBackendResponse;
         if (result.success && result.data) {
           sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
@@ -188,7 +188,7 @@ const createArcAction = action({
         point3: z.array(z.number()).length(2).optional().describe("Third point [x, y] for three_points type.")
     }),
     async handler(params, ctx, agent) {
-        const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
+        const cadBackend = agent.container.resolve<CadBackendClient>("cadBackend");
         const agentSessionId = ctx.id;
         const backendSessionId = agentSessionId.replace('web-chat:', '');
         
@@ -220,7 +220,7 @@ const createArcAction = action({
             parameters
         };
         
-        const result = await cppBackend.addSketchElement(backendSessionId, elementData) as CppBackendResponse;
+        const result = await cadBackend.addSketchElement(backendSessionId, elementData) as CadBackendResponse;
         if (result.success && result.data) {
           sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
@@ -239,7 +239,7 @@ const createPolygonAction = action({
         radius: z.number().gt(0).describe("Radius from center to vertices.")
     }),
     async handler(params, ctx, agent) {
-        const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
+        const cadBackend = agent.container.resolve<CadBackendClient>("cadBackend");
         const agentSessionId = ctx.id;
         const backendSessionId = agentSessionId.replace('web-chat:', '');
         const elementData = {
@@ -251,7 +251,7 @@ const createPolygonAction = action({
                 radius: params.radius
             }
         };
-        const result = await cppBackend.addSketchElement(backendSessionId, elementData) as CppBackendResponse;
+        const result = await cadBackend.addSketchElement(backendSessionId, elementData) as CadBackendResponse;
         if (result.success && result.data) {
           sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
@@ -270,10 +270,10 @@ const addFilletAction = action({
         radius: z.number().gt(0).describe("The radius of the fillet arc.")
     }),
     async handler(filletData, ctx, agent) {
-        const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
+        const cadBackend = agent.container.resolve<CadBackendClient>("cadBackend");
         const agentSessionId = ctx.id;
         const backendSessionId = agentSessionId.replace('web-chat:', '');
-        const result = await cppBackend.addFillet(backendSessionId, filletData) as CppBackendResponse;
+        const result = await cadBackend.addFillet(backendSessionId, filletData) as CadBackendResponse;
         if (result.success && result.data) {
           // Send visualization data for the fillet
           sendVisualizationData(agent, agentSessionId, result.data);
@@ -308,10 +308,10 @@ const addChamferAction = action({
         distance: z.number().gt(0).describe("The distance of the chamfer cut.")
     }),
     async handler(chamferData, ctx, agent) {
-        const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
+        const cadBackend = agent.container.resolve<CadBackendClient>("cadBackend");
         const agentSessionId = ctx.id;
         const backendSessionId = agentSessionId.replace('web-chat:', '');
-        const result = await cppBackend.addChamfer(backendSessionId, chamferData) as CppBackendResponse;
+        const result = await cadBackend.addChamfer(backendSessionId, chamferData) as CadBackendResponse;
         if (result.success && result.data) {
           // Send visualization data for the chamfer
           sendVisualizationData(agent, agentSessionId, result.data);
@@ -345,10 +345,10 @@ const trimLineToLineAction = action({
         cutting_line_id: z.string().describe("The ID of the line that defines the trim boundary.")
     }),
     async handler(trimData, ctx, agent) {
-        const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
+        const cadBackend = agent.container.resolve<CadBackendClient>("cadBackend");
         const agentSessionId = ctx.id;
         const backendSessionId = agentSessionId.replace('web-chat:', '');
-        const result = await cppBackend.trimLineToLine(backendSessionId, trimData) as CppBackendResponse;
+        const result = await cadBackend.trimLineToLine(backendSessionId, trimData) as CadBackendResponse;
         if (result.success && result.data) {
           sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
@@ -366,10 +366,10 @@ const extendLineToLineAction = action({
         target_line_id: z.string().describe("The ID of the line that defines the extension target.")
     }),
     async handler(extendData, ctx, agent) {
-        const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
+        const cadBackend = agent.container.resolve<CadBackendClient>("cadBackend");
         const agentSessionId = ctx.id;
         const backendSessionId = agentSessionId.replace('web-chat:', '');
-        const result = await cppBackend.extendLineToLine(backendSessionId, extendData) as CppBackendResponse;
+        const result = await cadBackend.extendLineToLine(backendSessionId, extendData) as CadBackendResponse;
         if (result.success && result.data) {
           sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
@@ -390,10 +390,10 @@ const mirrorElementAction = action({
         }).describe("The line of symmetry to mirror across.")
     }),
     async handler(mirrorData, ctx, agent) {
-        const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
+        const cadBackend = agent.container.resolve<CadBackendClient>("cadBackend");
         const agentSessionId = ctx.id;
         const backendSessionId = agentSessionId.replace('web-chat:', '');
-        const result = await cppBackend.mirrorElements(backendSessionId, mirrorData) as CppBackendResponse;
+        const result = await cadBackend.mirrorElements(backendSessionId, mirrorData) as CadBackendResponse;
         if (result.success && result.data) {
           sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
@@ -411,10 +411,10 @@ const offsetElementAction = action({
         distance: z.number().describe("The offset distance (positive or negative).")
     }),
     async handler(offsetData, ctx, agent) {
-        const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
+        const cadBackend = agent.container.resolve<CadBackendClient>("cadBackend");
         const agentSessionId = ctx.id;
         const backendSessionId = agentSessionId.replace('web-chat:', '');
-        const result = await cppBackend.offsetElement(backendSessionId, offsetData) as CppBackendResponse;
+        const result = await cadBackend.offsetElement(backendSessionId, offsetData) as CadBackendResponse;
         if (result.success && result.data) {
           sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
@@ -432,10 +432,10 @@ const copyElementAction = action({
         translation: z.array(z.number()).length(2).describe("Translation vector [dx, dy] for the copy.")
     }),
     async handler(copyData, ctx, agent) {
-        const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
+        const cadBackend = agent.container.resolve<CadBackendClient>("cadBackend");
         const agentSessionId = ctx.id;
         const backendSessionId = agentSessionId.replace('web-chat:', '');
-        const result = await cppBackend.copyElement(backendSessionId, copyData) as CppBackendResponse;
+        const result = await cadBackend.copyElement(backendSessionId, copyData) as CadBackendResponse;
         if (result.success && result.data) {
           sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
@@ -453,10 +453,10 @@ const moveElementAction = action({
         translation: z.array(z.number()).length(2).describe("Translation vector [dx, dy] for the move.")
     }),
     async handler(moveData, ctx, agent) {
-        const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
+        const cadBackend = agent.container.resolve<CadBackendClient>("cadBackend");
         const agentSessionId = ctx.id;
         const backendSessionId = agentSessionId.replace('web-chat:', '');
-        const result = await cppBackend.moveElement(backendSessionId, moveData) as CppBackendResponse;
+        const result = await cadBackend.moveElement(backendSessionId, moveData) as CadBackendResponse;
         if (result.success && result.data) {
           sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
@@ -476,10 +476,10 @@ const createLinearArrayAction = action({
         spacing: z.number().gt(0).describe("Distance between array elements.")
     }),
     async handler(arrayData, ctx, agent) {
-        const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
+        const cadBackend = agent.container.resolve<CadBackendClient>("cadBackend");
         const agentSessionId = ctx.id;
         const backendSessionId = agentSessionId.replace('web-chat:', '');
-        const result = await cppBackend.createLinearArray(backendSessionId, arrayData) as CppBackendResponse;
+        const result = await cadBackend.createLinearArray(backendSessionId, arrayData) as CadBackendResponse;
         if (result.success && result.data) {
           // Send visualization for each created element
           if (result.data.visualization_data && Array.isArray(result.data.visualization_data)) {
@@ -513,10 +513,10 @@ const createMirrorArrayAction = action({
         keep_original: z.boolean().optional().default(true).describe("Whether to keep the original elements.")
     }),
     async handler(arrayData, ctx, agent) {
-        const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
+        const cadBackend = agent.container.resolve<CadBackendClient>("cadBackend");
         const agentSessionId = ctx.id;
         const backendSessionId = agentSessionId.replace('web-chat:', '');
-        const result = await cppBackend.createMirrorArray(backendSessionId, arrayData) as CppBackendResponse;
+        const result = await cadBackend.createMirrorArray(backendSessionId, arrayData) as CadBackendResponse;
         if (result.success && result.data) {
           // Send visualization for each mirrored element
           if (result.data.visualization_data && Array.isArray(result.data.visualization_data)) {
@@ -547,7 +547,7 @@ const extrudeFeatureAction = action({
         direction: z.enum(['normal', 'custom']).optional().describe("The direction of the extrusion.")
     }),
     async handler(extrudeData, ctx, agent) {
-        const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
+        const cadBackend = agent.container.resolve<CadBackendClient>("cadBackend");
         const agentSessionId = ctx.id;
         const backendSessionId = agentSessionId.replace('web-chat:', '');
 
@@ -564,7 +564,7 @@ const extrudeFeatureAction = action({
         }
 
         try {
-            const result = await cppBackend.extrudeFeature(backendSessionId, extrudeData) as CppBackendResponse;
+            const result = await cadBackend.extrudeFeature(backendSessionId, extrudeData) as CadBackendResponse;
             if (result.success && result.data) {
               sendVisualizationData(agent, agentSessionId, result.data);
               return result.data;
@@ -592,10 +592,10 @@ const performBooleanOperationAction = action({
         tool_id: z.string().describe("The ID of the tool model to use for the operation.")
     }),
     async handler(operation, ctx, agent) {
-        const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
+        const cadBackend = agent.container.resolve<CadBackendClient>("cadBackend");
         const agentSessionId = ctx.id;
         const backendSessionId = agentSessionId.replace('web-chat:', '');
-        const result = await cppBackend.performBooleanOperation(backendSessionId, operation) as CppBackendResponse;
+        const result = await cadBackend.performBooleanOperation(backendSessionId, operation) as CadBackendResponse;
         if (result.success && result.data) {
           sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;
@@ -612,11 +612,11 @@ const tessellateModelAction = action({
         tessellation_quality: z.number().min(0.001).max(1.0).optional().describe("The quality of the tessellation (0.001 to 1.0).")
     }),
     async handler(tessellationData, ctx, agent) {
-        const cppBackend = agent.container.resolve<CppBackendClient>("cppBackend");
+        const cadBackend = agent.container.resolve<CadBackendClient>("cadBackend");
         const agentSessionId = ctx.id;
         const backendSessionId = agentSessionId.replace('web-chat:', '');
         const { model_id, tessellation_quality } = tessellationData;
-        const result = await cppBackend.tessellateModel(backendSessionId, model_id, tessellation_quality) as CppBackendResponse;
+        const result = await cadBackend.tessellateModel(backendSessionId, model_id, tessellation_quality) as CadBackendResponse;
         if (result.success && result.data) {
           sendVisualizationData(agent, agentSessionId, result.data);
           return result.data;

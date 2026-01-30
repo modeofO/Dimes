@@ -1,9 +1,9 @@
 import express from 'express';
-import { CppBackendClient } from '../services/cppBackendClient.js';
+import { CadBackendClient } from '../services/cadBackendClient.js';
 import { logger } from '../utils/logger.js';
 
 const router = express.Router();
-const cppBackend = new CppBackendClient();
+const cadBackend = new CadBackendClient();
 
 /**
  * GET /api/v1/health
@@ -13,16 +13,16 @@ router.get('/', async (req, res) => {
   try {
     const startTime = Date.now();
     
-    // Check C++ backend health
+    // Check CAD backend health
     let backendStatus = 'unknown';
     let backendHealth = null;
     
     try {
-      backendHealth = await cppBackend.healthCheck();
+      backendHealth = await cadBackend.healthCheck();
       backendStatus = 'healthy';
     } catch (error) {
       backendStatus = 'unhealthy';
-      logger.warn('C++ backend health check failed:', error.message);
+      logger.warn('CAD backend health check failed:', error.message);
     }
     
     const responseTime = Date.now() - startTime;
@@ -38,7 +38,7 @@ router.get('/', async (req, res) => {
       backend: {
         status: backendStatus,
         health: backendHealth,
-        url: `${process.env.CPP_BACKEND_HOST}:${process.env.CPP_BACKEND_PORT}`,
+        url: `${process.env.CAD_BACKEND_HOST}:${process.env.CAD_BACKEND_PORT}`,
       },
       performance: {
         response_time_ms: responseTime,
@@ -69,8 +69,8 @@ router.get('/', async (req, res) => {
  */
 router.get('/ready', async (req, res) => {
   try {
-    // Check if C++ backend is available
-    const isBackendReady = await cppBackend.isAvailable();
+    // Check if CAD backend is available
+    const isBackendReady = await cadBackend.isAvailable();
     
     if (isBackendReady) {
       res.json({
@@ -83,7 +83,7 @@ router.get('/ready', async (req, res) => {
         status: 'not_ready',
         timestamp: Date.now(),
         backend_ready: false,
-        message: 'C++ backend is not available',
+        message: 'CAD backend is not available',
       });
     }
     

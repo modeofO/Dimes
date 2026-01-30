@@ -1,13 +1,13 @@
 import express from 'express';
 import { body, param, query, validationResult } from 'express-validator';
-import { CppBackendClient } from '../services/cppBackendClient.js';
+import { CadBackendClient } from '../services/cadBackendClient.js';
 import { logger } from '../utils/logger.js';
 import { ApiError } from '../utils/errors.js';
 import sessionValidator from '../middleware/sessionValidator.js';
 
 export default function(webSocketManager) {
   const router = express.Router();
-  const cppBackend = new CppBackendClient();
+  const cadBackend = new CadBackendClient();
 
   // Validation middleware
   const handleValidationErrors = (req, res, next) => {
@@ -235,10 +235,10 @@ export default function(webSocketManager) {
       // Debug: Log detailed parameters
       console.log('🔧 API Server received parameters:', JSON.stringify(parameters, null, 2));
 
-      const result = await cppBackend.createModel(sessionId, parameters);
+      const result = await cadBackend.createModel(sessionId, parameters);
 
-      // Debug: Log C++ backend response
-      console.log('📨 C++ Backend returned:', JSON.stringify(result, null, 2));
+      // Debug: Log CAD backend response
+      console.log('📨 CAD Backend returned:', JSON.stringify(result, null, 2));
 
       res.json({
         success: true,
@@ -263,9 +263,9 @@ export default function(webSocketManager) {
 
       logger.info(`Creating sketch plane for session ${sessionId}`, { planeData });
 
-      const result = await cppBackend.createSketchPlane(sessionId, planeData);
+      const result = await cadBackend.createSketchPlane(sessionId, planeData);
 
-      console.log('🔍 Raw C++ backend createSketchPlane result:', JSON.stringify(result, null, 2));
+      console.log('🔍 Raw CAD backend createSketchPlane result:', JSON.stringify(result, null, 2));
 
       // Send WebSocket notification for real-time updates
       if (webSocketManager && result.success && result.data) {
@@ -300,9 +300,9 @@ export default function(webSocketManager) {
 
       logger.info(`Creating sketch for session ${sessionId}`, { sketchData });
 
-      const result = await cppBackend.createSketch(sessionId, sketchData);
+      const result = await cadBackend.createSketch(sessionId, sketchData);
 
-      console.log('🔍 Raw C++ backend createSketch result:', JSON.stringify(result, null, 2));
+      console.log('🔍 Raw CAD backend createSketch result:', JSON.stringify(result, null, 2));
 
       // Send WebSocket notification for real-time updates
       if (webSocketManager && result.success && result.data) {
@@ -339,9 +339,9 @@ export default function(webSocketManager) {
 
       console.log('🔍 API Server received sketch element data:', JSON.stringify(elementData, null, 2));
 
-      const result = await cppBackend.addSketchElement(sessionId, elementData);
+      const result = await cadBackend.addSketchElement(sessionId, elementData);
 
-      console.log('🔍 Raw C++ backend addSketchElement result:', JSON.stringify(result, null, 2));
+      console.log('🔍 Raw CAD backend addSketchElement result:', JSON.stringify(result, null, 2));
 
       // Send WebSocket notification for real-time updates
       if (webSocketManager && result.success && result.data) {
@@ -394,9 +394,9 @@ export default function(webSocketManager) {
 
       logger.info(`Adding fillet for session ${sessionId}`, { filletData });
 
-      const result = await cppBackend.addFillet(sessionId, filletData);
+      const result = await cadBackend.addFillet(sessionId, filletData);
 
-      console.log('🔍 Raw C++ backend addFillet result:', JSON.stringify(result, null, 2));
+      console.log('🔍 Raw CAD backend addFillet result:', JSON.stringify(result, null, 2));
 
       // Send WebSocket notification for real-time updates
       if (webSocketManager && result.success && result.data) {
@@ -431,9 +431,9 @@ export default function(webSocketManager) {
 
       logger.info(`Adding chamfer for session ${sessionId}`, { chamferData });
 
-      const result = await cppBackend.addChamfer(sessionId, chamferData);
+      const result = await cadBackend.addChamfer(sessionId, chamferData);
 
-      console.log('🔍 Raw C++ backend addChamfer result:', JSON.stringify(result, null, 2));
+      console.log('🔍 Raw CAD backend addChamfer result:', JSON.stringify(result, null, 2));
 
       // Send WebSocket notification for real-time updates
       if (webSocketManager && result.success && result.data) {
@@ -468,7 +468,7 @@ export default function(webSocketManager) {
 
       logger.info(`Deleting element ${elementId} from sketch ${sketchId} for session ${sessionId}`);
 
-      const result = await cppBackend.deleteSketchElement(sessionId, sketchId, elementId);
+      const result = await cadBackend.deleteSketchElement(sessionId, sketchId, elementId);
 
       console.log('🔍 Raw backend deleteSketchElement result:', JSON.stringify(result, null, 2));
 
@@ -508,9 +508,9 @@ export default function(webSocketManager) {
 
       logger.info(`Trimming line to line for session ${sessionId}`, { trimData });
 
-      const result = await cppBackend.trimLineToLine(sessionId, trimData);
+      const result = await cadBackend.trimLineToLine(sessionId, trimData);
 
-      console.log('🔍 Raw C++ backend trimLineToLine result:', JSON.stringify(result, null, 2));
+      console.log('🔍 Raw CAD backend trimLineToLine result:', JSON.stringify(result, null, 2));
 
       // Send WebSocket notification for real-time updates
       if (webSocketManager && result.success && result.data) {
@@ -545,9 +545,9 @@ export default function(webSocketManager) {
 
       logger.info(`Trimming line to geometry for session ${sessionId}`, { trimData });
 
-      const result = await cppBackend.trimLineToGeometry(sessionId, trimData);
+      const result = await cadBackend.trimLineToGeometry(sessionId, trimData);
 
-      console.log('🔍 Raw C++ backend trimLineToGeometry result:', JSON.stringify(result, null, 2));
+      console.log('🔍 Raw CAD backend trimLineToGeometry result:', JSON.stringify(result, null, 2));
 
       // Send WebSocket notification for real-time updates
       if (webSocketManager && result.success && result.data) {
@@ -582,9 +582,9 @@ export default function(webSocketManager) {
 
       logger.info(`Extending line to line for session ${sessionId}`, { extendData });
 
-      const result = await cppBackend.extendLineToLine(sessionId, extendData);
+      const result = await cadBackend.extendLineToLine(sessionId, extendData);
 
-      console.log('🔍 Raw C++ backend extendLineToLine result:', JSON.stringify(result, null, 2));
+      console.log('🔍 Raw CAD backend extendLineToLine result:', JSON.stringify(result, null, 2));
 
       // Send WebSocket notification for real-time updates
       if (webSocketManager && result.success && result.data) {
@@ -619,9 +619,9 @@ export default function(webSocketManager) {
 
       logger.info(`Extending line to geometry for session ${sessionId}`, { extendData });
 
-      const result = await cppBackend.extendLineToGeometry(sessionId, extendData);
+      const result = await cadBackend.extendLineToGeometry(sessionId, extendData);
 
-      console.log('🔍 Raw C++ backend extendLineToGeometry result:', JSON.stringify(result, null, 2));
+      console.log('🔍 Raw CAD backend extendLineToGeometry result:', JSON.stringify(result, null, 2));
 
       // Send WebSocket notification for real-time updates
       if (webSocketManager && result.success && result.data) {
@@ -656,9 +656,9 @@ export default function(webSocketManager) {
 
       logger.info(`Mirroring elements for session ${sessionId}`, { mirrorData });
 
-      const result = await cppBackend.mirrorElements(sessionId, mirrorData);
+      const result = await cadBackend.mirrorElements(sessionId, mirrorData);
 
-      console.log('🔍 Raw C++ backend mirrorElements result:', JSON.stringify(result, null, 2));
+      console.log('🔍 Raw CAD backend mirrorElements result:', JSON.stringify(result, null, 2));
 
       // Send WebSocket notification for real-time updates
       if (webSocketManager && result.success && result.data) {
@@ -693,9 +693,9 @@ export default function(webSocketManager) {
 
       logger.info(`Mirroring elements by two points for session ${sessionId}`, { mirrorData });
 
-      const result = await cppBackend.mirrorElementsByTwoPoints(sessionId, mirrorData);
+      const result = await cadBackend.mirrorElementsByTwoPoints(sessionId, mirrorData);
 
-      console.log('🔍 Raw C++ backend mirrorElementsByTwoPoints result:', JSON.stringify(result, null, 2));
+      console.log('🔍 Raw CAD backend mirrorElementsByTwoPoints result:', JSON.stringify(result, null, 2));
 
       // Send WebSocket notification for real-time updates
       if (webSocketManager && result.success && result.data) {
@@ -730,9 +730,9 @@ export default function(webSocketManager) {
 
       logger.info(`Offsetting element for session ${sessionId}`, { offsetData });
 
-      const result = await cppBackend.offsetElement(sessionId, offsetData);
+      const result = await cadBackend.offsetElement(sessionId, offsetData);
 
-      console.log('🔍 Raw C++ backend offsetElement result:', JSON.stringify(result, null, 2));
+      console.log('🔍 Raw CAD backend offsetElement result:', JSON.stringify(result, null, 2));
 
       // Send WebSocket notification for real-time updates
       if (webSocketManager && result.success && result.data) {
@@ -767,9 +767,9 @@ export default function(webSocketManager) {
 
       logger.info(`Offsetting element directionally for session ${sessionId}`, { offsetData });
 
-      const result = await cppBackend.offsetElementDirectional(sessionId, offsetData);
+      const result = await cadBackend.offsetElementDirectional(sessionId, offsetData);
 
-      console.log('🔍 Raw C++ backend offsetElementDirectional result:', JSON.stringify(result, null, 2));
+      console.log('🔍 Raw CAD backend offsetElementDirectional result:', JSON.stringify(result, null, 2));
 
       // Send WebSocket notification for real-time updates
       if (webSocketManager && result.success && result.data) {
@@ -804,9 +804,9 @@ export default function(webSocketManager) {
 
       logger.info(`Copying element for session ${sessionId}`, { copyData });
 
-      const result = await cppBackend.copyElement(sessionId, copyData);
+      const result = await cadBackend.copyElement(sessionId, copyData);
 
-      console.log('🔍 Raw C++ backend copyElement result:', JSON.stringify(result, null, 2));
+      console.log('🔍 Raw CAD backend copyElement result:', JSON.stringify(result, null, 2));
 
       // Send WebSocket notification for real-time updates
       if (webSocketManager && result.success && result.data) {
@@ -841,9 +841,9 @@ export default function(webSocketManager) {
 
       logger.info(`Moving element for session ${sessionId}`, { moveData });
 
-      const result = await cppBackend.moveElement(sessionId, moveData);
+      const result = await cadBackend.moveElement(sessionId, moveData);
 
-      console.log('🔍 Raw C++ backend moveElement result:', JSON.stringify(result, null, 2));
+      console.log('🔍 Raw CAD backend moveElement result:', JSON.stringify(result, null, 2));
 
       // Send WebSocket notification for real-time updates
       if (webSocketManager && result.success && result.data) {
@@ -878,7 +878,7 @@ export default function(webSocketManager) {
 
       logger.info(`Creating linear array for session ${sessionId}`, { arrayData });
 
-      const result = await cppBackend.createLinearArray(sessionId, arrayData);
+      const result = await cadBackend.createLinearArray(sessionId, arrayData);
 
       console.log('🔍 Raw backend createLinearArray result:', JSON.stringify(result, null, 2));
 
@@ -927,7 +927,7 @@ export default function(webSocketManager) {
 
       logger.info(`Creating mirror array for session ${sessionId}`, { arrayData });
 
-      const result = await cppBackend.createMirrorArray(sessionId, arrayData);
+      const result = await cadBackend.createMirrorArray(sessionId, arrayData);
 
       console.log('🔍 Raw backend createMirrorArray result:', JSON.stringify(result, null, 2));
 
@@ -976,9 +976,9 @@ export default function(webSocketManager) {
 
       logger.info(`Extruding feature for session ${sessionId}`, { extrudeData });
 
-      const result = await cppBackend.extrudeFeature(sessionId, extrudeData);
+      const result = await cadBackend.extrudeFeature(sessionId, extrudeData);
 
-      console.log('🔍 Raw C++ backend extrudeFeature result:', JSON.stringify(result, null, 2));
+      console.log('🔍 Raw CAD backend extrudeFeature result:', JSON.stringify(result, null, 2));
 
       // Send WebSocket notification for real-time updates
       if (webSocketManager && result.success && result.data) {
@@ -1025,7 +1025,7 @@ export default function(webSocketManager) {
 
       logger.info(`Performing boolean operation for session ${sessionId}`, { operation });
 
-      const result = await cppBackend.performBooleanOperation(sessionId, operation);
+      const result = await cadBackend.performBooleanOperation(sessionId, operation);
 
       // Send WebSocket notification for real-time updates
       if (webSocketManager && result.success && result.data) {
@@ -1072,7 +1072,7 @@ export default function(webSocketManager) {
 
       logger.info(`Updating parameters for session ${sessionId}`, { parameters });
 
-      const result = await cppBackend.updateParameters(sessionId, parameters);
+      const result = await cadBackend.updateParameters(sessionId, parameters);
 
       res.json({
         success: true,
@@ -1097,7 +1097,7 @@ export default function(webSocketManager) {
 
       logger.info(`Tessellating model for session ${sessionId}`, { model_id, tessellation_quality });
 
-      const result = await cppBackend.tessellateModel(sessionId, model_id, tessellation_quality);
+      const result = await cadBackend.tessellateModel(sessionId, model_id, tessellation_quality);
 
       res.json({
         success: true,
@@ -1121,7 +1121,7 @@ export default function(webSocketManager) {
 
       logger.info(`Exporting model for session ${sessionId}`, { format });
 
-      const result = await cppBackend.exportModel(sessionId, format);
+      const result = await cadBackend.exportModel(sessionId, format);
 
       // Set appropriate headers for file download
       const contentType = getContentType(format);
@@ -1143,14 +1143,14 @@ export default function(webSocketManager) {
 
   /**
    * GET /api/v1/cad/backend/status
-   * Check C++ backend status
+   * Check CAD backend status
    */
   router.get('/backend/status', async (req, res, next) => {
     try {
-      const isAvailable = await cppBackend.isAvailable();
+      const isAvailable = await cadBackend.isAvailable();
       
       if (isAvailable) {
-        const healthData = await cppBackend.healthCheck();
+        const healthData = await cadBackend.healthCheck();
         res.json({
           success: true,
           backend_status: 'available',
@@ -1161,7 +1161,7 @@ export default function(webSocketManager) {
         res.status(503).json({
           success: false,
           backend_status: 'unavailable',
-          error: 'C++ backend is not responding',
+          error: 'CAD backend is not responding',
           timestamp: Date.now(),
         });
       }

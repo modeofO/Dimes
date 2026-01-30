@@ -2,7 +2,7 @@ import { createDreams, context, LogLevel, type AnyAgent } from "@daydreamsai/cor
 import { openrouter } from "@openrouter/ai-sdk-provider";
 import { webChatExtension, webChatContext } from "./extension.js";
 import { cadActions } from "./actions.js";
-import { cppBackendService } from "./service.js";
+import { cadBackendService } from "./service.js";
 import type { WebSocketManager } from "../services/websocketManager.js";
 import { logger } from "../utils/logger.js";
 
@@ -28,7 +28,7 @@ export async function initializeAgent(webSocketManager: WebSocketManager) {
     extensions: [webChatExtension],
     contexts: [webChatContext],
     actions: cadActions,
-    services: [cppBackendService],
+    services: [cadBackendService],
   });
 
   // Make the webSocketManager instance available to the agent via the container.

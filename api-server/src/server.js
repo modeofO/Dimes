@@ -13,7 +13,7 @@ import { validateSession } from './middleware/sessionValidator.js';
 import cadRoutes from './routes/cad.js';
 import healthRoutes from './routes/health.js';
 import { WebSocketManager } from './services/websocketManager.js';
-import { CppBackendClient } from './services/cppBackendClient.js';
+import { CadBackendClient } from './services/cadBackendClient.js';
 import { logger } from './utils/logger.js';
 import { initializeAgent } from './agent/index.ts';
 
@@ -74,7 +74,7 @@ const host = process.env.HOST || '0.0.0.0';
 server.listen(port, host, () => {
   logger.info(`🚀 Dimes CAD API Server running on port ${port}`);
   logger.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  logger.info(`🔗 C++ Backend: ${process.env.CPP_BACKEND_URL || '127.0.0.1:8080'}`);
+  logger.info(`🔗 CAD Backend: ${process.env.CAD_BACKEND_URL || '127.0.0.1:8080'}`);
 });
 
 // Graceful shutdown

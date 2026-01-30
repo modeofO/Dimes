@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { CppBackendClient } from './services/cppBackendClient.js';
+import { CadBackendClient } from './services/cadBackendClient.js';
 import { logger } from './utils/logger.js';
 
 const server = new McpServer({
@@ -9,7 +9,7 @@ const server = new McpServer({
   version: '1.0.0',
 });
 
-const cadClient = new CppBackendClient();
+const cadClient = new CadBackendClient();
 const sessionId = 'mcp-agent-session'; // A dedicated session ID for the MCP agent
 
 logger.info('MCP Server starting...');

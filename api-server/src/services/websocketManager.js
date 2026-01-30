@@ -2,13 +2,13 @@ import { WebSocketServer } from 'ws';
 import { logger } from '../utils/logger.js';
 
 export class WebSocketManager {
-  constructor(server, cppBackendClient) {
+  constructor(server, cadBackendClient) {
     this.wss = new WebSocketServer({ 
       server,
       path: '/ws',
     });
     
-    this.cppBackend = cppBackendClient;
+    this.cadBackend = cadBackendClient;
     this.clients = new Map(); // sessionId -> WebSocket
     this.heartbeatInterval = parseInt(process.env.WS_HEARTBEAT_INTERVAL) || 30000;
     this.onMessageCallback = null; // Callback for incoming messages
@@ -251,7 +251,7 @@ export class WebSocketManager {
   // Send backend status to client
   async sendBackendStatus(sessionId) {
     try {
-      const isAvailable = await this.cppBackend.isAvailable();
+      const isAvailable = await this.cadBackend.isAvailable();
       this.sendToClient(sessionId, {
         type: 'backend_status',
         status: isAvailable ? 'available' : 'unavailable',

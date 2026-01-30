@@ -8,17 +8,17 @@ const httpAgent = new Agent({
   timeout: 30000
 });
 
-export class CppBackendClient {
+export class CadBackendClient {
   constructor() {
-    this.baseUrl = `http://${process.env.CPP_BACKEND_HOST || 'localhost'}:${process.env.CPP_BACKEND_PORT || 8080}`;
-    this.timeout = parseInt(process.env.CPP_BACKEND_TIMEOUT) || 30000;
+    this.baseUrl = `http://${process.env.CAD_BACKEND_HOST || 'localhost'}:${process.env.CAD_BACKEND_PORT || 8080}`;
+    this.timeout = parseInt(process.env.CAD_BACKEND_TIMEOUT) || 30000;
     this.retryAttempts = 3;
     this.retryDelay = 1000;
     logger.info(`CAD backend configured at: ${this.baseUrl}`);
   }
 
   /**
-   * Make a request to the C++ backend with retry logic
+   * Make a request to the CAD backend with retry logic
    */
   async makeRequest(endpoint, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
@@ -52,11 +52,11 @@ export class CppBackendClient {
         }
 
       } catch (error) {
-        logger.warn(`C++ backend request failed (attempt ${attempt}): ${error.message}`);
+        logger.warn(`CAD backend request failed (attempt ${attempt}): ${error.message}`);
         
         if (attempt === this.retryAttempts) {
           logger.error(`All retry attempts failed for ${url}`);
-          throw new Error(`C++ backend unavailable: ${error.message}`);
+          throw new Error(`CAD backend unavailable: ${error.message}`);
         }
         
         // Wait before retrying
@@ -66,7 +66,7 @@ export class CppBackendClient {
   }
 
   /**
-   * Health check for C++ backend
+   * Health check for CAD backend
    */
   async healthCheck() {
     try {
@@ -75,17 +75,17 @@ export class CppBackendClient {
       });
       return response;
     } catch (error) {
-      logger.error('C++ backend health check failed:', error.message);
+      logger.error('CAD backend health check failed:', error.message);
       throw error;
     }
   }
 
   /**
-   * Create a model in the C++ backend
+   * Create a model in the CAD backend
    */
   async createModel(sessionId, parameters) {
     try {
-      // Flatten the structure to avoid C++ JSON parsing issues
+      // Flatten the structure to avoid JSON parsing issues
       const requestBody = {
         session_id: sessionId,
         operation: 'create_model',
@@ -99,8 +99,8 @@ export class CppBackendClient {
       
       const jsonString = JSON.stringify(requestBody);
       
-      // Debug: Log what we're sending to C++
-      console.log('🔧 Node.js sending to C++:', jsonString);
+      // Debug: Log what we're sending to CAD backend
+      console.log('🔧 Node.js sending to CAD backend:', jsonString);
       console.log('🔧 Parameters object:', JSON.stringify(parameters, null, 2));
       
       const response = await this.makeRequest('/api/v1/models', {
@@ -112,13 +112,13 @@ export class CppBackendClient {
       });
       return response;
     } catch (error) {
-      logger.error('Failed to create model in C++ backend:', error.message);
+      logger.error('Failed to create model in CAD backend:', error.message);
       throw error;
     }
   }
 
   /**
-   * Create a sketch plane in the C++ backend
+   * Create a sketch plane in the CAD backend
    */
   async createSketchPlane(sessionId, planeData) {
     try {
@@ -133,7 +133,7 @@ export class CppBackendClient {
 
       const jsonString = JSON.stringify(requestBody);
       
-      console.log('🔧 Node.js sending sketch plane request to C++:');
+      console.log('🔧 Node.js sending sketch plane request to CAD backend:');
       console.log('📋 Request body object:', JSON.stringify(requestBody, null, 2));
       console.log('📋 JSON string:', jsonString);
       console.log('📋 JSON string length:', jsonString.length);
@@ -149,13 +149,13 @@ export class CppBackendClient {
       });
       return response;
     } catch (error) {
-      logger.error('Failed to create sketch plane in C++ backend:', error.message);
+      logger.error('Failed to create sketch plane in CAD backend:', error.message);
       throw error;
     }
   }
 
   /**
-   * Create a sketch in the C++ backend
+   * Create a sketch in the CAD backend
    */
   async createSketch(sessionId, sketchData) {
     try {
@@ -166,7 +166,7 @@ export class CppBackendClient {
 
       const jsonString = JSON.stringify(requestBody);
       
-      console.log('🔧 Node.js sending sketch request to C++:');
+      console.log('🔧 Node.js sending sketch request to CAD backend:');
       console.log('📋 Request body object:', JSON.stringify(requestBody, null, 2));
       console.log('📋 JSON string:', jsonString);
 
@@ -181,19 +181,19 @@ export class CppBackendClient {
       });
       return response;
     } catch (error) {
-      logger.error('Failed to create sketch in C++ backend:', error.message);
+      logger.error('Failed to create sketch in CAD backend:', error.message);
       throw error;
     }
   }
 
   /**
-   * Add element to sketch in the C++ backend
+   * Add element to sketch in the CAD backend
    */
   async addSketchElement(sessionId, elementData) {
     try {
       console.log('📋 Element data received:', elementData);
 
-      // Flatten parameters to avoid nested JSON parsing issues in C++
+      // Flatten parameters to avoid nested JSON parsing issues
       const requestBody = {
         session_id: sessionId,
         sketch_id: elementData.sketch_id,
@@ -260,7 +260,7 @@ export class CppBackendClient {
       
       const jsonString = JSON.stringify(requestBody);
       
-      console.log('🔧 Node.js sending sketch element request to C++:');
+      console.log('🔧 Node.js sending sketch element request to CAD backend:');
       console.log('📋 JSON string:', jsonString);
 
       const response = await this.makeRequest('/api/v1/sketch-elements', {
@@ -272,13 +272,13 @@ export class CppBackendClient {
       });
       return response;
     } catch (error) {
-      logger.error('Failed to add sketch element in C++ backend:', error.message);
+      logger.error('Failed to add sketch element in CAD backend:', error.message);
       throw error;
     }
   }
 
   /**
-   * Add fillet to sketch in the C++ backend
+   * Add fillet to sketch in the CAD backend
    */
   async addFillet(sessionId, filletData) {
     try {
@@ -296,7 +296,7 @@ export class CppBackendClient {
       
       const jsonString = JSON.stringify(requestBody);
       
-      console.log('🔧 Node.js sending fillet request to C++:');
+      console.log('🔧 Node.js sending fillet request to CAD backend:');
       console.log('📋 JSON string:', jsonString);
 
       const response = await this.makeRequest('/api/v1/fillets', {
@@ -308,13 +308,13 @@ export class CppBackendClient {
       });
       return response;
     } catch (error) {
-      logger.error('Failed to add fillet in C++ backend:', error.message);
+      logger.error('Failed to add fillet in CAD backend:', error.message);
       throw error;
     }
   }
 
   /**
-   * Add chamfer to sketch in the C++ backend
+   * Add chamfer to sketch in the CAD backend
    */
   async addChamfer(sessionId, chamferData) {
     try {
@@ -332,7 +332,7 @@ export class CppBackendClient {
       
       const jsonString = JSON.stringify(requestBody);
       
-      console.log('🔧 Node.js sending chamfer request to C++:');
+      console.log('🔧 Node.js sending chamfer request to CAD backend:');
       console.log('📋 JSON string:', jsonString);
 
       const response = await this.makeRequest('/api/v1/chamfers', {
@@ -344,7 +344,7 @@ export class CppBackendClient {
       });
       return response;
     } catch (error) {
-      logger.error('Failed to add chamfer in C++ backend:', error.message);
+      logger.error('Failed to add chamfer in CAD backend:', error.message);
       throw error;
     }
   }
@@ -370,7 +370,7 @@ export class CppBackendClient {
   }
 
   /**
-   * Trim line to line in the C++ backend
+   * Trim line to line in the CAD backend
    */
   async trimLineToLine(sessionId, trimData) {
     try {
@@ -388,7 +388,7 @@ export class CppBackendClient {
       
       const jsonString = JSON.stringify(requestBody);
       
-      console.log('🔧 Node.js sending trim line to line request to C++:');
+      console.log('🔧 Node.js sending trim line to line request to CAD backend:');
       console.log('📋 JSON string:', jsonString);
 
       const response = await this.makeRequest('/api/v1/trim-line-to-line', {
@@ -400,13 +400,13 @@ export class CppBackendClient {
       });
       return response;
     } catch (error) {
-      logger.error('Failed to trim line to line in C++ backend:', error.message);
+      logger.error('Failed to trim line to line in CAD backend:', error.message);
       throw error;
     }
   }
 
   /**
-   * Trim line to geometry in the C++ backend
+   * Trim line to geometry in the CAD backend
    */
   async trimLineToGeometry(sessionId, trimData) {
     try {
@@ -424,7 +424,7 @@ export class CppBackendClient {
       
       const jsonString = JSON.stringify(requestBody);
       
-      console.log('🔧 Node.js sending trim line to geometry request to C++:');
+      console.log('🔧 Node.js sending trim line to geometry request to CAD backend:');
       console.log('📋 JSON string:', jsonString);
 
       const response = await this.makeRequest('/api/v1/trim-line-to-geometry', {
@@ -436,13 +436,13 @@ export class CppBackendClient {
       });
       return response;
     } catch (error) {
-      logger.error('Failed to trim line to geometry in C++ backend:', error.message);
+      logger.error('Failed to trim line to geometry in CAD backend:', error.message);
       throw error;
     }
   }
 
   /**
-   * Extend line to line in the C++ backend
+   * Extend line to line in the CAD backend
    */
   async extendLineToLine(sessionId, extendData) {
     try {
@@ -460,7 +460,7 @@ export class CppBackendClient {
       
       const jsonString = JSON.stringify(requestBody);
       
-      console.log('🔧 Node.js sending extend line to line request to C++:');
+      console.log('🔧 Node.js sending extend line to line request to CAD backend:');
       console.log('📋 JSON string:', jsonString);
 
       const response = await this.makeRequest('/api/v1/extend-line-to-line', {
@@ -472,13 +472,13 @@ export class CppBackendClient {
       });
       return response;
     } catch (error) {
-      logger.error('Failed to extend line to line in C++ backend:', error.message);
+      logger.error('Failed to extend line to line in CAD backend:', error.message);
       throw error;
     }
   }
 
   /**
-   * Extend line to geometry in the C++ backend
+   * Extend line to geometry in the CAD backend
    */
   async extendLineToGeometry(sessionId, extendData) {
     try {
@@ -496,7 +496,7 @@ export class CppBackendClient {
       
       const jsonString = JSON.stringify(requestBody);
       
-      console.log('🔧 Node.js sending extend line to geometry request to C++:');
+      console.log('🔧 Node.js sending extend line to geometry request to CAD backend:');
       console.log('📋 JSON string:', jsonString);
 
       const response = await this.makeRequest('/api/v1/extend-line-to-geometry', {
@@ -508,13 +508,13 @@ export class CppBackendClient {
       });
       return response;
     } catch (error) {
-      logger.error('Failed to extend line to geometry in C++ backend:', error.message);
+      logger.error('Failed to extend line to geometry in CAD backend:', error.message);
       throw error;
     }
   }
 
   /**
-   * Mirror elements in the C++ backend
+   * Mirror elements in the CAD backend
    */
   async mirrorElements(sessionId, mirrorData) {
     try {
@@ -532,7 +532,7 @@ export class CppBackendClient {
       
       const jsonString = JSON.stringify(requestBody);
       
-      console.log('🔧 Node.js sending mirror elements request to C++:');
+      console.log('🔧 Node.js sending mirror elements request to CAD backend:');
       console.log('📋 JSON string:', jsonString);
 
       const response = await this.makeRequest('/api/v1/mirror-elements', {
@@ -544,13 +544,13 @@ export class CppBackendClient {
       });
       return response;
     } catch (error) {
-      logger.error('Failed to mirror elements in C++ backend:', error.message);
+      logger.error('Failed to mirror elements in CAD backend:', error.message);
       throw error;
     }
   }
 
   /**
-   * Mirror elements by two points in the C++ backend
+   * Mirror elements by two points in the CAD backend
    */
   async mirrorElementsByTwoPoints(sessionId, mirrorData) {
     try {
@@ -571,7 +571,7 @@ export class CppBackendClient {
       
       const jsonString = JSON.stringify(requestBody);
       
-      console.log('🔧 Node.js sending mirror elements by two points request to C++:');
+      console.log('🔧 Node.js sending mirror elements by two points request to CAD backend:');
       console.log('📋 JSON string:', jsonString);
 
       const response = await this.makeRequest('/api/v1/mirror-elements-by-two-points', {
@@ -583,13 +583,13 @@ export class CppBackendClient {
       });
       return response;
     } catch (error) {
-      logger.error('Failed to mirror elements by two points in C++ backend:', error.message);
+      logger.error('Failed to mirror elements by two points in CAD backend:', error.message);
       throw error;
     }
   }
 
   /**
-   * Offset element in the C++ backend
+   * Offset element in the CAD backend
    */
   async offsetElement(sessionId, offsetData) {
     try {
@@ -606,7 +606,7 @@ export class CppBackendClient {
       
       const jsonString = JSON.stringify(requestBody);
       
-      console.log('🔧 Node.js sending offset element request to C++:');
+      console.log('🔧 Node.js sending offset element request to CAD backend:');
       console.log('📋 JSON string:', jsonString);
 
       const response = await this.makeRequest('/api/v1/offset-element', {
@@ -618,13 +618,13 @@ export class CppBackendClient {
       });
       return response;
     } catch (error) {
-      logger.error('Failed to offset element in C++ backend:', error.message);
+      logger.error('Failed to offset element in CAD backend:', error.message);
       throw error;
     }
   }
 
   /**
-   * Offset element directionally in the C++ backend
+   * Offset element directionally in the CAD backend
    */
   async offsetElementDirectional(sessionId, offsetData) {
     try {
@@ -642,7 +642,7 @@ export class CppBackendClient {
       
       const jsonString = JSON.stringify(requestBody);
       
-      console.log('🔧 Node.js sending offset element directional request to C++:');
+      console.log('🔧 Node.js sending offset element directional request to CAD backend:');
       console.log('📋 JSON string:', jsonString);
 
       const response = await this.makeRequest('/api/v1/offset-element-directional', {
@@ -654,13 +654,13 @@ export class CppBackendClient {
       });
       return response;
     } catch (error) {
-      logger.error('Failed to offset element directionally in C++ backend:', error.message);
+      logger.error('Failed to offset element directionally in CAD backend:', error.message);
       throw error;
     }
   }
 
   /**
-   * Copy element in the C++ backend
+   * Copy element in the CAD backend
    */
   async copyElement(sessionId, copyData) {
     try {
@@ -693,7 +693,7 @@ export class CppBackendClient {
       
       const jsonString = JSON.stringify(requestBody);
       
-      console.log('🔧 Node.js sending copy element request to C++:');
+      console.log('🔧 Node.js sending copy element request to CAD backend:');
       console.log('📋 JSON string:', jsonString);
 
       const response = await this.makeRequest('/api/v1/copy-element', {
@@ -705,13 +705,13 @@ export class CppBackendClient {
       });
       return response;
     } catch (error) {
-      logger.error('Failed to copy element in C++ backend:', error.message);
+      logger.error('Failed to copy element in CAD backend:', error.message);
       throw error;
     }
   }
 
   /**
-   * Move element in the C++ backend
+   * Move element in the CAD backend
    */
   async moveElement(sessionId, moveData) {
     try {
@@ -742,7 +742,7 @@ export class CppBackendClient {
       
       const jsonString = JSON.stringify(requestBody);
       
-      console.log('🔧 Node.js sending move element request to C++:');
+      console.log('🔧 Node.js sending move element request to CAD backend:');
       console.log('📋 JSON string:', jsonString);
 
       const response = await this.makeRequest('/api/v1/move-element', {
@@ -754,7 +754,7 @@ export class CppBackendClient {
       });
       return response;
     } catch (error) {
-      logger.error('Failed to move element in C++ backend:', error.message);
+      logger.error('Failed to move element in CAD backend:', error.message);
       throw error;
     }
   }
@@ -864,7 +864,7 @@ export class CppBackendClient {
   }
 
   /**
-   * Extrude sketch or element in the C++ backend
+   * Extrude sketch or element in the CAD backend
    */
   async extrudeFeature(sessionId, extrudeData) {
     try {
@@ -882,7 +882,7 @@ export class CppBackendClient {
       
       const jsonString = JSON.stringify(requestBody);
       
-      console.log('🔧 Node.js sending extrude feature request to C++:');
+      console.log('🔧 Node.js sending extrude feature request to CAD backend:');
       console.log('📋 JSON string:', jsonString);
 
       const response = await this.makeRequest('/api/v1/extrude', {
@@ -894,13 +894,13 @@ export class CppBackendClient {
       });
       return response;
     } catch (error) {
-      logger.error('Failed to extrude feature in C++ backend:', error.message);
+      logger.error('Failed to extrude feature in CAD backend:', error.message);
       throw error;
     }
   }
 
   /**
-   * Perform boolean operation in the C++ backend
+   * Perform boolean operation in the CAD backend
    */
   async performBooleanOperation(sessionId, operation) {
     try {
@@ -917,13 +917,13 @@ export class CppBackendClient {
       });
       return response;
     } catch (error) {
-      logger.error('Failed to perform boolean operation in C++ backend:', error.message);
+      logger.error('Failed to perform boolean operation in CAD backend:', error.message);
       throw error;
     }
   }
 
   /**
-   * Update parameters in the C++ backend
+   * Update parameters in the CAD backend
    */
   async updateParameters(sessionId, parameters) {
     try {
@@ -940,13 +940,13 @@ export class CppBackendClient {
       });
       return response;
     } catch (error) {
-      logger.error('Failed to update parameters in C++ backend:', error.message);
+      logger.error('Failed to update parameters in CAD backend:', error.message);
       throw error;
     }
   }
 
   /**
-   * Tessellate a model in the C++ backend
+   * Tessellate a model in the CAD backend
    */
   async tessellateModel(sessionId, modelId, quality = 0.1) {
     try {
@@ -963,13 +963,13 @@ export class CppBackendClient {
       });
       return response;
     } catch (error) {
-      logger.error('Failed to tessellate model in C++ backend:', error.message);
+      logger.error('Failed to tessellate model in CAD backend:', error.message);
       throw error;
     }
   }
 
   /**
-   * Export a model from the C++ backend
+   * Export a model from the CAD backend
    */
   async exportModel(sessionId, format) {
     try {
@@ -981,13 +981,13 @@ export class CppBackendClient {
       });
       return response;
     } catch (error) {
-      logger.error('Failed to export model from C++ backend:', error.message);
+      logger.error('Failed to export model from CAD backend:', error.message);
       throw error;
     }
   }
 
   /**
-   * Send Daydreams AI request to C++ backend
+   * Send Daydreams AI request to CAD backend
    */
   async sendDaydreamsRequest(sessionId, instruction, parameters = {}) {
     try {
@@ -1001,13 +1001,13 @@ export class CppBackendClient {
       });
       return response;
     } catch (error) {
-      logger.error('Failed to send Daydreams request to C++ backend:', error.message);
+      logger.error('Failed to send Daydreams request to CAD backend:', error.message);
       throw error;
     }
   }
 
   /**
-   * Check if C++ backend is available
+   * Check if CAD backend is available
    */
   async isAvailable() {
     try {
