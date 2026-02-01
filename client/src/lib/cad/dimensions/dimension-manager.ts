@@ -119,12 +119,12 @@ export class DimensionManager {
      * @param offsetDirection - Which side of the line (1 or -1)
      * @returns The created dimension, or null if creation failed
      */
-    public createDimension(
+    public async createDimension(
         sketchId: string,
         elementId: string,
         offset: number,
         offsetDirection: 1 | -1
-    ): LinearDimension | null {
+    ): Promise<LinearDimension | null> {
         // Get element data
         const element = this.elementData.get(elementId);
         if (!element) {
@@ -145,6 +145,19 @@ export class DimensionManager {
         // Generate unique ID
         const id = `dim_${++this.idCounter}_${Date.now()}`;
 
+        // Create constraint in backend if callback available
+        let constraintId: string | undefined;
+        if (this.callbacks.onConstraintCreate) {
+            try {
+                const result = await this.callbacks.onConstraintCreate(sketchId, elementId, value);
+                constraintId = result.constraint_id;
+                console.log(`Created backend constraint ${constraintId} for dimension ${id}`);
+            } catch (error) {
+                console.error('Failed to create constraint:', error);
+                // Continue without constraint - dimension still works locally
+            }
+        }
+
         // Create the dimension object
         const dimension: LinearDimension = {
             id,
@@ -153,7 +166,8 @@ export class DimensionManager {
             sketch_id: sketchId,
             value,
             offset,
-            offset_direction: offsetDirection
+            offset_direction: offsetDirection,
+            constraint_id: constraintId
         };
 
         // Store the dimension
