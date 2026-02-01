@@ -307,15 +307,27 @@ export class DimensionManager {
     }
 
     /**
-     * Delete a dimension.
+     * Delete a dimension and its associated backend constraint.
      *
      * @param dimensionId - The dimension to delete
+     * @returns true if deletion succeeded, false otherwise
      */
-    public deleteDimension(dimensionId: string): void {
+    public async deleteDimension(dimensionId: string): Promise<boolean> {
         const dimension = this.dimensions.get(dimensionId);
         if (!dimension) {
             console.warn(`Cannot delete dimension: ${dimensionId} not found`);
-            return;
+            return false;
+        }
+
+        // Delete constraint in backend if exists
+        if (dimension.constraint_id && this.callbacks.onConstraintDelete) {
+            try {
+                await this.callbacks.onConstraintDelete(dimension.constraint_id);
+                console.log(`Deleted backend constraint ${dimension.constraint_id}`);
+            } catch (error) {
+                console.error('Failed to delete constraint:', error);
+                // Continue with local deletion anyway
+            }
         }
 
         // Remove from renderer
@@ -330,6 +342,7 @@ export class DimensionManager {
         }
 
         console.log(`Deleted dimension ${dimensionId}`);
+        return true;
     }
 
     /**
