@@ -1311,11 +1311,15 @@ export function CADApplication() {
         const dimension = dimensionManager.getDimension(editingDimension.dimensionId);
         if (!dimension) return;
 
-        // Update dimension (this will trigger line resize)
-        dimensionManager.updateDimensionValue(editingDimension.dimensionId, newValue);
+        // Update dimension via constraint solver (async)
+        const success = await dimensionManager.updateDimensionValue(editingDimension.dimensionId, newValue);
 
         setEditingDimension(null);
-        updateStatus(`Line resized to ${newValue.toFixed(2)} mm`, 'success');
+        if (success) {
+            updateStatus(`Dimension updated to ${newValue.toFixed(2)} mm`, 'success');
+        } else {
+            updateStatus('Failed to update dimension', 'error');
+        }
     }, [editingDimension, updateStatus]);
 
     // Handle dimension edit cancel
@@ -1763,12 +1767,40 @@ export function CADApplication() {
         }
     }, [handleSelection]);
 
-    // Set up dimension manager callbacks for line resize
+    // Set up dimension manager callbacks for constraint integration
     useEffect(() => {
         if (!rendererRef.current) return;
 
         const dimensionManager = rendererRef.current.getDimensionManager();
         dimensionManager.setCallbacks({
+            // Constraint integration callbacks
+            onConstraintCreate: async (sketchId, elementId, value) => {
+                if (!clientRef.current) throw new Error('No client');
+                const result = await clientRef.current.createConstraint(
+                    sketchId,
+                    'length',
+                    [elementId],
+                    value
+                );
+                return {
+                    constraint_id: result.constraint.id,
+                    updated_elements: result.updated_elements,
+                };
+            },
+            onConstraintUpdate: async (constraintId, sketchId, value) => {
+                if (!clientRef.current) throw new Error('No client');
+                const result = await clientRef.current.updateConstraint(
+                    constraintId,
+                    sketchId,
+                    value
+                );
+                return { updated_elements: result.updated_elements };
+            },
+            onConstraintDelete: async (constraintId) => {
+                if (!clientRef.current) return false;
+                return await clientRef.current.deleteConstraint(constraintId);
+            },
+            // Keep legacy callback for fallback
             onLineResizeRequested: async (sketchId, elementId, newX1, newY1, newX2, newY2) => {
                 if (!clientRef.current) return;
 
