@@ -190,3 +190,138 @@ export function getPointPosition(
 ): { x: number; y: number } {
     return pointIndex === 0 ? { x: x1, y: y1 } : { x: x2, y: y2 };
 }
+
+export interface AngleConstraintCandidate {
+    type: 'perpendicular' | 'parallel';
+    element1Id: string;
+    element2Id: string;
+    sketchId: string;
+    confidence: number;  // 0-1, how close to exact perpendicular/parallel
+}
+
+/**
+ * Detect if a new line is near-perpendicular or near-parallel to any existing line.
+ *
+ * @param newElementId - ID of the newly drawn line
+ * @param newX1, newY1, newX2, newY2 - Endpoints of new line
+ * @param existingElements - Map of element IDs to their endpoints
+ * @param sketchId - ID of the containing sketch
+ * @returns Array of angle constraint candidates
+ */
+export function detectAngleConstraints(
+    newElementId: string,
+    newX1: number,
+    newY1: number,
+    newX2: number,
+    newY2: number,
+    existingElements: Map<string, { x1: number; y1: number; x2: number; y2: number }>,
+    sketchId: string
+): AngleConstraintCandidate[] {
+    const candidates: AngleConstraintCandidate[] = [];
+
+    // Direction vector of new line
+    const dx1 = newX2 - newX1;
+    const dy1 = newY2 - newY1;
+    const len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1);
+
+    // Skip zero-length lines
+    if (len1 < 0.0001) {
+        return candidates;
+    }
+
+    // Normalize direction
+    const nx1 = dx1 / len1;
+    const ny1 = dy1 / len1;
+
+    existingElements.forEach((endpoints, elementId) => {
+        // Skip self
+        if (elementId === newElementId) return;
+
+        // Direction vector of existing line
+        const dx2 = endpoints.x2 - endpoints.x1;
+        const dy2 = endpoints.y2 - endpoints.y1;
+        const len2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+
+        // Skip zero-length lines
+        if (len2 < 0.0001) return;
+
+        // Normalize direction
+        const nx2 = dx2 / len2;
+        const ny2 = dy2 / len2;
+
+        // Dot product (0 = perpendicular)
+        const dot = nx1 * nx2 + ny1 * ny2;
+        // Cross product (0 = parallel)
+        const cross = nx1 * ny2 - ny1 * nx2;
+
+        // Check perpendicular (dot product near 0)
+        // Using normalized vectors, |dot| should be near 0
+        const dotThreshold = Math.sin(ANGLE_THRESHOLD_RADIANS);  // ~0.035 for 2 degrees
+        if (Math.abs(dot) < dotThreshold) {
+            const confidence = 1 - (Math.abs(dot) / dotThreshold);
+            candidates.push({
+                type: 'perpendicular',
+                element1Id: newElementId,
+                element2Id: elementId,
+                sketchId,
+                confidence: Math.max(0, Math.min(1, confidence))
+            });
+        }
+
+        // Check parallel (cross product near 0)
+        // Using normalized vectors, |cross| should be near 0
+        const crossThreshold = Math.sin(ANGLE_THRESHOLD_RADIANS);  // ~0.035 for 2 degrees
+        if (Math.abs(cross) < crossThreshold) {
+            const confidence = 1 - (Math.abs(cross) / crossThreshold);
+            candidates.push({
+                type: 'parallel',
+                element1Id: newElementId,
+                element2Id: elementId,
+                sketchId,
+                confidence: Math.max(0, Math.min(1, confidence))
+            });
+        }
+    });
+
+    return candidates;
+}
+
+/**
+ * Get the intersection point of two lines (for icon placement).
+ * Returns null if lines are parallel or don't have a reasonable intersection.
+ */
+export function getLineIntersection(
+    x1: number, y1: number, x2: number, y2: number,  // Line 1
+    x3: number, y3: number, x4: number, y4: number   // Line 2
+): { x: number; y: number } | null {
+    const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+
+    // Lines are parallel
+    if (Math.abs(denom) < 0.0001) {
+        return null;
+    }
+
+    const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
+
+    return {
+        x: x1 + t * (x2 - x1),
+        y: y1 + t * (y2 - y1)
+    };
+}
+
+/**
+ * Get position for angle constraint icon (midpoint between line midpoints).
+ */
+export function getAngleConstraintIconPosition(
+    endpoints1: { x1: number; y1: number; x2: number; y2: number },
+    endpoints2: { x1: number; y1: number; x2: number; y2: number }
+): { x: number; y: number } {
+    // Use midpoint between the two line midpoints
+    const mid1 = lineMidpoint2D(endpoints1.x1, endpoints1.y1, endpoints1.x2, endpoints1.y2);
+    const mid2 = lineMidpoint2D(endpoints2.x1, endpoints2.y1, endpoints2.x2, endpoints2.y2);
+
+    return {
+        x: (mid1.x + mid2.x) / 2,
+        y: (mid1.y + mid2.y) / 2
+    };
+}

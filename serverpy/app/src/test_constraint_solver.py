@@ -207,6 +207,82 @@ def test_coincident_constraint():
     return True
 
 
+def test_perpendicular_constraint():
+    """Test that perpendicular constraint makes two lines at 90 degrees."""
+    from constraint_solver import ConstraintSolver
+
+    solver = ConstraintSolver()
+
+    # Two lines that are NOT perpendicular
+    # line1: horizontal from (0,0) to (10,0) - direction (10, 0)
+    # line2: at 45 degrees from (5,0) to (15,10) - direction (10, 10)
+    elements = {
+        'line1': {'x1': 0, 'y1': 0, 'x2': 10, 'y2': 0},
+        'line2': {'x1': 5, 'y1': 0, 'x2': 15, 'y2': 10}
+    }
+
+    constraints = [
+        {'id': 'c1', 'type': 'perpendicular', 'element_ids': ['line1', 'line2']}
+    ]
+
+    result = solver.solve(constraints, elements)
+
+    assert result.success, f"Solver failed: {result.error}"
+
+    new_line1 = result.updated_elements['line1']
+    new_line2 = result.updated_elements['line2']
+
+    # Calculate dot product of direction vectors (should be 0 for perpendicular)
+    dx1 = new_line1['x2'] - new_line1['x1']
+    dy1 = new_line1['y2'] - new_line1['y1']
+    dx2 = new_line2['x2'] - new_line2['x1']
+    dy2 = new_line2['y2'] - new_line2['y1']
+
+    dot_product = dx1 * dx2 + dy1 * dy2
+
+    assert abs(dot_product) < 0.01, f"Expected dot product 0 (perpendicular), got {dot_product}"
+    print("✅ test_perpendicular_constraint passed")
+    return True
+
+
+def test_parallel_constraint():
+    """Test that parallel constraint makes two lines have the same angle."""
+    from constraint_solver import ConstraintSolver
+
+    solver = ConstraintSolver()
+
+    # Two lines that are NOT parallel
+    # line1: horizontal from (0,0) to (10,0) - direction (10, 0)
+    # line2: tilted from (0,5) to (10,8) - direction (10, 3)
+    elements = {
+        'line1': {'x1': 0, 'y1': 0, 'x2': 10, 'y2': 0},
+        'line2': {'x1': 0, 'y1': 5, 'x2': 10, 'y2': 8}
+    }
+
+    constraints = [
+        {'id': 'c1', 'type': 'parallel', 'element_ids': ['line1', 'line2']}
+    ]
+
+    result = solver.solve(constraints, elements)
+
+    assert result.success, f"Solver failed: {result.error}"
+
+    new_line1 = result.updated_elements['line1']
+    new_line2 = result.updated_elements['line2']
+
+    # Calculate cross product of direction vectors (should be 0 for parallel)
+    dx1 = new_line1['x2'] - new_line1['x1']
+    dy1 = new_line1['y2'] - new_line1['y1']
+    dx2 = new_line2['x2'] - new_line2['x1']
+    dy2 = new_line2['y2'] - new_line2['y1']
+
+    cross_product = dx1 * dy2 - dy1 * dx2
+
+    assert abs(cross_product) < 0.01, f"Expected cross product 0 (parallel), got {cross_product}"
+    print("✅ test_parallel_constraint passed")
+    return True
+
+
 def main():
     """Run all tests."""
     print("🧪 Running Constraint Solver Tests")
@@ -220,6 +296,8 @@ def main():
         test_vertical_constraint,
         test_combined_constraints,
         test_coincident_constraint,
+        test_perpendicular_constraint,
+        test_parallel_constraint,
     ]
 
     passed = 0

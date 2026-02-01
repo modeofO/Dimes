@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ConstraintRenderer } from './constraint-renderer';
-import { detectLineConstraints, detectCoincidentConstraints, lineMidpoint2D, getPointPosition, InferredConstraint, CoincidentCandidate } from './constraint-inference';
+import { detectLineConstraints, detectCoincidentConstraints, detectAngleConstraints, lineMidpoint2D, getPointPosition, getAngleConstraintIconPosition, InferredConstraint, CoincidentCandidate, AngleConstraintCandidate } from './constraint-inference';
 import { Constraint } from '@/types/geometry';
 
 /**
@@ -45,6 +45,13 @@ interface GhostCoincidentConstraint extends CoincidentCandidate {
 }
 
 /**
+ * Ghost angle constraint (perpendicular/parallel).
+ */
+interface GhostAngleConstraint extends AngleConstraintCandidate {
+    ghostId: string;
+}
+
+/**
  * ConstraintManager coordinates constraint inference, rendering, and backend sync.
  *
  * Flow:
@@ -66,6 +73,9 @@ export class ConstraintManager {
 
     // Track ghost coincident constraints (not yet confirmed)
     private ghostCoincidentConstraints = new Map<string, GhostCoincidentConstraint>();
+
+    // Track ghost angle constraints (perpendicular/parallel)
+    private ghostAngleConstraints = new Map<string, GhostAngleConstraint>();
 
     // Track confirmed constraints
     private confirmedConstraints = new Map<string, Constraint>();
@@ -205,6 +215,61 @@ export class ConstraintManager {
             console.log(`Created ghost coincident constraint: ${ghostId}`);
         }
 
+        // Detect angle constraints (perpendicular/parallel)
+        const angleCandidates = detectAngleConstraints(
+            elementId, x1, y1, x2, y2,
+            this.elementEndpoints,
+            sketchId
+        );
+
+        // Render ghost icons for angle candidates
+        for (const candidate of angleCandidates) {
+            const prefix = candidate.type === 'perpendicular' ? 'ghost_perp_' : 'ghost_para_';
+            const ghostId = `${prefix}${++this.ghostIdCounter}_${Date.now()}`;
+
+            // Get endpoints of other element for icon positioning
+            const otherEndpoints = this.elementEndpoints.get(candidate.element2Id);
+            if (!otherEndpoints) continue;
+
+            // Position icon between the two line midpoints
+            const iconPos2D = getAngleConstraintIconPosition(
+                { x1, y1, x2, y2 },
+                otherEndpoints
+            );
+            const position3D = coords.origin.clone()
+                .addScaledVector(coords.uAxis, iconPos2D.x)
+                .addScaledVector(coords.vAxis, iconPos2D.y);
+
+            if (candidate.type === 'perpendicular') {
+                this.renderer.renderPerpendicularIcon(
+                    ghostId,
+                    candidate.element1Id,
+                    candidate.element2Id,
+                    sketchId,
+                    position3D,
+                    coords.normal,
+                    false
+                );
+            } else {
+                this.renderer.renderParallelIcon(
+                    ghostId,
+                    candidate.element1Id,
+                    candidate.element2Id,
+                    sketchId,
+                    position3D,
+                    coords.normal,
+                    false
+                );
+            }
+
+            this.ghostAngleConstraints.set(ghostId, {
+                ...candidate,
+                ghostId
+            });
+
+            console.log(`Created ghost ${candidate.type} constraint: ${ghostId}`);
+        }
+
         // Store this element's endpoints for future detection
         this.elementEndpoints.set(elementId, { x1, y1, x2, y2 });
 
@@ -219,8 +284,10 @@ export class ConstraintManager {
         const ghost = this.ghostConstraints.get(ghostId);
         // Check if it's a coincident ghost
         const coincGhost = this.ghostCoincidentConstraints.get(ghostId);
+        // Check if it's an angle ghost (perpendicular/parallel)
+        const angleGhost = this.ghostAngleConstraints.get(ghostId);
 
-        if (!ghost && !coincGhost) {
+        if (!ghost && !coincGhost && !angleGhost) {
             console.warn(`Ghost constraint ${ghostId} not found`);
             return null;
         }
@@ -235,7 +302,27 @@ export class ConstraintManager {
             let result;
             let constraint: Constraint;
 
-            if (coincGhost) {
+            if (angleGhost) {
+                // Perpendicular or parallel constraint
+                result = await this.callbacks.onConstraintCreate(
+                    angleGhost.sketchId,
+                    angleGhost.type,
+                    [angleGhost.element1Id, angleGhost.element2Id]
+                );
+
+                constraint = {
+                    id: result.constraint_id,
+                    type: angleGhost.type,
+                    sketch_id: angleGhost.sketchId,
+                    element_ids: [angleGhost.element1Id, angleGhost.element2Id],
+                    satisfied: true,
+                    inferred: true,
+                    confirmed: true
+                };
+
+                // Remove ghost and add confirmed
+                this.ghostAngleConstraints.delete(ghostId);
+            } else if (coincGhost) {
                 // Coincident constraint
                 result = await this.callbacks.onConstraintCreate(
                     coincGhost.sketchId,
@@ -301,6 +388,7 @@ export class ConstraintManager {
             this.renderer.removeIcon(ghostId);
             this.ghostConstraints.delete(ghostId);
             this.ghostCoincidentConstraints.delete(ghostId);
+            this.ghostAngleConstraints.delete(ghostId);
             return null;
         }
     }
@@ -326,6 +414,15 @@ export class ConstraintManager {
             }
         });
         this.ghostCoincidentConstraints.clear();
+
+        // Dismiss angle ghosts (perpendicular/parallel)
+        this.ghostAngleConstraints.forEach((_, ghostId) => {
+            this.renderer.removeIcon(ghostId);
+            if (this.callbacks.onConstraintRejected) {
+                this.callbacks.onConstraintRejected(ghostId);
+            }
+        });
+        this.ghostAngleConstraints.clear();
 
         console.log('Dismissed all ghost constraints');
     }
@@ -356,6 +453,18 @@ export class ConstraintManager {
         coincToRemove.forEach(ghostId => {
             this.renderer.removeIcon(ghostId);
             this.ghostCoincidentConstraints.delete(ghostId);
+        });
+
+        // Remove angle ghosts (perpendicular/parallel)
+        const angleToRemove: string[] = [];
+        this.ghostAngleConstraints.forEach((ghost, ghostId) => {
+            if (ghost.element1Id === elementId || ghost.element2Id === elementId) {
+                angleToRemove.push(ghostId);
+            }
+        });
+        angleToRemove.forEach(ghostId => {
+            this.renderer.removeIcon(ghostId);
+            this.ghostAngleConstraints.delete(ghostId);
         });
     }
 
@@ -398,7 +507,9 @@ export class ConstraintManager {
      * Check if a constraint ID is a ghost.
      */
     public isGhostConstraint(id: string): boolean {
-        return this.ghostConstraints.has(id) || this.ghostCoincidentConstraints.has(id);
+        return this.ghostConstraints.has(id) ||
+               this.ghostCoincidentConstraints.has(id) ||
+               this.ghostAngleConstraints.has(id);
     }
 
     /**
@@ -421,7 +532,8 @@ export class ConstraintManager {
     public getAllGhostIds(): string[] {
         return [
             ...Array.from(this.ghostConstraints.keys()),
-            ...Array.from(this.ghostCoincidentConstraints.keys())
+            ...Array.from(this.ghostCoincidentConstraints.keys()),
+            ...Array.from(this.ghostAngleConstraints.keys())
         ];
     }
 
@@ -429,7 +541,9 @@ export class ConstraintManager {
      * Check if there are any ghost constraints.
      */
     public hasGhostConstraints(): boolean {
-        return this.ghostConstraints.size > 0 || this.ghostCoincidentConstraints.size > 0;
+        return this.ghostConstraints.size > 0 ||
+               this.ghostCoincidentConstraints.size > 0 ||
+               this.ghostAngleConstraints.size > 0;
     }
 
     /**
@@ -460,6 +574,18 @@ export class ConstraintManager {
             this.ghostCoincidentConstraints.delete(ghostId);
         });
 
+        // Remove angle ghosts (perpendicular/parallel)
+        const angleGhostsToRemove: string[] = [];
+        this.ghostAngleConstraints.forEach((ghost, ghostId) => {
+            if (ghost.sketchId === sketchId) {
+                angleGhostsToRemove.push(ghostId);
+            }
+        });
+        angleGhostsToRemove.forEach(ghostId => {
+            this.renderer.removeIcon(ghostId);
+            this.ghostAngleConstraints.delete(ghostId);
+        });
+
         // Remove confirmed
         const confirmedToRemove: string[] = [];
         this.confirmedConstraints.forEach((constraint, id) => {
@@ -487,6 +613,7 @@ export class ConstraintManager {
         this.renderer.dispose();
         this.ghostConstraints.clear();
         this.ghostCoincidentConstraints.clear();
+        this.ghostAngleConstraints.clear();
         this.confirmedConstraints.clear();
         this.elementEndpoints.clear();
         this.sketchCoords.clear();

@@ -11,9 +11,9 @@ const ICON_SIZE = 1.2;
 
 interface ConstraintIcon {
     id: string;
-    type: 'horizontal' | 'vertical' | 'coincident';
+    type: 'horizontal' | 'vertical' | 'coincident' | 'perpendicular' | 'parallel';
     elementId: string;
-    element2Id?: string;  // For coincident: second element
+    element2Id?: string;  // For coincident/perpendicular/parallel: second element
     pointIndex?: 0 | 1;   // For coincident: which point
     point2Index?: 0 | 1;  // For coincident: second point
     sketchId: string;
@@ -257,6 +257,204 @@ export class ConstraintRenderer {
     }
 
     /**
+     * Render a perpendicular constraint icon (right angle symbol).
+     */
+    public renderPerpendicularIcon(
+        id: string,
+        elementId: string,
+        element2Id: string,
+        sketchId: string,
+        position3D: THREE.Vector3,
+        normal: THREE.Vector3,
+        isConfirmed: boolean
+    ): void {
+        this.removeIcon(id);
+
+        const group = new THREE.Group();
+        group.name = `constraint-${id}`;
+        group.userData.constraintId = id;
+        group.userData.isConstraint = true;
+        group.userData.elementId = elementId;
+
+        const opacity = isConfirmed ? CONSTRAINT_OPACITY_CONFIRMED : CONSTRAINT_OPACITY_GHOST;
+
+        const sprite = this.createPerpendicularSprite(opacity, isConfirmed);
+        sprite.position.copy(position3D);
+        sprite.position.addScaledVector(normal, 0.5);
+        group.add(sprite);
+
+        const hitMesh = this.createHitTestMesh(position3D, normal, id);
+        group.add(hitMesh);
+
+        this.scene.add(group);
+        this.icons.set(id, {
+            id,
+            type: 'perpendicular',
+            elementId,
+            element2Id,
+            sketchId,
+            isConfirmed,
+            group
+        });
+    }
+
+    private createPerpendicularSprite(
+        opacity: number,
+        isConfirmed: boolean
+    ): THREE.Sprite {
+        const canvas = document.createElement('canvas');
+        const size = 64;
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d')!;
+
+        // Background circle
+        ctx.fillStyle = isConfirmed ? 'rgba(80, 200, 120, 0.9)' : 'rgba(74, 158, 255, 0.6)';
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Border
+        ctx.strokeStyle = isConfirmed ? '#50C878' : '#4A9EFF';
+        ctx.lineWidth = 3;
+        if (!isConfirmed) {
+            ctx.setLineDash([6, 4]);
+        }
+        ctx.stroke();
+
+        // Right angle symbol (rotated L shape)
+        ctx.setLineDash([]);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        // Draw perpendicular lines
+        ctx.moveTo(size / 2, size / 2 - 12);
+        ctx.lineTo(size / 2, size / 2 + 6);
+        ctx.moveTo(size / 2 - 6, size / 2);
+        ctx.lineTo(size / 2 + 12, size / 2);
+        ctx.stroke();
+
+        // Small square at corner
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(size / 2 + 2, size / 2 - 8, 6, 6);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.needsUpdate = true;
+
+        const material = new THREE.SpriteMaterial({
+            map: texture,
+            transparent: true,
+            opacity,
+            depthTest: false,
+            depthWrite: false
+        });
+
+        const sprite = new THREE.Sprite(material);
+        sprite.scale.set(ICON_SIZE, ICON_SIZE, 1);
+        sprite.userData.isConstraintIcon = true;
+
+        return sprite;
+    }
+
+    /**
+     * Render a parallel constraint icon (parallel lines symbol).
+     */
+    public renderParallelIcon(
+        id: string,
+        elementId: string,
+        element2Id: string,
+        sketchId: string,
+        position3D: THREE.Vector3,
+        normal: THREE.Vector3,
+        isConfirmed: boolean
+    ): void {
+        this.removeIcon(id);
+
+        const group = new THREE.Group();
+        group.name = `constraint-${id}`;
+        group.userData.constraintId = id;
+        group.userData.isConstraint = true;
+        group.userData.elementId = elementId;
+
+        const opacity = isConfirmed ? CONSTRAINT_OPACITY_CONFIRMED : CONSTRAINT_OPACITY_GHOST;
+
+        const sprite = this.createParallelSprite(opacity, isConfirmed);
+        sprite.position.copy(position3D);
+        sprite.position.addScaledVector(normal, 0.5);
+        group.add(sprite);
+
+        const hitMesh = this.createHitTestMesh(position3D, normal, id);
+        group.add(hitMesh);
+
+        this.scene.add(group);
+        this.icons.set(id, {
+            id,
+            type: 'parallel',
+            elementId,
+            element2Id,
+            sketchId,
+            isConfirmed,
+            group
+        });
+    }
+
+    private createParallelSprite(
+        opacity: number,
+        isConfirmed: boolean
+    ): THREE.Sprite {
+        const canvas = document.createElement('canvas');
+        const size = 64;
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d')!;
+
+        // Background circle
+        ctx.fillStyle = isConfirmed ? 'rgba(80, 200, 120, 0.9)' : 'rgba(74, 158, 255, 0.6)';
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Border
+        ctx.strokeStyle = isConfirmed ? '#50C878' : '#4A9EFF';
+        ctx.lineWidth = 3;
+        if (!isConfirmed) {
+            ctx.setLineDash([6, 4]);
+        }
+        ctx.stroke();
+
+        // Parallel lines symbol (two slanted lines)
+        ctx.setLineDash([]);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        // First line
+        ctx.moveTo(size / 2 - 10, size / 2 - 10);
+        ctx.lineTo(size / 2 + 10, size / 2 + 10);
+        // Second line (parallel)
+        ctx.moveTo(size / 2 - 4, size / 2 - 14);
+        ctx.lineTo(size / 2 + 16, size / 2 + 6);
+        ctx.stroke();
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.needsUpdate = true;
+
+        const material = new THREE.SpriteMaterial({
+            map: texture,
+            transparent: true,
+            opacity,
+            depthTest: false,
+            depthWrite: false
+        });
+
+        const sprite = new THREE.Sprite(material);
+        sprite.scale.set(ICON_SIZE, ICON_SIZE, 1);
+        sprite.userData.isConstraintIcon = true;
+
+        return sprite;
+    }
+
+    /**
      * Confirm a ghost constraint (change appearance to solid).
      */
     public confirmConstraint(id: string): void {
@@ -280,6 +478,26 @@ export class ConstraintRenderer {
                 icon.element2Id || '',
                 icon.pointIndex || 0,
                 icon.point2Index || 0,
+                icon.sketchId,
+                position,
+                normal,
+                true
+            );
+        } else if (icon.type === 'perpendicular') {
+            this.renderPerpendicularIcon(
+                id,
+                icon.elementId,
+                icon.element2Id || '',
+                icon.sketchId,
+                position,
+                normal,
+                true
+            );
+        } else if (icon.type === 'parallel') {
+            this.renderParallelIcon(
+                id,
+                icon.elementId,
+                icon.element2Id || '',
                 icon.sketchId,
                 position,
                 normal,
