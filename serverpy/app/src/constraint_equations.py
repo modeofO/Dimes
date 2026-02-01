@@ -115,6 +115,34 @@ class VerticalEquation(ConstraintEquation):
         }
 
 
+class CoincidentEquation(ConstraintEquation):
+    """
+    Coincident constraint: point A = point B
+    Creates TWO equations: x_a - x_b = 0 AND y_a - y_b = 0
+    This class handles one coordinate (x or y).
+    """
+    def __init__(self, constraint_id: str, element1_id: str, point1_index: int,
+                 element2_id: str, point2_index: int, coordinate: str):
+        super().__init__(constraint_id, 'coincident')
+        self.coordinate = coordinate  # 'x' or 'y'
+
+        # Build variable names based on point index (0=start, 1=end)
+        suffix1 = '1' if point1_index == 0 else '2'
+        suffix2 = '1' if point2_index == 0 else '2'
+
+        self.var_a = f"{element1_id}_{coordinate}{suffix1}"
+        self.var_b = f"{element2_id}_{coordinate}{suffix2}"
+
+    def error(self, variables: Dict[str, float]) -> float:
+        return variables[self.var_a] - variables[self.var_b]
+
+    def jacobian(self, variables: Dict[str, float]) -> Dict[str, float]:
+        return {
+            self.var_a: 1.0,
+            self.var_b: -1.0,
+        }
+
+
 def build_equations(constraints: List[Dict[str, Any]], elements: Dict[str, Dict[str, float]]) -> List[ConstraintEquation]:
     """
     Build equation objects from constraint definitions.
@@ -148,5 +176,21 @@ def build_equations(constraints: List[Dict[str, Any]], elements: Dict[str, Dict[
             if len(element_ids) != 1:
                 continue
             equations.append(VerticalEquation(constraint_id, element_ids[0]))
+
+        elif constraint_type == 'coincident':
+            if len(element_ids) != 2:
+                continue
+            point_indices = c.get('point_indices', [0, 0])
+            if len(point_indices) != 2:
+                continue
+            # Create two equations: one for X, one for Y
+            equations.append(CoincidentEquation(
+                constraint_id, element_ids[0], point_indices[0],
+                element_ids[1], point_indices[1], 'x'
+            ))
+            equations.append(CoincidentEquation(
+                f"{constraint_id}_y", element_ids[0], point_indices[0],
+                element_ids[1], point_indices[1], 'y'
+            ))
 
     return equations

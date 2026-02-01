@@ -11,8 +11,11 @@ const ICON_SIZE = 1.2;
 
 interface ConstraintIcon {
     id: string;
-    type: 'horizontal' | 'vertical';
+    type: 'horizontal' | 'vertical' | 'coincident';
     elementId: string;
+    element2Id?: string;  // For coincident: second element
+    pointIndex?: 0 | 1;   // For coincident: which point
+    point2Index?: 0 | 1;  // For coincident: second point
     sketchId: string;
     isConfirmed: boolean;
     group: THREE.Group;
@@ -158,6 +161,102 @@ export class ConstraintRenderer {
     }
 
     /**
+     * Render a coincident constraint icon (filled circle) at the point location.
+     */
+    public renderCoincidentIcon(
+        id: string,
+        elementId: string,
+        element2Id: string,
+        pointIndex: 0 | 1,
+        point2Index: 0 | 1,
+        sketchId: string,
+        position3D: THREE.Vector3,
+        normal: THREE.Vector3,
+        isConfirmed: boolean
+    ): void {
+        this.removeIcon(id);
+
+        const group = new THREE.Group();
+        group.name = `constraint-${id}`;
+        group.userData.constraintId = id;
+        group.userData.isConstraint = true;
+        group.userData.elementId = elementId;
+
+        const opacity = isConfirmed ? CONSTRAINT_OPACITY_CONFIRMED : CONSTRAINT_OPACITY_GHOST;
+
+        // Create filled circle sprite for coincident
+        const sprite = this.createCoincidentSprite(opacity, isConfirmed);
+        sprite.position.copy(position3D);
+        sprite.position.addScaledVector(normal, 0.3);
+        group.add(sprite);
+
+        // Hit test mesh
+        const hitMesh = this.createHitTestMesh(position3D, normal, id);
+        group.add(hitMesh);
+
+        this.scene.add(group);
+        this.icons.set(id, {
+            id,
+            type: 'coincident',
+            elementId,
+            element2Id,
+            pointIndex,
+            point2Index,
+            sketchId,
+            isConfirmed,
+            group
+        });
+    }
+
+    private createCoincidentSprite(
+        opacity: number,
+        isConfirmed: boolean
+    ): THREE.Sprite {
+        const canvas = document.createElement('canvas');
+        const size = 48;
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d')!;
+
+        // Filled circle
+        ctx.fillStyle = isConfirmed ? 'rgba(80, 200, 120, 0.9)' : 'rgba(74, 158, 255, 0.6)';
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Border
+        ctx.strokeStyle = isConfirmed ? '#50C878' : '#4A9EFF';
+        ctx.lineWidth = 3;
+        if (!isConfirmed) {
+            ctx.setLineDash([4, 3]);
+        }
+        ctx.stroke();
+
+        // Inner dot
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.needsUpdate = true;
+
+        const material = new THREE.SpriteMaterial({
+            map: texture,
+            transparent: true,
+            opacity,
+            depthTest: false,
+            depthWrite: false
+        });
+
+        const sprite = new THREE.Sprite(material);
+        sprite.scale.set(0.8, 0.8, 1);  // Smaller than H/V icons
+        sprite.userData.isConstraintIcon = true;
+
+        return sprite;
+    }
+
+    /**
      * Confirm a ghost constraint (change appearance to solid).
      */
     public confirmConstraint(id: string): void {
@@ -174,15 +273,29 @@ export class ConstraintRenderer {
         });
 
         // Re-render with confirmed appearance
-        this.renderConstraintIcon(
-            id,
-            icon.type,
-            icon.elementId,
-            icon.sketchId,
-            position,
-            normal,
-            true
-        );
+        if (icon.type === 'coincident') {
+            this.renderCoincidentIcon(
+                id,
+                icon.elementId,
+                icon.element2Id || '',
+                icon.pointIndex || 0,
+                icon.point2Index || 0,
+                icon.sketchId,
+                position,
+                normal,
+                true
+            );
+        } else {
+            this.renderConstraintIcon(
+                id,
+                icon.type,
+                icon.elementId,
+                icon.sketchId,
+                position,
+                normal,
+                true
+            );
+        }
     }
 
     /**

@@ -1634,7 +1634,13 @@ export function CADApplication() {
                                 x1, y1, x2, y2
                             );
 
-                            // Detect H/V constraints for newly drawn lines
+                            // Store element endpoints for coincident detection
+                            rendererRef.current?.getConstraintManager().setElementEndpoints(
+                                data.element_id,
+                                x1, y1, x2, y2
+                            );
+
+                            // Detect H/V and coincident constraints for newly drawn lines
                             rendererRef.current?.detectConstraintsForLine(
                                 data.element_id,
                                 data.sketch_id,
@@ -1832,13 +1838,14 @@ export function CADApplication() {
 
         // Set up constraint manager callbacks
         rendererRef.current.setConstraintCallbacks({
-            onConstraintCreate: async (sketchId, type, elementIds, value) => {
+            onConstraintCreate: async (sketchId, type, elementIds, value, pointIndices) => {
                 if (!clientRef.current) throw new Error('No client');
                 const result = await clientRef.current.createConstraint(
                     sketchId,
                     type,
                     elementIds,
-                    value
+                    value,
+                    pointIndices
                 );
                 return {
                     constraint_id: result.constraint.id,

@@ -819,7 +819,8 @@ export class CADClient {
         sketchId: string,
         type: string,
         elementIds: string[],
-        value?: number
+        value?: number,
+        pointIndices?: number[]  // For coincident constraints
     ): Promise<{ constraint: any; updated_elements: any[] }> {
         const response = await fetch(`${this.baseUrl}/api/v1/constraints`, {
             method: 'POST',
@@ -833,6 +834,7 @@ export class CADClient {
                 type,
                 element_ids: elementIds,
                 value,
+                point_indices: pointIndices,
             }),
         });
 

@@ -167,6 +167,46 @@ def test_already_satisfied():
     return True
 
 
+def test_coincident_constraint():
+    """Test that coincident constraint merges two endpoints."""
+    from constraint_solver import ConstraintSolver
+
+    solver = ConstraintSolver()
+
+    # Two lines: line1 ends at (10,0), line2 starts at (11,1)
+    elements = {
+        'line1': {'x1': 0, 'y1': 0, 'x2': 10, 'y2': 0},
+        'line2': {'x1': 11, 'y1': 1, 'x2': 20, 'y2': 1}
+    }
+
+    # Constrain line1 end (index 1) to coincide with line2 start (index 0)
+    constraints = [
+        {
+            'id': 'c1',
+            'type': 'coincident',
+            'element_ids': ['line1', 'line2'],
+            'point_indices': [1, 0]  # line1.end = line2.start
+        }
+    ]
+
+    result = solver.solve(constraints, elements)
+
+    assert result.success, f"Solver failed: {result.error}"
+
+    # Check that the points are now coincident
+    new_line1 = result.updated_elements['line1']
+    new_line2 = result.updated_elements['line2']
+
+    # line1's end should equal line2's start
+    assert abs(new_line1['x2'] - new_line2['x1']) < 0.01, \
+        f"X not coincident: {new_line1['x2']} vs {new_line2['x1']}"
+    assert abs(new_line1['y2'] - new_line2['y1']) < 0.01, \
+        f"Y not coincident: {new_line1['y2']} vs {new_line2['y1']}"
+
+    print("✅ test_coincident_constraint passed")
+    return True
+
+
 def main():
     """Run all tests."""
     print("🧪 Running Constraint Solver Tests")
@@ -179,6 +219,7 @@ def main():
         test_horizontal_constraint,
         test_vertical_constraint,
         test_combined_constraints,
+        test_coincident_constraint,
     ]
 
     passed = 0

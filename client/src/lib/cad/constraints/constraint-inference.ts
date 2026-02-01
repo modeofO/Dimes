@@ -1,11 +1,15 @@
 /**
- * Constraint inference detects when a line is near-horizontal or near-vertical.
- * Returns suggested constraint types based on angle thresholds.
+ * Constraint inference detects when a line is near-horizontal or near-vertical,
+ * and when line endpoints are near each other (coincident).
+ * Returns suggested constraint types based on angle and distance thresholds.
  */
 
 // Angle threshold in degrees for H/V detection
 const ANGLE_THRESHOLD_DEGREES = 2;
 const ANGLE_THRESHOLD_RADIANS = (ANGLE_THRESHOLD_DEGREES * Math.PI) / 180;
+
+// Distance threshold for coincident detection (in sketch units)
+const COINCIDENT_THRESHOLD = 0.5;
 
 export interface InferredConstraint {
     type: 'horizontal' | 'vertical';
@@ -107,4 +111,82 @@ export function lineMidpoint2D(
         x: (x1 + x2) / 2,
         y: (y1 + y2) / 2
     };
+}
+
+export interface CoincidentCandidate {
+    type: 'coincident';
+    element1Id: string;
+    point1Index: 0 | 1;  // 0 = start, 1 = end
+    element2Id: string;
+    point2Index: 0 | 1;
+    sketchId: string;
+    distance: number;  // How close the points are
+}
+
+/**
+ * Detect if any endpoint of a new line is near endpoints of existing lines.
+ *
+ * @param newElementId - ID of the newly drawn line
+ * @param newX1, newY1, newX2, newY2 - Endpoints of new line
+ * @param existingElements - Map of element IDs to their endpoints
+ * @param sketchId - ID of the containing sketch
+ * @returns Array of coincident candidates
+ */
+export function detectCoincidentConstraints(
+    newElementId: string,
+    newX1: number,
+    newY1: number,
+    newX2: number,
+    newY2: number,
+    existingElements: Map<string, { x1: number; y1: number; x2: number; y2: number }>,
+    sketchId: string
+): CoincidentCandidate[] {
+    const candidates: CoincidentCandidate[] = [];
+    const newPoints = [
+        { x: newX1, y: newY1, index: 0 as const },
+        { x: newX2, y: newY2, index: 1 as const }
+    ];
+
+    existingElements.forEach((endpoints, elementId) => {
+        // Skip self
+        if (elementId === newElementId) return;
+
+        const existingPoints = [
+            { x: endpoints.x1, y: endpoints.y1, index: 0 as const },
+            { x: endpoints.x2, y: endpoints.y2, index: 1 as const }
+        ];
+
+        // Check each new point against each existing point
+        for (const newPt of newPoints) {
+            for (const existPt of existingPoints) {
+                const dx = newPt.x - existPt.x;
+                const dy = newPt.y - existPt.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < COINCIDENT_THRESHOLD && distance > 0.0001) {
+                    candidates.push({
+                        type: 'coincident',
+                        element1Id: newElementId,
+                        point1Index: newPt.index,
+                        element2Id: elementId,
+                        point2Index: existPt.index,
+                        sketchId,
+                        distance
+                    });
+                }
+            }
+        }
+    });
+
+    return candidates;
+}
+
+/**
+ * Get the position of a point on a line.
+ */
+export function getPointPosition(
+    x1: number, y1: number, x2: number, y2: number,
+    pointIndex: 0 | 1
+): { x: number; y: number } {
+    return pointIndex === 0 ? { x: x1, y: y1 } : { x: x2, y: y2 };
 }
