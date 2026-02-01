@@ -126,8 +126,9 @@ class Sketch:
         self.plane_id = plane_id
         self.sketch_plane = sketch_plane
         self.elements: List[SketchElement] = []  # List of sketch elements
+        self.constraints: List[Dict[str, Any]] = []  # List of constraints
         self.is_closed = False
-        
+
         print(f"✅ Created sketch: {sketch_id} on plane: {plane_id}")
     
     def get_sketch_id(self) -> str:
@@ -513,6 +514,45 @@ class Sketch:
 
         print(f"✅ Removed {removed_count} element(s) from sketch {self.sketch_id}")
         return removed_count > 0
+
+    def add_constraint(self, constraint: Dict[str, Any]) -> bool:
+        """Add constraint to sketch."""
+        self.constraints.append(constraint)
+        print(f"✅ Added constraint to sketch {self.sketch_id}: {constraint['type']}")
+        return True
+
+    def remove_constraint(self, constraint_id: str) -> bool:
+        """Remove constraint by ID."""
+        for i, c in enumerate(self.constraints):
+            if c.get('id') == constraint_id:
+                self.constraints.pop(i)
+                print(f"✅ Removed constraint {constraint_id} from sketch {self.sketch_id}")
+                return True
+        return False
+
+    def get_constraint(self, constraint_id: str) -> Optional[Dict[str, Any]]:
+        """Get constraint by ID."""
+        for c in self.constraints:
+            if c.get('id') == constraint_id:
+                return c
+        return None
+
+    def get_constraints(self) -> List[Dict[str, Any]]:
+        """Get all constraints."""
+        return self.constraints
+
+    def get_elements_as_dict(self) -> Dict[str, Dict[str, float]]:
+        """Get all line elements as dict for solver."""
+        result = {}
+        for elem in self.elements:
+            if elem.element_type == SketchElementType.LINE:
+                result[elem.id] = {
+                    'x1': elem.start_point.X() if elem.start_point else 0,
+                    'y1': elem.start_point.Y() if elem.start_point else 0,
+                    'x2': elem.end_point.X() if elem.end_point else 0,
+                    'y2': elem.end_point.Y() if elem.end_point else 0,
+                }
+        return result
 
     def get_visualization_data(self) -> Dict[str, Any]:
         """Get visualization data for the sketch - matches SketchVisualizationData interface"""
