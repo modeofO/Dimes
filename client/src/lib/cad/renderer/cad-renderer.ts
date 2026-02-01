@@ -55,6 +55,14 @@ export class CADRenderer {
         u_axis: THREE.Vector3;
         v_axis: THREE.Vector3;
     } | null = null;
+
+    // Camera animation state
+    private cameraAnimation: {
+        startPos: THREE.Vector3;
+        targetPos: THREE.Vector3;
+        startTime: number;
+        duration: number;
+    } | null = null;
     
     constructor(container: HTMLElement) {
         this.container = container;
@@ -280,10 +288,45 @@ export class CADRenderer {
     
     private animate = (): void => {
         requestAnimationFrame(this.animate);
-        
+
+        // Handle smooth camera animation
+        if (this.cameraAnimation) {
+            const elapsed = performance.now() - this.cameraAnimation.startTime;
+            const progress = Math.min(elapsed / this.cameraAnimation.duration, 1);
+
+            // Smooth easing function (ease-out cubic)
+            const eased = 1 - Math.pow(1 - progress, 3);
+
+            // Interpolate camera position
+            this.camera.position.lerpVectors(
+                this.cameraAnimation.startPos,
+                this.cameraAnimation.targetPos,
+                eased
+            );
+            this.camera.lookAt(0, 0, 0);
+
+            // Animation complete
+            if (progress >= 1) {
+                this.cameraAnimation = null;
+            }
+        }
+
         this.controls.update();
         this.renderer.render(this.scene, this.camera);
     };
+
+    /**
+     * Animate camera to a target position with smooth easing.
+     * Duration is in milliseconds (default 300ms for snappy feel).
+     */
+    private animateCameraTo(target: THREE.Vector3, duration = 300): void {
+        this.cameraAnimation = {
+            startPos: this.camera.position.clone(),
+            targetPos: target,
+            startTime: performance.now(),
+            duration
+        };
+    }
     
     public updateGeometry(modelId: string, meshData: MeshData): void {
         this.meshManager.updateMesh(modelId, meshData);
@@ -889,29 +932,49 @@ export class CADRenderer {
         }
     }
     
-    // CAD-specific view methods
-    public viewFront(): void {
-        this.camera.position.set(0, 0, 50);
-        this.camera.lookAt(0, 0, 0);
-        this.controls.update();
+    // CAD-specific view methods with smooth animation
+    public viewFront(animate = true): void {
+        const target = new THREE.Vector3(0, 0, 50);
+        if (animate) {
+            this.animateCameraTo(target);
+        } else {
+            this.camera.position.copy(target);
+            this.camera.lookAt(0, 0, 0);
+            this.controls.update();
+        }
     }
-    
-    public viewTop(): void {
-        this.camera.position.set(0, 50, 0);
-        this.camera.lookAt(0, 0, 0);
-        this.controls.update();
+
+    public viewTop(animate = true): void {
+        const target = new THREE.Vector3(0, 50, 0);
+        if (animate) {
+            this.animateCameraTo(target);
+        } else {
+            this.camera.position.copy(target);
+            this.camera.lookAt(0, 0, 0);
+            this.controls.update();
+        }
     }
-    
-    public viewRight(): void {
-        this.camera.position.set(50, 0, 0);
-        this.camera.lookAt(0, 0, 0);
-        this.controls.update();
+
+    public viewRight(animate = true): void {
+        const target = new THREE.Vector3(50, 0, 0);
+        if (animate) {
+            this.animateCameraTo(target);
+        } else {
+            this.camera.position.copy(target);
+            this.camera.lookAt(0, 0, 0);
+            this.controls.update();
+        }
     }
-    
-    public viewIsometric(): void {
-        this.camera.position.set(20, 20, 20);
-        this.camera.lookAt(0, 0, 0);
-        this.controls.update();
+
+    public viewIsometric(animate = true): void {
+        const target = new THREE.Vector3(20, 20, 20);
+        if (animate) {
+            this.animateCameraTo(target);
+        } else {
+            this.camera.position.copy(target);
+            this.camera.lookAt(0, 0, 0);
+            this.controls.update();
+        }
     }
     
     // Interactive drawing methods
@@ -1037,7 +1100,7 @@ export class CADRenderer {
         return this.dimensionManager;
     }
 
-    public getConstraintManager(): ConstraintManager {
+public getConstraintManager(): ConstraintManager {
         return this.constraintManager;
     }
 
