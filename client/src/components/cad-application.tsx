@@ -1886,8 +1886,8 @@ export function CADApplication() {
                     event.preventDefault();
                     const ghostIds = constraintManager.getAllGhostIds();
                     Promise.all(ghostIds.map(id => constraintManager.confirmConstraint(id)))
-                        .then(results => {
-                            const confirmed = results.filter(r => r !== null).length;
+                        .then((results) => {
+                            const confirmed = results.filter(Boolean).length;
                             if (confirmed > 0) {
                                 updateStatus(`Confirmed ${confirmed} constraint(s)`, 'success');
                             }

@@ -167,6 +167,7 @@ export interface LinearDimension {
     value: number;             // Current length value (in mm)
     offset: number;            // Perpendicular distance from line
     offset_direction: 1 | -1;  // Which side of the line
+    constraint_id?: string;    // Link to backend constraint
 }
 
 export interface DimensionVisualizationData {
@@ -197,4 +198,25 @@ export interface ExtrudeFeature {
 }
 
 export type BooleanOperation = 'union' | 'cut' | 'intersect';
-export type ExportFormat = 'step' | 'stl' | 'obj' | 'iges'; 
+export type ExportFormat = 'step' | 'stl' | 'obj' | 'iges';
+
+// Constraint types
+export type ConstraintType =
+  | 'length'
+  | 'coincident'
+  | 'horizontal'
+  | 'vertical'
+  | 'perpendicular'
+  | 'parallel';
+
+export interface Constraint {
+  id: string;
+  type: ConstraintType;
+  sketch_id: string;
+  element_ids: string[];
+  point_indices?: number[];
+  value?: number;
+  satisfied: boolean;
+  inferred?: boolean;
+  confirmed?: boolean;
+} 
