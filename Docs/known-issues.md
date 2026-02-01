@@ -126,13 +126,18 @@ The backend supports union, cut, and intersect boolean operations between shapes
 
 Backend supports creating linear arrays (copy elements in a pattern) and mirror arrays, but no UI flow exists for these operations.
 
-### 6. No Constraint System
+### 6. Constraint System - Phase 1 Complete
 
-**Status:** Architecture
+**Status:** In Progress
 
-The CAD application currently has no parametric constraint system (coincident, perpendicular, parallel, tangent, equal, horizontal, vertical, fixed). All geometry is placed by absolute coordinates with snap points only.
+Phase 1 of the constraint system is implemented:
+- ✅ Backend constraint solver (Newton-Raphson)
+- ✅ Length, horizontal, vertical constraints
+- ✅ API endpoints for constraint CRUD
+- ⏳ Phase 2: Dimension integration
+- ⏳ Phase 3-5: Frontend UI and remaining constraints
 
-A constraint solver would be a major architectural addition.
+See `Docs/plans/2026-02-01-constraint-system-design.md` for full design.
 
 ### 7. Session Persistence
 
