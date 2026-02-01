@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ConstraintRenderer } from './constraint-renderer';
-import { detectLineConstraints, lineMidpoint2D, InferredConstraint } from './constraint-inference';
+import { detectLineConstraints, detectCoincidentConstraints, lineMidpoint2D, getPointPosition, InferredConstraint, CoincidentCandidate } from './constraint-inference';
 import { Constraint } from '@/types/geometry';
 
 /**
@@ -11,7 +11,8 @@ export interface ConstraintManagerCallbacks {
         sketchId: string,
         type: string,
         elementIds: string[],
-        value?: number
+        value?: number,
+        pointIndices?: number[]  // For coincident constraints
     ) => Promise<{ constraint_id: string; updated_elements: any[] }>;
     onConstraintDelete?: (constraintId: string) => Promise<boolean>;
     onConstraintConfirmed?: (constraint: Constraint) => void;
@@ -36,6 +37,14 @@ interface GhostConstraint extends InferredConstraint {
 }
 
 /**
+ * Ghost coincident constraint.
+ */
+interface GhostCoincidentConstraint extends CoincidentCandidate {
+    ghostId: string;
+    confidence: number;
+}
+
+/**
  * ConstraintManager coordinates constraint inference, rendering, and backend sync.
  *
  * Flow:
@@ -55,8 +64,14 @@ export class ConstraintManager {
     // Track ghost constraints (not yet confirmed)
     private ghostConstraints = new Map<string, GhostConstraint>();
 
+    // Track ghost coincident constraints (not yet confirmed)
+    private ghostCoincidentConstraints = new Map<string, GhostCoincidentConstraint>();
+
     // Track confirmed constraints
     private confirmedConstraints = new Map<string, Constraint>();
+
+    // Store element endpoints for coincident detection
+    private elementEndpoints = new Map<string, { x1: number; y1: number; x2: number; y2: number }>();
 
     // Counter for ghost IDs
     private ghostIdCounter = 0;
@@ -91,6 +106,16 @@ export class ConstraintManager {
     }
 
     /**
+     * Store element endpoints for coincident detection.
+     */
+    public setElementEndpoints(
+        elementId: string,
+        x1: number, y1: number, x2: number, y2: number
+    ): void {
+        this.elementEndpoints.set(elementId, { x1, y1, x2, y2 });
+    }
+
+    /**
      * Detect and display ghost constraints for a newly drawn line.
      */
     public detectConstraintsForLine(
@@ -104,7 +129,7 @@ export class ConstraintManager {
         // Remove any existing ghosts for this element
         this.dismissGhostConstraintsForElement(elementId);
 
-        // Detect constraints
+        // Detect H/V constraints
         const inferred = detectLineConstraints(x1, y1, x2, y2, elementId, sketchId);
 
         // Get sketch coordinate system
@@ -114,7 +139,7 @@ export class ConstraintManager {
             return inferred;
         }
 
-        // Render ghost icons
+        // Render ghost icons for H/V constraints
         for (const constraint of inferred) {
             const ghostId = `ghost_${++this.ghostIdCounter}_${Date.now()}`;
 
@@ -142,6 +167,47 @@ export class ConstraintManager {
             console.log(`Created ghost ${constraint.type} constraint: ${ghostId}`);
         }
 
+        // Also detect coincident constraints
+        const coincidentCandidates = detectCoincidentConstraints(
+            elementId, x1, y1, x2, y2,
+            this.elementEndpoints,
+            sketchId
+        );
+
+        // Render ghost icons for coincident candidates
+        for (const candidate of coincidentCandidates) {
+            const ghostId = `ghost_coinc_${++this.ghostIdCounter}_${Date.now()}`;
+
+            // Get position of the point on the new element
+            const pointPos = getPointPosition(x1, y1, x2, y2, candidate.point1Index);
+            const position3D = coords.origin.clone()
+                .addScaledVector(coords.uAxis, pointPos.x)
+                .addScaledVector(coords.vAxis, pointPos.y);
+
+            this.renderer.renderCoincidentIcon(
+                ghostId,
+                candidate.element1Id,
+                candidate.element2Id,
+                candidate.point1Index,
+                candidate.point2Index,
+                sketchId,
+                position3D,
+                coords.normal,
+                false
+            );
+
+            this.ghostCoincidentConstraints.set(ghostId, {
+                ...candidate,
+                ghostId,
+                confidence: 1 - (candidate.distance / 0.5)  // Closer = higher confidence
+            });
+
+            console.log(`Created ghost coincident constraint: ${ghostId}`);
+        }
+
+        // Store this element's endpoints for future detection
+        this.elementEndpoints.set(elementId, { x1, y1, x2, y2 });
+
         return inferred;
     }
 
@@ -149,8 +215,12 @@ export class ConstraintManager {
      * Confirm a ghost constraint, creating it in the backend.
      */
     public async confirmConstraint(ghostId: string): Promise<Constraint | null> {
+        // Check if it's a H/V ghost
         const ghost = this.ghostConstraints.get(ghostId);
-        if (!ghost) {
+        // Check if it's a coincident ghost
+        const coincGhost = this.ghostCoincidentConstraints.get(ghostId);
+
+        if (!ghost && !coincGhost) {
             console.warn(`Ghost constraint ${ghostId} not found`);
             return null;
         }
@@ -162,25 +232,56 @@ export class ConstraintManager {
         }
 
         try {
-            const result = await this.callbacks.onConstraintCreate(
-                ghost.sketchId,
-                ghost.type,
-                [ghost.elementId]
-            );
+            let result;
+            let constraint: Constraint;
 
-            // Create constraint object
-            const constraint: Constraint = {
-                id: result.constraint_id,
-                type: ghost.type,
-                sketch_id: ghost.sketchId,
-                element_ids: [ghost.elementId],
-                satisfied: true,
-                inferred: true,
-                confirmed: true
-            };
+            if (coincGhost) {
+                // Coincident constraint
+                result = await this.callbacks.onConstraintCreate(
+                    coincGhost.sketchId,
+                    'coincident',
+                    [coincGhost.element1Id, coincGhost.element2Id],
+                    undefined,
+                    [coincGhost.point1Index, coincGhost.point2Index]
+                );
 
-            // Remove ghost and add confirmed
-            this.ghostConstraints.delete(ghostId);
+                constraint = {
+                    id: result.constraint_id,
+                    type: 'coincident',
+                    sketch_id: coincGhost.sketchId,
+                    element_ids: [coincGhost.element1Id, coincGhost.element2Id],
+                    point_indices: [coincGhost.point1Index, coincGhost.point2Index],
+                    satisfied: true,
+                    inferred: true,
+                    confirmed: true
+                };
+
+                // Remove ghost and add confirmed
+                this.ghostCoincidentConstraints.delete(ghostId);
+            } else if (ghost) {
+                // H/V constraint
+                result = await this.callbacks.onConstraintCreate(
+                    ghost.sketchId,
+                    ghost.type,
+                    [ghost.elementId]
+                );
+
+                constraint = {
+                    id: result.constraint_id,
+                    type: ghost.type,
+                    sketch_id: ghost.sketchId,
+                    element_ids: [ghost.elementId],
+                    satisfied: true,
+                    inferred: true,
+                    confirmed: true
+                };
+
+                // Remove ghost and add confirmed
+                this.ghostConstraints.delete(ghostId);
+            } else {
+                return null;
+            }
+
             this.confirmedConstraints.set(constraint.id, constraint);
 
             // Update icon appearance
@@ -191,7 +292,7 @@ export class ConstraintManager {
                 this.callbacks.onConstraintConfirmed(constraint);
             }
 
-            console.log(`Confirmed constraint: ${constraint.id} (${ghost.type})`);
+            console.log(`Confirmed constraint: ${constraint.id} (${constraint.type})`);
             return constraint;
 
         } catch (error) {
@@ -199,6 +300,7 @@ export class ConstraintManager {
             // Remove the ghost icon since creation failed
             this.renderer.removeIcon(ghostId);
             this.ghostConstraints.delete(ghostId);
+            this.ghostCoincidentConstraints.delete(ghostId);
             return null;
         }
     }
@@ -207,6 +309,7 @@ export class ConstraintManager {
      * Dismiss all ghost constraints (user pressed Escape).
      */
     public dismissAllGhostConstraints(): void {
+        // Dismiss H/V ghosts
         this.ghostConstraints.forEach((_, ghostId) => {
             this.renderer.removeIcon(ghostId);
             if (this.callbacks.onConstraintRejected) {
@@ -214,6 +317,16 @@ export class ConstraintManager {
             }
         });
         this.ghostConstraints.clear();
+
+        // Dismiss coincident ghosts
+        this.ghostCoincidentConstraints.forEach((_, ghostId) => {
+            this.renderer.removeIcon(ghostId);
+            if (this.callbacks.onConstraintRejected) {
+                this.callbacks.onConstraintRejected(ghostId);
+            }
+        });
+        this.ghostCoincidentConstraints.clear();
+
         console.log('Dismissed all ghost constraints');
     }
 
@@ -221,6 +334,7 @@ export class ConstraintManager {
      * Dismiss ghost constraints for a specific element.
      */
     public dismissGhostConstraintsForElement(elementId: string): void {
+        // Remove H/V ghosts
         const toRemove: string[] = [];
         this.ghostConstraints.forEach((ghost, ghostId) => {
             if (ghost.elementId === elementId) {
@@ -230,6 +344,18 @@ export class ConstraintManager {
         toRemove.forEach(ghostId => {
             this.renderer.removeIcon(ghostId);
             this.ghostConstraints.delete(ghostId);
+        });
+
+        // Remove coincident ghosts
+        const coincToRemove: string[] = [];
+        this.ghostCoincidentConstraints.forEach((ghost, ghostId) => {
+            if (ghost.element1Id === elementId || ghost.element2Id === elementId) {
+                coincToRemove.push(ghostId);
+            }
+        });
+        coincToRemove.forEach(ghostId => {
+            this.renderer.removeIcon(ghostId);
+            this.ghostCoincidentConstraints.delete(ghostId);
         });
     }
 
@@ -272,7 +398,7 @@ export class ConstraintManager {
      * Check if a constraint ID is a ghost.
      */
     public isGhostConstraint(id: string): boolean {
-        return this.ghostConstraints.has(id);
+        return this.ghostConstraints.has(id) || this.ghostCoincidentConstraints.has(id);
     }
 
     /**
@@ -293,21 +419,24 @@ export class ConstraintManager {
      * Get all ghost constraint IDs.
      */
     public getAllGhostIds(): string[] {
-        return Array.from(this.ghostConstraints.keys());
+        return [
+            ...Array.from(this.ghostConstraints.keys()),
+            ...Array.from(this.ghostCoincidentConstraints.keys())
+        ];
     }
 
     /**
      * Check if there are any ghost constraints.
      */
     public hasGhostConstraints(): boolean {
-        return this.ghostConstraints.size > 0;
+        return this.ghostConstraints.size > 0 || this.ghostCoincidentConstraints.size > 0;
     }
 
     /**
      * Clear all constraints for a sketch.
      */
     public clearConstraintsForSketch(sketchId: string): void {
-        // Remove ghosts
+        // Remove H/V ghosts
         const ghostsToRemove: string[] = [];
         this.ghostConstraints.forEach((ghost, ghostId) => {
             if (ghost.sketchId === sketchId) {
@@ -317,6 +446,18 @@ export class ConstraintManager {
         ghostsToRemove.forEach(ghostId => {
             this.renderer.removeIcon(ghostId);
             this.ghostConstraints.delete(ghostId);
+        });
+
+        // Remove coincident ghosts
+        const coincGhostsToRemove: string[] = [];
+        this.ghostCoincidentConstraints.forEach((ghost, ghostId) => {
+            if (ghost.sketchId === sketchId) {
+                coincGhostsToRemove.push(ghostId);
+            }
+        });
+        coincGhostsToRemove.forEach(ghostId => {
+            this.renderer.removeIcon(ghostId);
+            this.ghostCoincidentConstraints.delete(ghostId);
         });
 
         // Remove confirmed
@@ -345,7 +486,9 @@ export class ConstraintManager {
     public dispose(): void {
         this.renderer.dispose();
         this.ghostConstraints.clear();
+        this.ghostCoincidentConstraints.clear();
         this.confirmedConstraints.clear();
+        this.elementEndpoints.clear();
         this.sketchCoords.clear();
         this.callbacks = {};
     }
