@@ -3,6 +3,7 @@ import { MeshManager } from '../mesh/mesh-manager';
 import { CADControls, DrawingTool } from '../controls/cad-controls';
 import { VisualizationManager } from './visualization-manager';
 import { DimensionManager } from '../dimensions/dimension-manager';
+import { ConstraintManager, ConstraintManagerCallbacks } from '../constraints';
 import {
     PlaneVisualizationData,
     SketchVisualizationData,
@@ -18,6 +19,7 @@ export class CADRenderer {
     private meshManager!: MeshManager;
     private visualizationManager!: VisualizationManager;
     private dimensionManager!: DimensionManager;
+    private constraintManager!: ConstraintManager;
     private container: HTMLElement;
     private raycaster: THREE.Raycaster;
     private pointerDownPos = new THREE.Vector2();
@@ -281,6 +283,7 @@ export class CADRenderer {
         this.meshManager = new MeshManager(this.scene);
         this.visualizationManager = new VisualizationManager(this.scene);
         this.dimensionManager = new DimensionManager(this.scene);
+        this.constraintManager = new ConstraintManager(this.scene);
     }
     
     private animate = (): void => {
@@ -911,6 +914,7 @@ export class CADRenderer {
         this.meshManager.dispose();
         this.visualizationManager.dispose();
         this.dimensionManager.dispose();
+        this.constraintManager.dispose();
         this.renderer.dispose();
 
         this.renderer.domElement.removeEventListener('pointerdown', this.onPointerDown);
@@ -1056,7 +1060,7 @@ export class CADRenderer {
             u_axis: new THREE.Vector3(...data.u_axis),
             v_axis: new THREE.Vector3(...data.v_axis)
         };
-        
+
         this.controls.setActiveSketchPlane(
             sketch_id,
             this.activeSketchPlane.origin,
@@ -1064,10 +1068,19 @@ export class CADRenderer {
             this.activeSketchPlane.u_axis,
             this.activeSketchPlane.v_axis
         );
-        
+
+        // Set coordinate system for constraint manager
+        this.constraintManager.setSketchCoordinateSystem(
+            sketch_id,
+            this.activeSketchPlane.origin,
+            this.activeSketchPlane.u_axis,
+            this.activeSketchPlane.v_axis,
+            this.activeSketchPlane.normal
+        );
+
         // Highlight the active sketch plane
         this.visualizationManager.highlightActiveSketch(sketch_id);
-        
+
         console.log(`Set active sketch plane for interactive drawing: ${sketch_id}`);
     }
     
@@ -1085,6 +1098,37 @@ export class CADRenderer {
 
     public getDimensionManager(): DimensionManager {
         return this.dimensionManager;
+    }
+
+public getConstraintManager(): ConstraintManager {
+        return this.constraintManager;
+    }
+
+    public setConstraintCallbacks(callbacks: ConstraintManagerCallbacks): void {
+        this.constraintManager.setCallbacks(callbacks);
+    }
+
+    public detectConstraintsForLine(
+        elementId: string,
+        sketchId: string,
+        x1: number,
+        y1: number,
+        x2: number,
+        y2: number
+    ): void {
+        this.constraintManager.detectConstraintsForLine(
+            elementId, sketchId, x1, y1, x2, y2
+        );
+    }
+
+    public getConstraintAtScreenPosition(screenX: number, screenY: number): string | null {
+        const rect = this.renderer.domElement.getBoundingClientRect();
+        const mouse = new THREE.Vector2(
+            ((screenX - rect.left) / rect.width) * 2 - 1,
+            -((screenY - rect.top) / rect.height) * 2 + 1
+        );
+        this.raycaster.setFromCamera(mouse, this.camera);
+        return this.constraintManager.getConstraintAtPosition(this.raycaster);
     }
 
     public async createDimensionForLine(
