@@ -11,6 +11,19 @@ export interface DimensionManagerCallbacks {
     onDimensionCreated?: (dimension: LinearDimension) => void;
     onDimensionUpdated?: (dimension: LinearDimension) => void;
     onDimensionDeleted?: (dimensionId: string) => void;
+    // Constraint integration callbacks
+    onConstraintCreate?: (
+        sketchId: string,
+        elementId: string,
+        value: number
+    ) => Promise<{ constraint_id: string; updated_elements: any[] }>;
+    onConstraintUpdate?: (
+        constraintId: string,
+        sketchId: string,
+        value: number
+    ) => Promise<{ updated_elements: any[] }>;
+    onConstraintDelete?: (constraintId: string) => Promise<boolean>;
+    // Keep for backwards compatibility during transition
     onLineResizeRequested?: (
         sketchId: string,
         elementId: string,
