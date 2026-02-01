@@ -126,18 +126,18 @@ The backend supports union, cut, and intersect boolean operations between shapes
 
 Backend supports creating linear arrays (copy elements in a pattern) and mirror arrays, but no UI flow exists for these operations.
 
-### 6. Constraint System - Phase 4 Complete
+### 6. Constraint System - Phase 5 Complete
 
-**Status:** In Progress
+**Status:** Complete
 
-Phases 1-4 of the constraint system are implemented:
+All phases of the constraint system are implemented:
 - ✅ Backend constraint solver (Newton-Raphson)
-- ✅ Length, horizontal, vertical, coincident constraints
+- ✅ Length, horizontal, vertical, coincident, perpendicular, parallel constraints
 - ✅ API endpoints for constraint CRUD
 - ✅ Dimension integration (Phase 2)
 - ✅ H/V constraint inference and UI (Phase 3)
 - ✅ Coincident constraint inference and UI (Phase 4)
-- ⏳ Phase 5: Perpendicular/Parallel constraints
+- ✅ Perpendicular/Parallel constraint inference and UI (Phase 5)
 
 See `Docs/plans/2026-02-01-constraint-system-design.md` for full design.
 
@@ -166,5 +166,4 @@ The data flow through the agent path still needs end-to-end testing.
 3. **Sketch-on-Face normal mapping** - Limits 3D modeling capability
 4. **Boolean operations** - Advanced 3D modeling
 5. **Linear/Mirror arrays** - Pattern creation
-6. **Constraint system** - Parametric modeling
-7. **Session persistence** - Save/load
+6. **Session persistence** - Save/load

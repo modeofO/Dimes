@@ -143,6 +143,105 @@ class CoincidentEquation(ConstraintEquation):
         }
 
 
+class PerpendicularEquation(ConstraintEquation):
+    """
+    Perpendicular constraint: two lines are at 90 degrees.
+    Uses dot product of direction vectors = 0.
+    Error = dx1 * dx2 + dy1 * dy2
+    """
+    def __init__(self, constraint_id: str, element1_id: str, element2_id: str):
+        super().__init__(constraint_id, 'perpendicular')
+        self.element1_id = element1_id
+        self.element2_id = element2_id
+        # Variables for first line
+        self.x1_1 = f"{element1_id}_x1"
+        self.y1_1 = f"{element1_id}_y1"
+        self.x1_2 = f"{element1_id}_x2"
+        self.y1_2 = f"{element1_id}_y2"
+        # Variables for second line
+        self.x2_1 = f"{element2_id}_x1"
+        self.y2_1 = f"{element2_id}_y1"
+        self.x2_2 = f"{element2_id}_x2"
+        self.y2_2 = f"{element2_id}_y2"
+
+    def error(self, variables: Dict[str, float]) -> float:
+        # Direction vectors
+        dx1 = variables[self.x1_2] - variables[self.x1_1]
+        dy1 = variables[self.y1_2] - variables[self.y1_1]
+        dx2 = variables[self.x2_2] - variables[self.x2_1]
+        dy2 = variables[self.y2_2] - variables[self.y2_1]
+        # Dot product = 0 for perpendicular
+        return dx1 * dx2 + dy1 * dy2
+
+    def jacobian(self, variables: Dict[str, float]) -> Dict[str, float]:
+        dx1 = variables[self.x1_2] - variables[self.x1_1]
+        dy1 = variables[self.y1_2] - variables[self.y1_1]
+        dx2 = variables[self.x2_2] - variables[self.x2_1]
+        dy2 = variables[self.y2_2] - variables[self.y2_1]
+
+        # d(dx1*dx2 + dy1*dy2)/d(var)
+        # dx1 = x1_2 - x1_1, so d(dx1)/d(x1_2) = 1, d(dx1)/d(x1_1) = -1
+        return {
+            self.x1_1: -dx2,  # d/d(x1_1) = -1 * dx2
+            self.y1_1: -dy2,  # d/d(y1_1) = -1 * dy2
+            self.x1_2: dx2,   # d/d(x1_2) = 1 * dx2
+            self.y1_2: dy2,   # d/d(y1_2) = 1 * dy2
+            self.x2_1: -dx1,  # d/d(x2_1) = -1 * dx1
+            self.y2_1: -dy1,  # d/d(y2_1) = -1 * dy1
+            self.x2_2: dx1,   # d/d(x2_2) = 1 * dx1
+            self.y2_2: dy1,   # d/d(y2_2) = 1 * dy1
+        }
+
+
+class ParallelEquation(ConstraintEquation):
+    """
+    Parallel constraint: two lines have the same angle.
+    Uses cross product of direction vectors = 0.
+    Error = dx1 * dy2 - dy1 * dx2
+    """
+    def __init__(self, constraint_id: str, element1_id: str, element2_id: str):
+        super().__init__(constraint_id, 'parallel')
+        self.element1_id = element1_id
+        self.element2_id = element2_id
+        # Variables for first line
+        self.x1_1 = f"{element1_id}_x1"
+        self.y1_1 = f"{element1_id}_y1"
+        self.x1_2 = f"{element1_id}_x2"
+        self.y1_2 = f"{element1_id}_y2"
+        # Variables for second line
+        self.x2_1 = f"{element2_id}_x1"
+        self.y2_1 = f"{element2_id}_y1"
+        self.x2_2 = f"{element2_id}_x2"
+        self.y2_2 = f"{element2_id}_y2"
+
+    def error(self, variables: Dict[str, float]) -> float:
+        # Direction vectors
+        dx1 = variables[self.x1_2] - variables[self.x1_1]
+        dy1 = variables[self.y1_2] - variables[self.y1_1]
+        dx2 = variables[self.x2_2] - variables[self.x2_1]
+        dy2 = variables[self.y2_2] - variables[self.y2_1]
+        # Cross product = 0 for parallel
+        return dx1 * dy2 - dy1 * dx2
+
+    def jacobian(self, variables: Dict[str, float]) -> Dict[str, float]:
+        dx1 = variables[self.x1_2] - variables[self.x1_1]
+        dy1 = variables[self.y1_2] - variables[self.y1_1]
+        dx2 = variables[self.x2_2] - variables[self.x2_1]
+        dy2 = variables[self.y2_2] - variables[self.y2_1]
+
+        # d(dx1*dy2 - dy1*dx2)/d(var)
+        return {
+            self.x1_1: -dy2,  # d/d(x1_1) = -1 * dy2
+            self.y1_1: dx2,   # d/d(y1_1) = -(-1 * dx2) = dx2
+            self.x1_2: dy2,   # d/d(x1_2) = 1 * dy2
+            self.y1_2: -dx2,  # d/d(y1_2) = -(1 * dx2) = -dx2
+            self.x2_1: dy1,   # d/d(x2_1) = -(-1 * dy1) = dy1
+            self.y2_1: -dx1,  # d/d(y2_1) = -1 * dx1
+            self.x2_2: -dy1,  # d/d(x2_2) = -(1 * dy1) = -dy1
+            self.y2_2: dx1,   # d/d(y2_2) = 1 * dx1
+        }
+
+
 def build_equations(constraints: List[Dict[str, Any]], elements: Dict[str, Dict[str, float]]) -> List[ConstraintEquation]:
     """
     Build equation objects from constraint definitions.
@@ -191,6 +290,20 @@ def build_equations(constraints: List[Dict[str, Any]], elements: Dict[str, Dict[
             equations.append(CoincidentEquation(
                 f"{constraint_id}_y", element_ids[0], point_indices[0],
                 element_ids[1], point_indices[1], 'y'
+            ))
+
+        elif constraint_type == 'perpendicular':
+            if len(element_ids) != 2:
+                continue
+            equations.append(PerpendicularEquation(
+                constraint_id, element_ids[0], element_ids[1]
+            ))
+
+        elif constraint_type == 'parallel':
+            if len(element_ids) != 2:
+                continue
+            equations.append(ParallelEquation(
+                constraint_id, element_ids[0], element_ids[1]
             ))
 
     return equations
