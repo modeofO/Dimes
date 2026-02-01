@@ -1624,11 +1624,18 @@ export function CADApplication() {
                 client.onElementVisualization((data) => {
                     renderer.addSketchElementVisualization(data);
 
-                    // Track line data for dimension manager
+                    // Track line data for dimension manager and detect constraints
                     if (data.element_type === 'line' && data.parameters_2d) {
                         const { x1, y1, x2, y2 } = data.parameters_2d;
                         if (x1 !== undefined && y1 !== undefined && x2 !== undefined && y2 !== undefined) {
                             rendererRef.current?.getDimensionManager().setElementData(
+                                data.element_id,
+                                data.sketch_id,
+                                x1, y1, x2, y2
+                            );
+
+                            // Detect H/V constraints for newly drawn lines
+                            rendererRef.current?.detectConstraintsForLine(
                                 data.element_id,
                                 data.sketch_id,
                                 x1, y1, x2, y2
@@ -1822,6 +1829,33 @@ export function CADApplication() {
                 }
             }
         });
+
+        // Set up constraint manager callbacks
+        rendererRef.current.setConstraintCallbacks({
+            onConstraintCreate: async (sketchId, type, elementIds, value) => {
+                if (!clientRef.current) throw new Error('No client');
+                const result = await clientRef.current.createConstraint(
+                    sketchId,
+                    type,
+                    elementIds,
+                    value
+                );
+                return {
+                    constraint_id: result.constraint.id,
+                    updated_elements: result.updated_elements
+                };
+            },
+            onConstraintDelete: async (constraintId) => {
+                if (!clientRef.current) return false;
+                return await clientRef.current.deleteConstraint(constraintId);
+            },
+            onConstraintConfirmed: (constraint) => {
+                updateStatus(`${constraint.type} constraint confirmed`, 'success');
+            },
+            onConstraintRejected: () => {
+                // Silent dismiss
+            }
+        });
     }, [updateStatus]);
 
     // Handle window resize
@@ -1886,6 +1920,14 @@ export function CADApplication() {
                     break;
                 case 'Escape':
                     event.preventDefault();
+                    // Dismiss ghost constraints first
+                    if (rendererRef.current) {
+                        const constraintManager = rendererRef.current.getConstraintManager();
+                        if (constraintManager.hasGhostConstraints()) {
+                            constraintManager.dismissAllGhostConstraints();
+                            break;
+                        }
+                    }
                     if (editingDimension) {
                         setEditingDimension(null);
                     } else if (pendingDimension) {
@@ -2054,6 +2096,18 @@ export function CADApplication() {
                             : currentDrawingTool !== 'select'
                                 ? 'crosshair'
                                 : 'default'
+                }}
+                onClick={(e) => {
+                    if (!rendererRef.current) return;
+                    // Check for constraint icon click
+                    const constraintId = rendererRef.current.getConstraintAtScreenPosition(e.clientX, e.clientY);
+                    if (constraintId) {
+                        const constraintManager = rendererRef.current.getConstraintManager();
+                        if (constraintManager.isGhostConstraint(constraintId)) {
+                            // Confirm the ghost constraint
+                            constraintManager.confirmConstraint(constraintId);
+                        }
+                    }
                 }}
                 onDoubleClick={(e) => {
                     if (!rendererRef.current) return;
