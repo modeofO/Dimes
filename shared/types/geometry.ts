@@ -167,6 +167,7 @@ export interface LinearDimension {
     value: number;             // Current length value (in mm)
     offset: number;            // Perpendicular distance from line
     offset_direction: 1 | -1;  // Which side of the line
+    constraint_id?: string;    // Link to backend constraint
 }
 
 export interface DimensionVisualizationData {

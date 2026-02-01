@@ -11,6 +11,19 @@ export interface DimensionManagerCallbacks {
     onDimensionCreated?: (dimension: LinearDimension) => void;
     onDimensionUpdated?: (dimension: LinearDimension) => void;
     onDimensionDeleted?: (dimensionId: string) => void;
+    // Constraint integration callbacks
+    onConstraintCreate?: (
+        sketchId: string,
+        elementId: string,
+        value: number
+    ) => Promise<{ constraint_id: string; updated_elements: any[] }>;
+    onConstraintUpdate?: (
+        constraintId: string,
+        sketchId: string,
+        value: number
+    ) => Promise<{ updated_elements: any[] }>;
+    onConstraintDelete?: (constraintId: string) => Promise<boolean>;
+    // Keep for backwards compatibility during transition
     onLineResizeRequested?: (
         sketchId: string,
         elementId: string,
@@ -106,12 +119,12 @@ export class DimensionManager {
      * @param offsetDirection - Which side of the line (1 or -1)
      * @returns The created dimension, or null if creation failed
      */
-    public createDimension(
+    public async createDimension(
         sketchId: string,
         elementId: string,
         offset: number,
         offsetDirection: 1 | -1
-    ): LinearDimension | null {
+    ): Promise<LinearDimension | null> {
         // Get element data
         const element = this.elementData.get(elementId);
         if (!element) {
@@ -132,6 +145,19 @@ export class DimensionManager {
         // Generate unique ID
         const id = `dim_${++this.idCounter}_${Date.now()}`;
 
+        // Create constraint in backend if callback available
+        let constraintId: string | undefined;
+        if (this.callbacks.onConstraintCreate) {
+            try {
+                const result = await this.callbacks.onConstraintCreate(sketchId, elementId, value);
+                constraintId = result.constraint_id;
+                console.log(`Created backend constraint ${constraintId} for dimension ${id}`);
+            } catch (error) {
+                console.error('Failed to create constraint:', error);
+                // Continue without constraint - dimension still works locally
+            }
+        }
+
         // Create the dimension object
         const dimension: LinearDimension = {
             id,
@@ -140,7 +166,8 @@ export class DimensionManager {
             sketch_id: sketchId,
             value,
             offset,
-            offset_direction: offsetDirection
+            offset_direction: offsetDirection,
+            constraint_id: constraintId
         };
 
         // Store the dimension
@@ -161,31 +188,80 @@ export class DimensionManager {
 
     /**
      * Update the value of a dimension and resize the associated line.
+     * Uses the constraint solver if available, otherwise falls back to local calculation.
      *
      * @param dimensionId - The dimension to update
      * @param newValue - The new dimension value (line length)
+     * @returns true if update succeeded, false otherwise
      */
-    public updateDimensionValue(dimensionId: string, newValue: number): void {
+    public async updateDimensionValue(dimensionId: string, newValue: number): Promise<boolean> {
         const dimension = this.dimensions.get(dimensionId);
         if (!dimension) {
             console.warn(`Cannot update dimension: ${dimensionId} not found`);
-            return;
+            return false;
         }
 
         // Get element data
         const element = this.elementData.get(dimension.element_id);
         if (!element) {
             console.warn(`Cannot update dimension: element ${dimension.element_id} not found`);
-            return;
+            return false;
         }
 
         // Validate new value
         if (newValue <= 0) {
             console.warn(`Cannot set dimension to non-positive value: ${newValue}`);
-            return;
+            return false;
         }
 
-        // Calculate new line endpoints using symmetric resize
+        // If we have a constraint, update via solver
+        if (dimension.constraint_id && this.callbacks.onConstraintUpdate) {
+            try {
+                const result = await this.callbacks.onConstraintUpdate(
+                    dimension.constraint_id,
+                    dimension.sketch_id,
+                    newValue
+                );
+
+                // Apply updated geometry from solver
+                if (result.updated_elements && result.updated_elements.length > 0) {
+                    for (const elem of result.updated_elements) {
+                        if (elem.element_id === dimension.element_id) {
+                            // Update local element data from solver response
+                            const params = elem.parameters_2d;
+                            if (params) {
+                                this.elementData.set(dimension.element_id, {
+                                    x1: params.x1 ?? element.x1,
+                                    y1: params.y1 ?? element.y1,
+                                    x2: params.x2 ?? element.x2,
+                                    y2: params.y2 ?? element.y2,
+                                    sketchId: dimension.sketch_id
+                                });
+                            }
+                        }
+                    }
+                }
+
+                // Update dimension value
+                dimension.value = newValue;
+
+                // Re-render the dimension with new geometry
+                this.renderDimension(dimension);
+
+                // Fire dimension updated callback
+                if (this.callbacks.onDimensionUpdated) {
+                    this.callbacks.onDimensionUpdated(dimension);
+                }
+
+                console.log(`Updated dimension ${dimensionId} to ${newValue.toFixed(2)} mm via constraint solver`);
+                return true;
+            } catch (error) {
+                console.error('Constraint update failed:', error);
+                return false;
+            }
+        }
+
+        // Fallback: local calculation (legacy behavior for dimensions without constraints)
         const newEndpoints = resizeLineSymmetric(
             element.x1,
             element.y1,
@@ -209,7 +285,7 @@ export class DimensionManager {
         // Re-render the dimension with new geometry
         this.renderDimension(dimension);
 
-        // Fire line resize callback
+        // Fire line resize callback (legacy path)
         if (this.callbacks.onLineResizeRequested) {
             this.callbacks.onLineResizeRequested(
                 dimension.sketch_id,
@@ -226,19 +302,32 @@ export class DimensionManager {
             this.callbacks.onDimensionUpdated(dimension);
         }
 
-        console.log(`Updated dimension ${dimensionId} to ${newValue.toFixed(2)} mm`);
+        console.log(`Updated dimension ${dimensionId} to ${newValue.toFixed(2)} mm (local calculation)`);
+        return true;
     }
 
     /**
-     * Delete a dimension.
+     * Delete a dimension and its associated backend constraint.
      *
      * @param dimensionId - The dimension to delete
+     * @returns true if deletion succeeded, false otherwise
      */
-    public deleteDimension(dimensionId: string): void {
+    public async deleteDimension(dimensionId: string): Promise<boolean> {
         const dimension = this.dimensions.get(dimensionId);
         if (!dimension) {
             console.warn(`Cannot delete dimension: ${dimensionId} not found`);
-            return;
+            return false;
+        }
+
+        // Delete constraint in backend if exists
+        if (dimension.constraint_id && this.callbacks.onConstraintDelete) {
+            try {
+                await this.callbacks.onConstraintDelete(dimension.constraint_id);
+                console.log(`Deleted backend constraint ${dimension.constraint_id}`);
+            } catch (error) {
+                console.error('Failed to delete constraint:', error);
+                // Continue with local deletion anyway
+            }
         }
 
         // Remove from renderer
@@ -253,6 +342,7 @@ export class DimensionManager {
         }
 
         console.log(`Deleted dimension ${dimensionId}`);
+        return true;
     }
 
     /**

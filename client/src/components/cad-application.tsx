@@ -438,7 +438,7 @@ export function CADApplication() {
                 const sketch = createdSketches.find(s => s.sketch_id === sketchId);
                 const element = sketch?.elements.find(e => e.id === newSelection.id);
                 if (element?.type === 'line') {
-                    // Create dimension immediately with default offset
+                    // Create dimension immediately with default offset (async)
                     if (rendererRef.current) {
                         const defaultOffset = 3; // Default offset distance
                         const defaultDirection = 1 as const; // Default to one side
@@ -447,8 +447,12 @@ export function CADApplication() {
                             newSelection.id,
                             defaultOffset,
                             defaultDirection
-                        );
-                        updateStatus('Dimension created - double-click to edit value', 'success');
+                        ).then(() => {
+                            updateStatus('Dimension created - double-click to edit value', 'success');
+                        }).catch((error) => {
+                            console.error('Failed to create dimension:', error);
+                            updateStatus('Failed to create dimension', 'error');
+                        });
                     }
                 } else {
                     updateStatus('Dimensions can only be added to lines', 'warning');
@@ -1275,18 +1279,23 @@ export function CADApplication() {
     }, [pendingCopyMove, inlineCopyMoveX, inlineCopyMoveY, inlineCopyMoveCount, currentUnit, updateStatus, getElement2DEndpoints, updateElementVisualization]);
 
     // Handle dimension placement
-    const handleDimensionPlacement = useCallback((offset: number, offsetDirection: 1 | -1) => {
+    const handleDimensionPlacement = useCallback(async (offset: number, offsetDirection: 1 | -1) => {
         if (!pendingDimension || !rendererRef.current) return;
 
-        rendererRef.current.createDimensionForLine(
-            pendingDimension.sketchId,
-            pendingDimension.elementId,
-            offset,
-            offsetDirection
-        );
+        try {
+            await rendererRef.current.createDimensionForLine(
+                pendingDimension.sketchId,
+                pendingDimension.elementId,
+                offset,
+                offsetDirection
+            );
+            updateStatus('Dimension created - double-click to edit', 'success');
+        } catch (error) {
+            console.error('Failed to create dimension:', error);
+            updateStatus('Failed to create dimension', 'error');
+        }
 
         setPendingDimension(null);
-        updateStatus('Dimension created - double-click to edit', 'success');
     }, [pendingDimension, updateStatus]);
 
     // Handle dimension double-click for editing
@@ -1311,11 +1320,15 @@ export function CADApplication() {
         const dimension = dimensionManager.getDimension(editingDimension.dimensionId);
         if (!dimension) return;
 
-        // Update dimension (this will trigger line resize)
-        dimensionManager.updateDimensionValue(editingDimension.dimensionId, newValue);
+        // Update dimension via constraint solver (async)
+        const success = await dimensionManager.updateDimensionValue(editingDimension.dimensionId, newValue);
 
         setEditingDimension(null);
-        updateStatus(`Line resized to ${newValue.toFixed(2)} mm`, 'success');
+        if (success) {
+            updateStatus(`Dimension updated to ${newValue.toFixed(2)} mm`, 'success');
+        } else {
+            updateStatus('Failed to update dimension', 'error');
+        }
     }, [editingDimension, updateStatus]);
 
     // Handle dimension edit cancel
@@ -1763,12 +1776,40 @@ export function CADApplication() {
         }
     }, [handleSelection]);
 
-    // Set up dimension manager callbacks for line resize
+    // Set up dimension manager callbacks for constraint integration
     useEffect(() => {
         if (!rendererRef.current) return;
 
         const dimensionManager = rendererRef.current.getDimensionManager();
         dimensionManager.setCallbacks({
+            // Constraint integration callbacks
+            onConstraintCreate: async (sketchId, elementId, value) => {
+                if (!clientRef.current) throw new Error('No client');
+                const result = await clientRef.current.createConstraint(
+                    sketchId,
+                    'length',
+                    [elementId],
+                    value
+                );
+                return {
+                    constraint_id: result.constraint.id,
+                    updated_elements: result.updated_elements,
+                };
+            },
+            onConstraintUpdate: async (constraintId, sketchId, value) => {
+                if (!clientRef.current) throw new Error('No client');
+                const result = await clientRef.current.updateConstraint(
+                    constraintId,
+                    sketchId,
+                    value
+                );
+                return { updated_elements: result.updated_elements };
+            },
+            onConstraintDelete: async (constraintId) => {
+                if (!clientRef.current) return false;
+                return await clientRef.current.deleteConstraint(constraintId);
+            },
+            // Keep legacy callback for fallback
             onLineResizeRequested: async (sketchId, elementId, newX1, newY1, newX2, newY2) => {
                 if (!clientRef.current) return;
 
