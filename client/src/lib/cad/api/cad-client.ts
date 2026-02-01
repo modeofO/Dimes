@@ -813,6 +813,86 @@ export class CADClient {
         }
     }
     
+    // ==================== CONSTRAINT OPERATIONS ====================
+
+    public async createConstraint(
+        sketchId: string,
+        type: string,
+        elementIds: string[],
+        value?: number
+    ): Promise<{ constraint: any; updated_elements: any[] }> {
+        const response = await fetch(`${this.baseUrl}/api/v1/constraints`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Session-ID': this.sessionId,
+            },
+            body: JSON.stringify({
+                session_id: this.sessionId,
+                sketch_id: sketchId,
+                type,
+                element_ids: elementIds,
+                value,
+            }),
+        });
+
+        const result = await response.json();
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to create constraint');
+        }
+        return result.data;
+    }
+
+    public async updateConstraint(
+        constraintId: string,
+        sketchId: string,
+        value: number
+    ): Promise<{ constraint: any; updated_elements: any[] }> {
+        const response = await fetch(`${this.baseUrl}/api/v1/constraints/${constraintId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Session-ID': this.sessionId,
+            },
+            body: JSON.stringify({
+                session_id: this.sessionId,
+                sketch_id: sketchId,
+                value,
+            }),
+        });
+
+        const result = await response.json();
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to update constraint');
+        }
+        return result.data;
+    }
+
+    public async deleteConstraint(
+        constraintId: string,
+        sketchId?: string
+    ): Promise<boolean> {
+        const params = new URLSearchParams({
+            session_id: this.sessionId,
+        });
+        if (sketchId) {
+            params.append('sketch_id', sketchId);
+        }
+
+        const response = await fetch(
+            `${this.baseUrl}/api/v1/constraints/${constraintId}?${params}`,
+            {
+                method: 'DELETE',
+                headers: {
+                    'X-Session-ID': this.sessionId,
+                },
+            }
+        );
+
+        const result = await response.json();
+        return result.success;
+    }
+
     public dispose(): void {
         // Clean up callbacks
         this.geometryUpdateCallback = undefined;
