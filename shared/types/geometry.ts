@@ -197,4 +197,6 @@ export interface ExtrudeFeature {
 }
 
 export type BooleanOperation = 'union' | 'cut' | 'intersect';
-export type ExportFormat = 'step' | 'stl' | 'obj' | 'iges'; 
+export type ExportFormat = 'step' | 'stl' | 'obj' | 'iges';
+
+export * from './constraints'; 
