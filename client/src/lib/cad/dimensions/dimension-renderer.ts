@@ -257,7 +257,7 @@ export class DimensionRenderer {
 
         // Scale sprite to maintain readable size
         // Adjust scale based on canvas aspect ratio
-        const scale = 5; // Base scale for visibility
+        const scale = 1.5; // Base scale for visibility (smaller to not obscure drawing)
         const aspectRatio = canvas.width / canvas.height;
         sprite.scale.set(scale * aspectRatio, scale, 1);
 

@@ -3023,11 +3023,53 @@ class OCCTEngine:
                 print(f"❌ Failed to add line to sketch {sketch_id}")
             
             return line_id
-            
+
         except Exception as e:
             print(f"❌ Error adding line to sketch: {e}")
             return ""
-    
+
+    def update_line_in_sketch(self, sketch_id: str, element_id: str, x1: float, y1: float, x2: float, y2: float) -> bool:
+        """
+        Update line endpoints in sketch - for dimension-driven resize
+
+        Args:
+            sketch_id: Sketch identifier
+            element_id: Line element identifier
+            x1, y1: New start point coordinates in 2D sketch space
+            x2, y2: New end point coordinates in 2D sketch space
+
+        Returns:
+            True if successful, False if failed
+        """
+        print(f"📏 Updating line {element_id} in sketch {sketch_id}: ({x1},{y1}) to ({x2},{y2})")
+
+        if not self.sketch_exists(sketch_id):
+            print(f"❌ Sketch not found: {sketch_id}")
+            return False
+
+        try:
+            sketch = self.sketches[sketch_id]
+            element = sketch.get_element_by_id(element_id)
+
+            if not element:
+                print(f"❌ Element not found: {element_id}")
+                return False
+
+            if element.element_type != SketchElementType.LINE:
+                print(f"❌ Element {element_id} is not a line")
+                return False
+
+            # Update the line endpoints
+            element.start_point = gp_Pnt2d(x1, y1)
+            element.end_point = gp_Pnt2d(x2, y2)
+
+            print(f"✅ Updated line {element_id} in sketch {sketch_id}")
+            return True
+
+        except Exception as e:
+            print(f"❌ Error updating line in sketch: {e}")
+            return False
+
     def add_circle_to_sketch(self, sketch_id: str, center_x: float, center_y: float, radius: float) -> str:
         """
         Add circle to sketch - equivalent to C++ addCircleToSketch

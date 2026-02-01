@@ -350,6 +350,41 @@ export class CadBackendClient {
   }
 
   /**
+   * Update line endpoints in the CAD backend (for dimension-driven resize)
+   */
+  async updateLine(sessionId, sketchId, elementId, x1, y1, x2, y2) {
+    try {
+      console.log(`📏 Updating line ${elementId} in sketch ${sketchId}`);
+
+      const requestBody = {
+        session_id: sessionId,
+        sketch_id: sketchId,
+        element_id: elementId,
+        x1: x1,
+        y1: y1,
+        x2: x2,
+        y2: y2,
+      };
+
+      console.log('📏 Update line request body:', requestBody);
+
+      const jsonString = JSON.stringify(requestBody);
+
+      const response = await this.makeRequest('/api/v1/update-line', {
+        method: 'PUT',
+        headers: {
+          'X-Session-ID': sessionId,
+        },
+        body: jsonString,
+      });
+      return response;
+    } catch (error) {
+      logger.error('Failed to update line in CAD backend:', error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Delete a sketch element from the backend
    */
   async deleteSketchElement(sessionId, sketchId, elementId) {

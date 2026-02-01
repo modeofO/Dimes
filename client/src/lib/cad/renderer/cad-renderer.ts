@@ -57,7 +57,7 @@ export class CADRenderer {
     constructor(container: HTMLElement) {
         this.container = container;
         this.raycaster = new THREE.Raycaster();
-        this.raycaster.params.Line!.threshold = 0.5;
+        this.raycaster.params.Line!.threshold = 1.5; // Increased for easier line selection
 
         this.initializeScene();
         this.setupCamera();

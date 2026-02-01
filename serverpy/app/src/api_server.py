@@ -199,6 +199,17 @@ class ChamferRequest(BaseModel):
     distance: float = Field(..., gt=0, le=MAX_DIMENSION, description="Chamfer distance")
 
 
+class UpdateLineRequest(BaseModel):
+    """Request model for updating line endpoints (dimension-driven resize)"""
+    session_id: str = Field(..., description="Session ID")
+    sketch_id: str = Field(..., description="Sketch ID")
+    element_id: str = Field(..., description="Line element ID")
+    x1: float = Field(..., ge=MIN_COORDINATE, le=MAX_COORDINATE, description="New start X coordinate")
+    y1: float = Field(..., ge=MIN_COORDINATE, le=MAX_COORDINATE, description="New start Y coordinate")
+    x2: float = Field(..., ge=MIN_COORDINATE, le=MAX_COORDINATE, description="New end X coordinate")
+    y2: float = Field(..., ge=MIN_COORDINATE, le=MAX_COORDINATE, description="New end Y coordinate")
+
+
 class TrimLineToLineRequest(BaseModel):
     """Request model for simple line-to-line trim operations"""
     session_id: str = Field(..., description="Session ID")
@@ -578,7 +589,27 @@ class CADAPIServer:
                     timestamp=int(time.time()),
                     error=str(e)
                 )
-        
+
+        @self.app.put("/api/v1/update-line")
+        async def update_line(request: UpdateLineRequest):
+            """Update line endpoints - for dimension-driven resize"""
+            try:
+                response_data = await self._handle_update_line(request)
+
+                return APIResponse(
+                    success=True,
+                    timestamp=int(time.time()),
+                    data=response_data
+                )
+
+            except Exception as e:
+                print(f"❌ Error in update_line: {e}")
+                return APIResponse(
+                    success=False,
+                    timestamp=int(time.time()),
+                    error=str(e)
+                )
+
         @self.app.delete("/api/v1/sketches/{sketch_id}/elements/{element_id}")
         async def delete_sketch_element(sketch_id: str, element_id: str, request: Request):
             """Delete a sketch element by ID"""
@@ -1508,6 +1539,51 @@ class CADAPIServer:
             response_data["updated_elements"] = updated_elements
         
         print(f"✅ Chamfer created successfully: {chamfer_id}")
+        return response_data
+
+    async def _handle_update_line(self, request: UpdateLineRequest) -> Dict[str, Any]:
+        """Handle line endpoint update - for dimension-driven resize"""
+        print(f"📏 Updating line {request.element_id} in sketch {request.sketch_id}")
+
+        session_manager = SessionManager.get_instance()
+        engine = session_manager.get_or_create_session(request.session_id)
+
+        if engine is None:
+            raise Exception("Failed to get session")
+
+        # Validate that the sketch exists
+        if not engine.sketch_exists(request.sketch_id):
+            raise Exception(f"Sketch '{request.sketch_id}' does not exist")
+
+        # Update the line endpoints
+        success = engine.update_line_in_sketch(
+            request.sketch_id,
+            request.element_id,
+            request.x1, request.y1,
+            request.x2, request.y2
+        )
+
+        if not success:
+            raise Exception(f"Failed to update line '{request.element_id}' in sketch")
+
+        # Get updated visualization data for the line
+        viz_data = engine.get_sketch_element_visualization_data(request.sketch_id, request.element_id)
+
+        response_data = {
+            "element_id": request.element_id,
+            "sketch_id": request.sketch_id,
+            "session_id": request.session_id,
+            "x1": request.x1,
+            "y1": request.y1,
+            "x2": request.x2,
+            "y2": request.y2,
+            "message": f"Line {request.element_id} updated successfully"
+        }
+
+        if viz_data:
+            response_data["visualization_data"] = viz_data
+
+        print(f"✅ Line updated successfully: {request.element_id}")
         return response_data
 
     async def _handle_delete_sketch_element(self, session_id: str, sketch_id: str, element_id: str) -> Dict[str, Any]:
