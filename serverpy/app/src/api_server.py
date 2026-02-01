@@ -12,7 +12,8 @@ from pydantic import BaseModel, Field, field_validator
 import uvicorn
 
 from session_manager import SessionManager
-from geometry_engine import Vector3d, MeshData
+from geometry_engine import Vector3d, MeshData, SketchElementType
+from constraint_solver import ConstraintSolver, SolveResult
 
 # Configure logging
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
@@ -326,6 +327,30 @@ class CreateMirrorArrayRequest(BaseModel):
     x2: float = Field(..., description="Second point X of mirror line")
     y2: float = Field(..., description="Second point Y of mirror line")
     keep_original: bool = Field(default=True, description="Whether to keep original elements")
+
+
+class CreateConstraintRequest(BaseModel):
+    """Request model for creating constraints"""
+    session_id: str = Field(..., description="Session ID")
+    sketch_id: str = Field(..., description="Sketch ID")
+    type: str = Field(..., description="Constraint type (length, horizontal, vertical, perpendicular, parallel, coincident)")
+    element_ids: List[str] = Field(..., description="Element IDs involved in constraint")
+    point_indices: Optional[List[int]] = Field(None, description="Point indices for coincident (0=start, 1=end)")
+    value: Optional[float] = Field(None, description="Value for length constraints")
+
+
+class UpdateConstraintRequest(BaseModel):
+    """Request model for updating constraints"""
+    session_id: str = Field(..., description="Session ID")
+    sketch_id: str = Field(..., description="Sketch ID")
+    value: float = Field(..., description="New value for length constraint")
+
+
+class ValidateConstraintRequest(BaseModel):
+    """Request model for validating proposed changes"""
+    session_id: str = Field(..., description="Session ID")
+    sketch_id: str = Field(..., description="Sketch ID")
+    proposed_change: Dict[str, Any] = Field(..., description="Proposed geometry change")
 
 
 class APIResponse(BaseModel):
@@ -928,7 +953,295 @@ class CADAPIServer:
                     timestamp=int(time.time()),
                     error=str(e)
                 )
-        
+
+        # ==================== CONSTRAINT ENDPOINTS ====================
+
+        @self.app.post("/api/v1/constraints")
+        async def create_constraint(
+            request: CreateConstraintRequest,
+            x_session_id: Optional[str] = Header(None, alias="X-Session-ID")
+        ):
+            """Create a new constraint on a sketch."""
+            session_id = request.session_id or x_session_id or "default"
+
+            try:
+                session_manager = SessionManager.get_instance()
+                engine = session_manager.get_or_create_session(session_id)
+                sketch = engine.get_sketch(request.sketch_id)
+
+                if sketch is None:
+                    return APIResponse(
+                        success=False,
+                        timestamp=int(time.time()),
+                        error=f"Sketch not found: {request.sketch_id}"
+                    )
+
+                # Generate constraint ID
+                constraint_id = f"constraint_{request.type}_{int(time.time() * 1000)}"
+
+                constraint = {
+                    'id': constraint_id,
+                    'type': request.type,
+                    'sketch_id': request.sketch_id,
+                    'element_ids': request.element_ids,
+                    'point_indices': request.point_indices,
+                    'value': request.value,
+                    'satisfied': True,
+                    'inferred': False,
+                    'confirmed': True,
+                }
+
+                # Validate constraint won't over-constrain
+                solver = ConstraintSolver()
+                elements = sketch.get_elements_as_dict()
+                existing_constraints = sketch.get_constraints()
+
+                is_valid, error_msg = solver.validate_constraint(constraint, existing_constraints, elements)
+                if not is_valid:
+                    return APIResponse(
+                        success=False,
+                        timestamp=int(time.time()),
+                        error=f"Cannot add constraint: {error_msg}"
+                    )
+
+                # Add constraint and solve
+                sketch.add_constraint(constraint)
+                all_constraints = sketch.get_constraints()
+
+                result = solver.solve(all_constraints, elements)
+
+                if not result.success:
+                    # Roll back
+                    sketch.remove_constraint(constraint_id)
+                    return APIResponse(
+                        success=False,
+                        timestamp=int(time.time()),
+                        error=result.error.get('message', 'Solver failed')
+                    )
+
+                # Update element positions if changed
+                updated_elements = []
+                if result.updated_elements:
+                    from OCC.Core.gp import gp_Pnt2d
+                    for elem_id, coords in result.updated_elements.items():
+                        elem = sketch.get_element_by_id(elem_id)
+                        if elem and elem.element_type == SketchElementType.LINE:
+                            elem.start_point = gp_Pnt2d(coords['x1'], coords['y1'])
+                            elem.end_point = gp_Pnt2d(coords['x2'], coords['y2'])
+                            # Build visualization data
+                            viz = engine.get_element_visualization_data(request.sketch_id, elem_id)
+                            if viz:
+                                updated_elements.append(viz)
+
+                return APIResponse(
+                    success=True,
+                    timestamp=int(time.time()),
+                    data={
+                        'constraint': constraint,
+                        'updated_elements': updated_elements,
+                        'solve_status': 'solved' if result.iterations > 0 else 'already_satisfied'
+                    }
+                )
+
+            except Exception as e:
+                print(f"❌ Error creating constraint: {e}")
+                return APIResponse(
+                    success=False,
+                    timestamp=int(time.time()),
+                    error=str(e)
+                )
+
+        @self.app.delete("/api/v1/constraints/{constraint_id}")
+        async def delete_constraint(
+            constraint_id: str,
+            session_id: Optional[str] = None,
+            sketch_id: Optional[str] = None,
+            x_session_id: Optional[str] = Header(None, alias="X-Session-ID")
+        ):
+            """Delete a constraint."""
+            session_id = session_id or x_session_id or "default"
+
+            try:
+                session_manager = SessionManager.get_instance()
+                engine = session_manager.get_or_create_session(session_id)
+
+                # Find sketch containing this constraint
+                target_sketch = None
+                if sketch_id:
+                    target_sketch = engine.get_sketch(sketch_id)
+                else:
+                    # Search all sketches
+                    for sketch in engine.sketches.values():
+                        if sketch.get_constraint(constraint_id):
+                            target_sketch = sketch
+                            break
+
+                if target_sketch is None:
+                    return APIResponse(
+                        success=False,
+                        timestamp=int(time.time()),
+                        error=f"Constraint not found: {constraint_id}"
+                    )
+
+                success = target_sketch.remove_constraint(constraint_id)
+                return APIResponse(
+                    success=success,
+                    timestamp=int(time.time()),
+                    data={'removed': success}
+                )
+
+            except Exception as e:
+                print(f"❌ Error deleting constraint: {e}")
+                return APIResponse(
+                    success=False,
+                    timestamp=int(time.time()),
+                    error=str(e)
+                )
+
+        @self.app.put("/api/v1/constraints/{constraint_id}")
+        async def update_constraint(
+            constraint_id: str,
+            request: UpdateConstraintRequest,
+            x_session_id: Optional[str] = Header(None, alias="X-Session-ID")
+        ):
+            """Update a constraint value (for length constraints)."""
+            session_id = request.session_id or x_session_id or "default"
+
+            try:
+                session_manager = SessionManager.get_instance()
+                engine = session_manager.get_or_create_session(session_id)
+                sketch = engine.get_sketch(request.sketch_id)
+
+                if sketch is None:
+                    return APIResponse(
+                        success=False,
+                        timestamp=int(time.time()),
+                        error=f"Sketch not found: {request.sketch_id}"
+                    )
+
+                constraint = sketch.get_constraint(constraint_id)
+                if constraint is None:
+                    return APIResponse(
+                        success=False,
+                        timestamp=int(time.time()),
+                        error=f"Constraint not found: {constraint_id}"
+                    )
+
+                if constraint['type'] != 'length':
+                    return APIResponse(
+                        success=False,
+                        timestamp=int(time.time()),
+                        error="Can only update value for length constraints"
+                    )
+
+                # Update value
+                old_value = constraint.get('value')
+                constraint['value'] = request.value
+
+                # Re-solve
+                solver = ConstraintSolver()
+                elements = sketch.get_elements_as_dict()
+                all_constraints = sketch.get_constraints()
+
+                result = solver.solve(all_constraints, elements)
+
+                if not result.success:
+                    # Roll back
+                    constraint['value'] = old_value
+                    return APIResponse(
+                        success=False,
+                        timestamp=int(time.time()),
+                        error=result.error.get('message', 'Solver failed')
+                    )
+
+                # Update element positions
+                updated_elements = []
+                if result.updated_elements:
+                    from OCC.Core.gp import gp_Pnt2d
+                    for elem_id, coords in result.updated_elements.items():
+                        elem = sketch.get_element_by_id(elem_id)
+                        if elem and elem.element_type == SketchElementType.LINE:
+                            elem.start_point = gp_Pnt2d(coords['x1'], coords['y1'])
+                            elem.end_point = gp_Pnt2d(coords['x2'], coords['y2'])
+                            viz = engine.get_element_visualization_data(request.sketch_id, elem_id)
+                            if viz:
+                                updated_elements.append(viz)
+
+                return APIResponse(
+                    success=True,
+                    timestamp=int(time.time()),
+                    data={
+                        'constraint': constraint,
+                        'updated_elements': updated_elements
+                    }
+                )
+
+            except Exception as e:
+                print(f"❌ Error updating constraint: {e}")
+                return APIResponse(
+                    success=False,
+                    timestamp=int(time.time()),
+                    error=str(e)
+                )
+
+        @self.app.post("/api/v1/constraints/validate")
+        async def validate_constraint_change(
+            request: ValidateConstraintRequest,
+            x_session_id: Optional[str] = Header(None, alias="X-Session-ID")
+        ):
+            """Validate if a proposed geometry change satisfies constraints."""
+            session_id = request.session_id or x_session_id or "default"
+
+            try:
+                session_manager = SessionManager.get_instance()
+                engine = session_manager.get_or_create_session(session_id)
+                sketch = engine.get_sketch(request.sketch_id)
+
+                if sketch is None:
+                    return APIResponse(
+                        success=False,
+                        timestamp=int(time.time()),
+                        error=f"Sketch not found: {request.sketch_id}"
+                    )
+
+                # Apply proposed change to a copy of elements
+                elements = sketch.get_elements_as_dict()
+                proposed = request.proposed_change
+
+                if 'element_id' in proposed and proposed['element_id'] in elements:
+                    elem_id = proposed['element_id']
+                    new_values = proposed.get('new_values', {})
+                    elements[elem_id].update(new_values)
+
+                # Solve with proposed state
+                solver = ConstraintSolver()
+                constraints = sketch.get_constraints()
+                result = solver.solve(constraints, elements)
+
+                violations = []
+                if not result.success and result.error:
+                    violations = [
+                        {'constraint_id': cid, 'message': result.error.get('message', '')}
+                        for cid in result.error.get('conflicting_constraints', [])
+                    ]
+
+                return APIResponse(
+                    success=True,
+                    timestamp=int(time.time()),
+                    data={
+                        'valid': result.success,
+                        'violations': violations
+                    }
+                )
+
+            except Exception as e:
+                print(f"❌ Error validating constraint: {e}")
+                return APIResponse(
+                    success=False,
+                    timestamp=int(time.time()),
+                    error=str(e)
+                )
+
         print("HTTP routes configured")
     
     # ==================== REQUEST HANDLERS ====================
