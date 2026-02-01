@@ -1879,6 +1879,23 @@ export function CADApplication() {
                 return;
             }
 
+            // Enter confirms all ghost constraints
+            if (event.key === 'Enter' && rendererRef.current) {
+                const constraintManager = rendererRef.current.getConstraintManager();
+                if (constraintManager.hasGhostConstraints()) {
+                    event.preventDefault();
+                    const ghostIds = constraintManager.getAllGhostIds();
+                    Promise.all(ghostIds.map(id => constraintManager.confirmConstraint(id)))
+                        .then(results => {
+                            const confirmed = results.filter(r => r !== null).length;
+                            if (confirmed > 0) {
+                                updateStatus(`Confirmed ${confirmed} constraint(s)`, 'success');
+                            }
+                        });
+                    return;
+                }
+            }
+
             // Don't handle shortcuts when palette is open (except Escape)
             if (isPaletteOpen && event.key !== 'Escape') return;
 
