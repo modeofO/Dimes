@@ -1024,13 +1024,14 @@ export class CADRenderer {
         return this.dimensionManager;
     }
 
-    public createDimensionForLine(
+    public async createDimensionForLine(
         sketchId: string,
         elementId: string,
         offset: number,
         offsetDirection: 1 | -1
-    ): void {
-        this.dimensionManager.createDimension(sketchId, elementId, offset, offsetDirection);
+    ): Promise<string | null> {
+        const dimension = await this.dimensionManager.createDimension(sketchId, elementId, offset, offsetDirection);
+        return dimension?.id ?? null;
     }
 
     public getDimensionAtScreenPosition(screenX: number, screenY: number): string | null {

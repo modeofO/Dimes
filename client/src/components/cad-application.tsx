@@ -438,7 +438,7 @@ export function CADApplication() {
                 const sketch = createdSketches.find(s => s.sketch_id === sketchId);
                 const element = sketch?.elements.find(e => e.id === newSelection.id);
                 if (element?.type === 'line') {
-                    // Create dimension immediately with default offset
+                    // Create dimension immediately with default offset (async)
                     if (rendererRef.current) {
                         const defaultOffset = 3; // Default offset distance
                         const defaultDirection = 1 as const; // Default to one side
@@ -447,8 +447,12 @@ export function CADApplication() {
                             newSelection.id,
                             defaultOffset,
                             defaultDirection
-                        );
-                        updateStatus('Dimension created - double-click to edit value', 'success');
+                        ).then(() => {
+                            updateStatus('Dimension created - double-click to edit value', 'success');
+                        }).catch((error) => {
+                            console.error('Failed to create dimension:', error);
+                            updateStatus('Failed to create dimension', 'error');
+                        });
                     }
                 } else {
                     updateStatus('Dimensions can only be added to lines', 'warning');
@@ -1275,18 +1279,23 @@ export function CADApplication() {
     }, [pendingCopyMove, inlineCopyMoveX, inlineCopyMoveY, inlineCopyMoveCount, currentUnit, updateStatus, getElement2DEndpoints, updateElementVisualization]);
 
     // Handle dimension placement
-    const handleDimensionPlacement = useCallback((offset: number, offsetDirection: 1 | -1) => {
+    const handleDimensionPlacement = useCallback(async (offset: number, offsetDirection: 1 | -1) => {
         if (!pendingDimension || !rendererRef.current) return;
 
-        rendererRef.current.createDimensionForLine(
-            pendingDimension.sketchId,
-            pendingDimension.elementId,
-            offset,
-            offsetDirection
-        );
+        try {
+            await rendererRef.current.createDimensionForLine(
+                pendingDimension.sketchId,
+                pendingDimension.elementId,
+                offset,
+                offsetDirection
+            );
+            updateStatus('Dimension created - double-click to edit', 'success');
+        } catch (error) {
+            console.error('Failed to create dimension:', error);
+            updateStatus('Failed to create dimension', 'error');
+        }
 
         setPendingDimension(null);
-        updateStatus('Dimension created - double-click to edit', 'success');
     }, [pendingDimension, updateStatus]);
 
     // Handle dimension double-click for editing
