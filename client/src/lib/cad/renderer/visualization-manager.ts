@@ -242,7 +242,7 @@ export class VisualizationManager {
         }
 
         // Build a flat ribbon mesh along the polyline with a fixed half-width
-        const HALF_WIDTH = 0.4; // world units — generous click target
+        const HALF_WIDTH = 0.8; // world units — doubled for easier selection
         const ribbonPositions: number[] = [];
         const ribbonIndices: number[] = [];
 
@@ -478,6 +478,27 @@ export class VisualizationManager {
                         object.material.dispose();
                     }
                 }
+            }
+        });
+    }
+
+    public setPlaneVisibility(planeId: string, visible: boolean): void {
+        const group = this.planeMeshes.get(planeId);
+        if (group) {
+            group.visible = visible;
+        }
+    }
+
+    public setSketchVisibility(sketchId: string, visible: boolean): void {
+        const group = this.sketchMeshes.get(sketchId);
+        if (group) {
+            group.visible = visible;
+        }
+
+        // Also hide/show all elements in this sketch
+        this.elementMeshes.forEach((elemGroup, key) => {
+            if (key.startsWith(`element-${sketchId}-`)) {
+                elemGroup.visible = visible;
             }
         });
     }

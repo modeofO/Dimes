@@ -899,7 +899,15 @@ export class CADRenderer {
     public removeElementVisualization(elementId: string): void {
         this.visualizationManager.removeElementVisualization(elementId);
     }
-    
+
+    public setPlaneVisibility(planeId: string, visible: boolean): void {
+        this.visualizationManager.setPlaneVisibility(planeId, visible);
+    }
+
+    public setSketchVisibility(sketchId: string, visible: boolean): void {
+        this.visualizationManager.setSketchVisibility(sketchId, visible);
+    }
+
     public handleResize(): void {
         const width = this.container.clientWidth;
         const height = this.container.clientHeight;

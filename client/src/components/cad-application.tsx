@@ -41,6 +41,7 @@ interface CreatedPlane {
     plane_id: string;
     plane_type: string;
     origin: [number, number, number];
+    visible?: boolean;
 }
 
 interface SketchElementInfo {
@@ -56,6 +57,7 @@ interface CreatedSketch {
     plane_id: string;
     elements: SketchElementInfo[];
     visualization_data?: SketchVisualizationData;
+    visible?: boolean;
 }
 
 // Counter for unique model IDs to avoid collisions when geometry updates arrive rapidly
@@ -480,6 +482,32 @@ export function CADApplication() {
         if (agentRef.current) {
             agentRef.current.sendMessage('agent_message', message);
         }
+    }, []);
+
+    const togglePlaneVisibility = useCallback((planeId: string) => {
+        setCreatedPlanes(prev => prev.map(p => {
+            if (p.plane_id === planeId) {
+                const newVisible = p.visible === false ? true : false;
+                if (rendererRef.current) {
+                    rendererRef.current.setPlaneVisibility(planeId, newVisible);
+                }
+                return { ...p, visible: newVisible };
+            }
+            return p;
+        }));
+    }, []);
+
+    const toggleSketchVisibility = useCallback((sketchId: string) => {
+        setCreatedSketches(prev => prev.map(s => {
+            if (s.sketch_id === sketchId) {
+                const newVisible = s.visible === false ? true : false;
+                if (rendererRef.current) {
+                    rendererRef.current.setSketchVisibility(sketchId, newVisible);
+                }
+                return { ...s, visible: newVisible };
+            }
+            return s;
+        }));
     }, []);
 
     const openChat = useCallback(() => {
@@ -2587,6 +2615,8 @@ export function CADApplication() {
                 createdShapes={createdShapes}
                 selectedObject={selectedObject}
                 onSelection={handleSelection}
+                onTogglePlaneVisibility={togglePlaneVisibility}
+                onToggleSketchVisibility={toggleSketchVisibility}
             />
 
             {/* Command Palette — centered, toggled by Space */}

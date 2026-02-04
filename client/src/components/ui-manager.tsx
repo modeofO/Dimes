@@ -13,6 +13,7 @@ interface CreatedPlane {
     plane_id: string;
     plane_type: string;
     origin: [number, number, number];
+    visible?: boolean;
 }
 
 interface SketchElementInfo {
@@ -27,6 +28,7 @@ interface CreatedSketch {
     sketch_id: string;
     plane_id: string;
     elements: SketchElementInfo[];
+    visible?: boolean;
 }
 
 interface UIManagerProps {
@@ -34,8 +36,10 @@ interface UIManagerProps {
     createdPlanes: CreatedPlane[];
     createdSketches: CreatedSketch[];
     createdShapes: CreatedShape[];
-    selectedObject: { id: string; type: string; } | null;
-    onSelection: (id: string | null, type: string | null) => void;
+    selectedObject: { id: string; type: string; sketchId?: string; } | null;
+    onSelection: (id: string | null, type: string | null, sketchId?: string | null) => void;
+    onTogglePlaneVisibility?: (planeId: string) => void;
+    onToggleSketchVisibility?: (sketchId: string) => void;
 }
 
 // Icons for different element types
@@ -59,7 +63,9 @@ export function UIManager({
     createdSketches,
     createdShapes,
     selectedObject,
-    onSelection
+    onSelection,
+    onTogglePlaneVisibility,
+    onToggleSketchVisibility
 }: UIManagerProps) {
     const [expandedContainers, setExpandedContainers] = useState<Set<string>>(new Set());
     const [seenContainers, setSeenContainers] = useState<Set<string>>(new Set());
@@ -129,8 +135,8 @@ export function UIManager({
 
     // --- Interaction ---
 
-    const handleItemClick = (id: string, type: string) => {
-        onSelection(id, type);
+    const handleItemClick = (id: string, type: string, sketchId?: string) => {
+        onSelection(id, type, sketchId ?? null);
     };
 
     const isSelected = (id: string, type: string) => {
@@ -246,29 +252,53 @@ export function UIManager({
 
                         {/* Planes */}
                         {createdPlanes.map((plane) => (
-                            <div key={`plane-${plane.plane_id}`}>
+                            <div key={`plane-${plane.plane_id}`} className={plane.visible === false ? 'opacity-50' : ''}>
                                 <div
                                     className={`${itemClass(plane.plane_id, 'plane')} flex items-center gap-2`}
                                     onClick={() => handleItemClick(plane.plane_id, 'plane')}
                                 >
                                     <span className="text-[#6AAFFF] w-4 text-center">{getIcon('plane')}</span>
-                                    <span>{formatPlaneName(plane)}</span>
+                                    <span className="flex-1">{formatPlaneName(plane)}</span>
+                                    {onTogglePlaneVisibility && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onTogglePlaneVisibility(plane.plane_id);
+                                            }}
+                                            className="text-xs hover:bg-white/10 rounded p-0.5 text-[#6A6D7A] hover:text-[#DDD4C0]"
+                                            title={plane.visible === false ? 'Show plane' : 'Hide plane'}
+                                        >
+                                            {plane.visible === false ? '👁‍🗨' : '👁'}
+                                        </button>
+                                    )}
                                 </div>
 
                                 {/* Sketches on this plane */}
                                 {createdSketches
                                     .filter((sketch) => sketch.plane_id === plane.plane_id)
                                     .map((sketch) => (
-                                        <div key={`sketch-${sketch.sketch_id}`} className="ml-4">
+                                        <div key={`sketch-${sketch.sketch_id}`} className={`ml-4 ${sketch.visible === false ? 'opacity-50' : ''}`}>
                                             <div
                                                 className={`${itemClass(sketch.sketch_id, 'sketch')} flex items-center gap-2`}
                                                 onClick={() => handleItemClick(sketch.sketch_id, 'sketch')}
                                             >
                                                 <span className="text-[#D4A017] w-4 text-center">{getIcon('sketch')}</span>
-                                                <span>{formatSketchName(sketch)}</span>
+                                                <span className="flex-1">{formatSketchName(sketch)}</span>
                                                 <span className={`${itemSecondary} text-[10px]`}>
                                                     ({sketch.elements.length})
                                                 </span>
+                                                {onToggleSketchVisibility && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onToggleSketchVisibility(sketch.sketch_id);
+                                                        }}
+                                                        className="text-xs hover:bg-white/10 rounded p-0.5 text-[#6A6D7A] hover:text-[#DDD4C0]"
+                                                        title={sketch.visible === false ? 'Show sketch' : 'Hide sketch'}
+                                                    >
+                                                        {sketch.visible === false ? '👁‍🗨' : '👁'}
+                                                    </button>
+                                                )}
                                             </div>
 
                                             {/* Elements hierarchy */}
@@ -287,7 +317,7 @@ export function UIManager({
                                                                         className={`${itemBase} ${itemHover} flex items-center gap-1.5 ${
                                                                             isSelected(container.id, 'element') ? itemSelected : itemSecondary
                                                                         }`}
-                                                                        onClick={() => handleItemClick(container.id, 'element')}
+                                                                        onClick={() => handleItemClick(container.id, 'element', sketch.sketch_id)}
                                                                     >
                                                                         <button
                                                                             onClick={(e) => {
@@ -307,7 +337,7 @@ export function UIManager({
                                                                         <div
                                                                             key={`ch-${child.id}`}
                                                                             className={`ml-5 ${itemClass(child.id, 'element')} flex items-center gap-2`}
-                                                                            onClick={() => handleItemClick(child.id, 'element')}
+                                                                            onClick={() => handleItemClick(child.id, 'element', sketch.sketch_id)}
                                                                         >
                                                                             <span className="text-[#6A6D7A] w-4 text-center">{getIcon(child.type)}</span>
                                                                             <span>{formatElementName(child)}</span>
@@ -322,7 +352,7 @@ export function UIManager({
                                                             <div
                                                                 key={`o-${element.id}`}
                                                                 className={`ml-4 ${itemClass(element.id, 'element')} flex items-center gap-2`}
-                                                                onClick={() => handleItemClick(element.id, 'element')}
+                                                                onClick={() => handleItemClick(element.id, 'element', sketch.sketch_id)}
                                                             >
                                                                 <span className="text-[#6A6D7A] w-4 text-center">{getIcon(element.type)}</span>
                                                                 <span>{formatElementName(element)}</span>
